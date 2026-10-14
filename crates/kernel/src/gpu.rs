@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
 use std::thread::JoinHandle;
+use std::time::Instant;
 
 use bytemuck::{Pod, Zeroable};
 use winit::window::Window;
@@ -520,6 +521,7 @@ pub struct Screen {
     gpu: Arc<Mutex<Gpu>>,
     surface: Arc<Mutex<wgpu::Surface<'static>>>,
     waiting: Arc<AtomicBool>,
+    shown: Arc<Mutex<Option<Instant>>>,
     ready: Option<mpsc::SyncSender<()>>,
     presenter: Option<JoinHandle<()>>,
 }
@@ -531,20 +533,26 @@ impl Screen {
         let surface = Arc::new(Mutex::new(gpu.surface.take().expect("a window has a surface")));
         let gpu = Arc::new(Mutex::new(gpu));
         let waiting = Arc::new(AtomicBool::new(false));
+        let shown = Arc::new(Mutex::new(None));
         let (ready, staged) = mpsc::sync_channel::<()>(1);
         let presenter = {
-            let (gpu, surface, waiting) = (gpu.clone(), surface.clone(), waiting.clone());
+            let (gpu, surface, waiting, shown) = (gpu.clone(), surface.clone(), waiting.clone(), shown.clone());
             std::thread::Builder::new()
                 .name("graticule presenter".into())
                 .spawn(move || {
                     while staged.recv().is_ok() {
-                        present(&gpu, &lock(&surface), &waiting);
+                        present(&gpu, &lock(&surface), &waiting, &shown);
                         presented();
                     }
                 })
                 .ok()
         };
-        Self { gpu, surface, waiting, ready: Some(ready), presenter }
+        Self { gpu, surface, waiting, shown, ready: Some(ready), presenter }
+    }
+
+    /// When the display last took a frame: about when it last refreshed.
+    pub fn shown(&self) -> Option<Instant> {
+        *lock(&self.shown)
     }
 
     /// Whether the last staged frame is still waiting for the display.
@@ -563,7 +571,7 @@ impl Screen {
 
     /// Presents the staged frame on this thread, waiting for the display: for the first frame and a resize, which must be on screen before the event returns.
     pub fn present_now(&self) {
-        present(&self.gpu, &lock(&self.surface), &self.waiting);
+        present(&self.gpu, &lock(&self.surface), &self.waiting, &self.shown);
     }
 
     pub fn resize(&self, width: u32, height: u32) {
@@ -584,9 +592,12 @@ impl Drop for Screen {
     }
 }
 
-fn present(gpu: &Mutex<Gpu>, surface: &wgpu::Surface<'static>, waiting: &AtomicBool) {
+fn present(gpu: &Mutex<Gpu>, surface: &wgpu::Surface<'static>, waiting: &AtomicBool, shown: &Mutex<Option<Instant>>) {
     let frame = match surface.get_current_texture() {
-        wgpu::CurrentSurfaceTexture::Success(frame) | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+        wgpu::CurrentSurfaceTexture::Success(frame) | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
+            *lock(shown) = Some(Instant::now());
+            frame
+        }
         wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
             let gpu = lock(gpu);
             surface.configure(&gpu.device, &gpu.config);

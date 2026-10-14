@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -17,6 +17,8 @@ use crate::paint::Painter;
 use crate::reload::{Handoff, Reload};
 use crate::scope::{Cause, Recorder, Stages};
 use crate::text::Text;
+
+const LATE_MARGIN: Duration = Duration::from_millis(2);
 
 pub struct Config {
     pub title: String,
@@ -227,6 +229,9 @@ struct Running<F: Face> {
     window: Arc<Window>,
     gpu: Screen,
     held: bool,
+    refresh: Option<Duration>,
+    painting: Duration,
+    draw_at: Option<Instant>,
     text: Text,
     metrics: Metrics,
     quads: Vec<Quad>,
@@ -275,6 +280,7 @@ impl<F: Face> Running<F> {
             self.held = true;
             return;
         }
+        self.draw_at = None;
         let started = Instant::now();
         self.pace.drawn();
         self.text.begin_frame();
@@ -318,6 +324,7 @@ impl<F: Face> Running<F> {
         let mut frame = frame!(self);
         self.face.painted(&mut frame);
         self.update_access();
+        self.painting = started.elapsed();
         self.recorder.drawn(stages, gpu, micros(rendered), micros(started));
         profiling::finish_frame!();
     }
@@ -325,8 +332,33 @@ impl<F: Face> Running<F> {
     fn wants(&mut self, cause: Cause, since: Instant) {
         self.recorder.wanted(cause, micros(since));
         if self.pace.want() {
-            self.window.request_redraw();
+            self.owe();
         }
+    }
+
+    fn owe(&mut self) {
+        match self.late() {
+            Some(at) => self.draw_at = Some(at),
+            None => self.window.request_redraw(),
+        }
+    }
+
+    fn late(&self) -> Option<Instant> {
+        let (refresh, shown) = (self.refresh?, self.gpu.shown()?);
+        let now = Instant::now();
+        if now.duration_since(shown) > refresh * 2 {
+            return None;
+        }
+        let mut deadline = shown + refresh;
+        while deadline <= now {
+            deadline += refresh;
+        }
+        let at = deadline.checked_sub(LATE_MARGIN + self.painting * 2)?;
+        (at > now).then_some(at)
+    }
+
+    fn measure_refresh(&mut self) {
+        self.refresh = self.window.current_monitor().and_then(|m| m.refresh_rate_millihertz()).filter(|&mhz| mhz > 0).map(|mhz| Duration::from_secs_f64(1000.0 / mhz as f64));
     }
 
     fn update_access(&mut self) {
@@ -366,14 +398,23 @@ impl<F: Face> Running<F> {
 impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
     fn new_events(&mut self, _: &ActiveEventLoop, cause: winit::event::StartCause) {
         if let (winit::event::StartCause::ResumeTimeReached { .. }, Some(r)) = (cause, self.running.as_mut()) {
-            r.input(Input::Clock);
+            match r.draw_at {
+                Some(at) if at <= Instant::now() => {
+                    r.draw_at = None;
+                    r.window.request_redraw();
+                }
+                _ => {
+                    r.input(Input::Clock);
+                }
+            }
         }
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let Some(r) = self.running.as_ref() else { return };
-        let flow = match r.face.changes() {
-            Some(at) => ControlFlow::WaitUntil(Instant::now() + std::time::Duration::from_millis((at.0 - crate::app::Moment::now().0).max(0) as u64)),
+        let clock = r.face.changes().map(|at| Instant::now() + Duration::from_millis((at.0 - crate::app::Moment::now().0).max(0) as u64));
+        let flow = match clock.into_iter().chain(r.draw_at).min() {
+            Some(at) => ControlFlow::WaitUntil(at),
             None => ControlFlow::Wait,
         };
         event_loop.set_control_flow(flow);
@@ -444,6 +485,9 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             window,
             gpu,
             held: false,
+            refresh: None,
+            painting: Duration::ZERO,
+            draw_at: None,
             text,
             metrics,
             quads: Vec::with_capacity(8192),
@@ -462,6 +506,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             _watcher: watcher,
             _menu: menu,
         };
+        running.measure_refresh();
         running.render(true);
         running.window.set_visible(true);
         marks.push(("first frame", Instant::now()));
@@ -489,7 +534,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             Signal::Presented => {
                 if r.held {
                     r.held = false;
-                    r.window.request_redraw();
+                    r.owe();
                 }
             }
             Signal::Looks(looks) => {
@@ -535,7 +580,9 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
         r.access.process_event(&r.window, &event);
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Moved(_) => r.measure_refresh(),
             WindowEvent::Resized(size) => {
+                r.measure_refresh();
                 r.gpu.resize(size.width, size.height);
                 r.metrics = Metrics::measure(&mut r.text, r.metrics.scale, size.width, size.height);
                 r.input(Input::Resized);

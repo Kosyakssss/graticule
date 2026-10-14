@@ -492,7 +492,6 @@ New laws need the owner's approval (`AGENTS.md`). These are the ones the design 
 - How an app's own components and per-window session state look in app code (`api.md`, "Open"). Until then, session fields are one copy per app, and the first slice has one window.
 - Subjects that aren't keys (Ticker's `Choose(#[subject] Symbol)`): they need a `Subject` trait for small `Copy` values. Nothing in the first slice uses one.
 - Versions finer than a top-level field.
-- Late reading and frame pacing (build-plan item 13).
 - A command run on thousands of chosen items (Remove with everything chosen) runs as one transaction on the main thread: about 10 ms with thousands of items. It should become a bulk change landed in slices too (build-plan item 13).
 
 ## 21. The owner's answers

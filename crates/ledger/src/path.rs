@@ -223,6 +223,22 @@ pub trait Field: Clone + 'static {
         None
     }
 
+    /// Hands each live or derived value directly in this struct to `each`, with its field's index.
+    fn moving(&mut self, _each: &mut dyn FnMut(u16, &mut dyn Moving)) {}
+
+    /// The derived values directly in this struct: which field, its name, and the fields it is worked out from.
+    fn derivations() -> &'static [Derivation]
+    where
+        Self: Sized,
+    {
+        &[]
+    }
+
+    /// The work that computes the derived value in `field` from a snapshot of the fields it reads, to run on another thread.
+    fn derive_work(&self, _field: u16) -> Option<Work> {
+        None
+    }
+
     fn reach(&self, steps: &[Step]) -> Option<&dyn Any> {
         steps.is_empty().then_some(self as &dyn Any)
     }
@@ -230,6 +246,34 @@ pub trait Field: Clone + 'static {
     fn reach_mut(&mut self, steps: &[Step]) -> Option<&mut dyn Any> {
         if steps.is_empty() { Some(self as &mut dyn Any) } else { None }
     }
+}
+
+/// A value that moves on its own: written by another thread (a live value) or worked out in the background (a derived value). The kernel reaches them through `Field::moving`; Ledger only carries them.
+pub trait Moving {
+    /// Takes the newest value another thread published, if there is one, and says whether it changed.
+    fn pin(&mut self) -> bool {
+        false
+    }
+
+    /// Hands the value a way to wake the window when it publishes.
+    fn wake_with(&mut self, _wake: std::sync::Arc<dyn Fn() + Send + Sync>) {}
+
+    /// Takes a finished computation of a derived value.
+    fn arrive(&mut self, _value: Box<dyn Any + Send>) {}
+
+    /// Says whether a newer computation is on its way.
+    fn coming(&mut self, _coming: bool) {}
+}
+
+/// Work that runs on another thread and hands back a value of any type.
+pub type Work = Box<dyn FnOnce() -> Box<dyn Any + Send> + Send>;
+
+/// A derived value of a struct of facts: its field, its name and the fields it reads.
+#[derive(Clone, Copy, Debug)]
+pub struct Derivation {
+    pub field: u16,
+    pub name: &'static str,
+    pub from: &'static [u16],
 }
 
 /// Facts: a struct of fields, made by `derive(Facts)`.

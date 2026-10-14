@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Write as _;
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use ledger::{Change, Choose, Edit, ErasedPath, History, Op, Store, Transaction, Value};
@@ -87,6 +87,9 @@ struct Reading {
 
 /// The list commands act on right now, and the keys they act on.
 type Here = Option<(ListInfo, Vec<u128>)>;
+
+/// A derived value worked out on another thread: its field, the versions of the fields it was worked out from, and the value.
+type Worked = (u16, Vec<u64>, Box<dyn Any + Send>);
 
 /// What a command was given that isn't the same on every run: whose keys, from which counter, the time and a seed. The command log keeps it, so a replay gives the same facts.
 #[derive(Clone, Copy, Debug)]
@@ -209,6 +212,10 @@ pub struct Runner<A: App> {
     replaying: bool,
     effects: Vec<Effect<A::Cmd>>,
     jobs: Vec<Job<A::Cmd>>,
+    versions: HashMap<u16, u64>,
+    deriving: HashMap<u16, Vec<u64>>,
+    working: Vec<u16>,
+    derived: (mpsc::Sender<Worked>, mpsc::Receiver<Worked>),
     extras: Vec<Extra>,
     asked: Option<usize>,
     hold: bool,
@@ -276,6 +283,10 @@ impl<A: App> Runner<A> {
             replaying: false,
             effects: Vec::new(),
             jobs: Vec::new(),
+            versions: HashMap::new(),
+            deriving: HashMap::new(),
+            working: Vec::new(),
+            derived: mpsc::channel(),
             extras: Vec::new(),
             asked: None,
             hold: false,
@@ -317,6 +328,7 @@ impl<A: App> Runner<A> {
 
     /// Builds the tree from the facts: the app's view, the palette when it is open, then the window's own lines, then every label and availability filled in.
     pub fn build(&mut self) {
+        self.pin();
         if self.calendar.live {
             self.calendar.now = Moment::now();
         }
@@ -1142,6 +1154,11 @@ impl<A: App> Runner<A> {
     }
 
     fn record(&mut self, entry: Value, ops: &[Op]) {
+        for op in ops {
+            if let Some(field) = op.path().first_field() {
+                *self.versions.entry(field).or_default() += 1;
+            }
+        }
         match &mut self.keep {
             Keep::Nothing => {}
             Keep::Memory(entries) => entries.push(entry),
@@ -1405,7 +1422,8 @@ impl<A: App> Runner<A> {
     }
 
     fn progress(&self) -> Option<String> {
-        let Some(background) = self.background.front() else { return self.jobs.first().map(|job| job.name.clone()) };
+        let working = || A::derivations().iter().find(|d| self.working.contains(&d.field)).map(|d| format!("Working out “{}”", d.name));
+        let Some(background) = self.background.front() else { return self.jobs.first().map(|job| job.name.clone()).or_else(working) };
         let part = background.parts.front()?;
         Some(match &part.found {
             Found::Searching(_) => format!("{}: searching", background.label),
@@ -1413,8 +1431,90 @@ impl<A: App> Runner<A> {
         })
     }
 
+    fn pin(&mut self) -> bool {
+        let mut moved = Vec::new();
+        self.facts.moving(&mut |field, value| {
+            if value.pin() {
+                moved.push(field);
+            }
+        });
+        let any = !moved.is_empty();
+        for field in moved {
+            *self.versions.entry(field).or_default() += 1;
+        }
+        self.derive();
+        any
+    }
+
+    fn derive(&mut self) {
+        for d in A::derivations() {
+            let from: Vec<u64> = d.from.iter().map(|f| self.versions.get(f).copied().unwrap_or_default()).collect();
+            if self.deriving.get(&d.field) == Some(&from) {
+                continue;
+            }
+            let Some(work) = self.facts.derive_work(d.field) else { continue };
+            self.deriving.insert(d.field, from.clone());
+            if !self.working.contains(&d.field) {
+                self.working.push(d.field);
+            }
+            self.facts.moving(&mut |field, value| {
+                if field == d.field {
+                    value.coming(true);
+                }
+            });
+            let send = self.derived.0.clone();
+            let field = d.field;
+            match self.waker.clone() {
+                Some(waker) => {
+                    let started = std::thread::Builder::new().name(format!("graticule deriving {}", d.name)).spawn(move || {
+                        if send.send((field, from, work())).is_ok() {
+                            waker.wake();
+                        }
+                    });
+                    if let Err(e) = started {
+                        self.said = Some(Said::Failure(format!("Working out “{}” couldn't start: {e}", d.name)));
+                    }
+                }
+                None => {
+                    let _ = send.send((field, from, work()));
+                }
+            }
+        }
+        if self.waker.is_none() {
+            self.arrive();
+        }
+    }
+
+    fn arrive(&mut self) {
+        let mut landed = false;
+        while let Ok((field, from, value)) = self.derived.1.try_recv() {
+            if self.deriving.get(&field) != Some(&from) {
+                continue;
+            }
+            let mut value = Some(value);
+            self.facts.moving(&mut |f, moving| {
+                if f == field
+                    && let Some(value) = value.take()
+                {
+                    moving.arrive(value);
+                    moving.coming(false);
+                }
+            });
+            self.working.retain(|w| *w != field);
+            *self.versions.entry(field).or_default() += 1;
+            landed = true;
+        }
+        if landed {
+            self.stale = true;
+            self.derive();
+        }
+    }
+
     /// Lets jobs wake the window when their results are ready.
     pub fn wake_with(mut self, waker: Waker) -> Self {
+        let wake = waker.clone();
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(move || wake.wake());
+        self.facts.moving(&mut |_, value| value.wake_with(wake.clone()));
         self.keys_watch = self.keys_file.as_deref().and_then(|file| watch_keys(file, waker.clone()));
         self.waker = Some(waker);
         self
@@ -1516,6 +1616,7 @@ impl<A: App> Runner<A> {
     }
 
     fn collect(&mut self) {
+        self.arrive();
         if self.keys_watch.as_ref().is_some_and(|(_, changed)| changed.try_iter().count() > 0) {
             self.read_keys();
         }
@@ -2679,6 +2780,9 @@ impl<A: App> Face for Runner<A> {
                 true
             }
             Input::Woken => {
+                if self.pin() {
+                    self.stale = true;
+                }
                 self.collect();
                 self.slice(Slice::Time(SLICE));
                 true

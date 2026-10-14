@@ -109,6 +109,8 @@ Apps can show pictures: icons and small drawings, made as SVG files in any drawi
 
 `cargo run -p bindery -- new apps/hello` starts a new app: a window with a counter, two commands and one named state, ready to change, which already passes Assay and opens in Specimen. `cargo run -p bindery -- dev apps/hello` runs it and watches the code: every time a file is saved it builds the app again, and if the build works, the window closes and reopens with the new version in the same place, at the same size, with the same things in it. If the build fails, the errors show in the terminal and the app you have keeps running.
 
+Some of what an app shows changes on its own: prices from a market, the level of a microphone, a download's progress. Such a value is written by its own source as often as it likes, and the window wakes to show it at most once per picture, never more. Other values are worked out from the app's facts, a chart from thousands of prices or a count over a long list. They are worked out in the background, only when what they come from has changed, so the window never waits for them; until the new one is ready the app shows the last one, and the status line says "Working out …" with its name.
+
 ## How speed is measured
 
 A screen refreshes 60 to 1000 times a second; at 1000, there is one millisecond per picture. Graticule's goal is to finish its work for an ordinary interaction in a tenth of that, and to do nothing at all when nothing is happening, which is what saves battery. Times are measured automatically and judged by the slowest frames, not the average, because the slow ones are the ones you notice.

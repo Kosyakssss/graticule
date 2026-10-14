@@ -16,6 +16,7 @@ pub mod ink;
 pub mod kept;
 pub mod keys;
 pub mod layout;
+pub mod live;
 pub mod look;
 pub mod menu;
 pub mod message;
@@ -43,6 +44,7 @@ pub use message::Message;
 pub use picture::{Layer, Picture, icons};
 pub use tree::{Fill, Span, cols};
 pub use form::{Control, Setting, Settings};
+pub use live::{Derived, Feed, Live};
 pub use ui::{Bind, Ui};
 pub use value::{Dates, Integer};
 

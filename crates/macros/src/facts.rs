@@ -137,6 +137,52 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
         }
     });
     let documents: Vec<&Type> = fields.iter().filter(|f| f.kind == Kind::Document).map(|f| &f.ty).collect();
+    let moving: Vec<TokenStream> = fields
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.kind == Kind::Live)
+        .map(|(i, f)| {
+            let (ident, index) = (&f.ident, i as u16);
+            quote!(each(#index, &mut self.#ident);)
+        })
+        .collect();
+    let mut derivations = Vec::new();
+    let mut works = Vec::new();
+    for (i, f) in named.named.iter().enumerate() {
+        let Some(attr) = f.attrs.iter().find(|a| a.path().is_ident("derived")) else { continue };
+        let (work, from) = attr.parse_args_with(|input: syn::parse::ParseStream| {
+            let work: syn::ExprPath = input.parse()?;
+            input.parse::<syn::Token![,]>()?;
+            let word: syn::Ident = input.parse()?;
+            if word != "from" {
+                return Err(syn::Error::new_spanned(word, "write the fields it reads as `from = [a, b]`"));
+            }
+            input.parse::<syn::Token![=]>()?;
+            let inside;
+            syn::bracketed!(inside in input);
+            let from = syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated(&inside)?;
+            Ok((work, from.into_iter().collect::<Vec<_>>()))
+        })?;
+        let mut indexes = Vec::new();
+        for name in &from {
+            match fields.iter().position(|g| g.ident == *name) {
+                Some(j) if j != i => indexes.push(j as u16),
+                _ => return Err(syn::Error::new_spanned(name, "a derived value reads other fields of the same facts")),
+            }
+        }
+        let (index, label) = (i as u16, fields[i].ident.to_string());
+        derivations.push(quote!(#ledger::Derivation { field: #index, name: #label, from: &[#(#indexes),*] }));
+        let names: Vec<syn::Ident> = (0..from.len()).map(|k| format_ident!("input{k}")).collect();
+        works.push(quote! {
+            #index => {
+                let inputs = (#(::std::clone::Clone::clone(&self.#from),)*);
+                ::std::option::Option::Some(::std::boxed::Box::new(move || {
+                    let (#(#names,)*) = inputs;
+                    ::std::boxed::Box::new(#work(#(&#names),*)) as ::std::boxed::Box<dyn ::std::any::Any + ::std::marker::Send>
+                }))
+            }
+        });
+    }
 
     let record_impl = record.map(|k| {
         let key = &k.ident;
@@ -229,6 +275,22 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
                     },
                     #([#ledger::Step::Field(#indexes), rest @ ..] => #ledger::Field::apply(&mut self.#idents, rest, op),)*
                     _ => false,
+                }
+            }
+
+            fn moving(&mut self, each: &mut dyn FnMut(u16, &mut dyn #ledger::Moving)) {
+                let _ = &each;
+                #(#moving)*
+            }
+
+            fn derivations() -> &'static [#ledger::Derivation] {
+                &[#(#derivations),*]
+            }
+
+            fn derive_work(&self, field: u16) -> ::std::option::Option<#ledger::Work> {
+                match field {
+                    #(#works)*
+                    _ => ::std::option::Option::None,
                 }
             }
 

@@ -25,6 +25,7 @@ accesskit = "0.25.1"
 accesskit_winit = "0.34.1"
 notify = "8.2.0"
 jiff = "0.2.38"
+arc-swap = "1.7.1"
 
 [features]
 profile = ["profiling/profile-with-tracy"]

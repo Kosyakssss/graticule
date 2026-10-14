@@ -58,9 +58,10 @@ impl Theme {
 }
 
 /// One of the theme's semantic inks, by name, for code that draws in a chosen ink rather than a fixed color.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Ink {
     Background,
+    #[default]
     Ink,
     Muted,
     Faint,

@@ -1,16 +1,23 @@
-window		0 0 49 12	
+window		0 0 49 18	
   page	Field	0 0 49 7	
     list		2 3 45 3	18 items
       list item		2 3 43 3	
         text	A one-line field that types into a Text in the facts. The text is the app's; the caret and the selection inside the field are the field's own. Each change arrives in update as an Edit, so typing is undoable like any command, a word at a time.	2 3 43 3	
   alert		2 7 45 1	
   status		2 8 45 1	
-  toolbar		2 9 45 3	
+  toolbar		2 9 45 9	
     button	Press	2 9 7 1	
     button	Follow the link	11 9 13 1	
     button	Tick or untick the box	26 9 18 1	
     button	Say it	2 10 7 1	unavailable (Type something first)
     button	Back to all components	11 10 20 1	
-    button	Undo	33 10 13 1	unavailable (Nothing to undo)
-    button	Redo	2 11 19 1	unavailable (Nothing to redo)
-    button	Open the palette	23 11 15 1	
+    button	Change the light appearance	2 11 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	2 12 24 1	
+    button	Use the next weight of lines	2 13 23 1	
+    button	Deepen the shadow	27 13 17 1	
+    button	Make the shadow shallower	2 14 23 1	
+    button	Use the other check mark	2 15 22 1	
+    button	Save the theme and the style	2 16 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	28 16 13 1	unavailable (Nothing to undo)
+    button	Redo	2 17 19 1	unavailable (Nothing to redo)
+    button	Open the palette	23 17 15 1	

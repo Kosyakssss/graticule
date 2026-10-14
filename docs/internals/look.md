@@ -16,6 +16,14 @@ The user's own files live in the looks folder, shared by every Graticule app (`<
 
 The shell owns the `Looks`. It reads them once before the first frame and gives the face `Face::offered`. The five built-in commands that switch the look are `light-appearance`, `dark-appearance`, `system-appearance`, `next-theme` and `next-style`. They are in the registry like any other command: in the palette, bindable in a keymap, unavailable with a reason when they would do nothing. They don't change facts, so they are never undo steps; undoing a switch is the opposite switch. Running one leaves the switch in the runner. After each input the shell takes it (`Face::switch`), applies it, writes `look.txt` and draws again. A runner whose theme or style differs from the last frame's redraws everything it keeps.
 
+## The editor
+
+Specimen's Style place edits Graticule's own theme and style. The inks (in thousandths of lightness and chroma and tenths of a degree of hue, so every step lands on a number the file writes exactly) and the three style values are Specimen's facts, so every step is a command and undoes like any other. The steps for the chosen ink are lighter, darker, more color, less color, and the hue forward or back. They go to the appearance being changed (light or dark, switched by command). A step that would leave any text ink below its contrast is unavailable, and the reason gives the ratio, so the editor can't make a theme the file would refuse.
+
+While anything differs from the built-in look, Specimen draws in the edited one (`Face::look`), so every component page and every screen follows each step. Saving writes `graticule.theme` and `graticule.style` to the looks folder. They take the built-in ones' names and so replace them for this user, and every running Graticule app redraws in them through the watcher.
+
+The blast radius (spec §13.5) is counted once, on a thread, the first time Style opens. Every named state is painted in a coded theme in which each ink is a color no other ink has, and the colors of the quads say which inks each screen uses. The column "Drawn" then reads "on 12 of 18 screens". The count doesn't depend on the inks' values, so editing never makes it stale.
+
 `Face::look` lets a face draw in a look other than the chosen one; Specimen's style editor uses it to show a theme or style as it is being edited.
 
 ## Editing live

@@ -26,6 +26,13 @@ pub struct Picture {
 }
 
 impl Offscreen {
+    /// The quads of the frame rendered last.
+    pub fn quads(&self) -> &[Quad] {
+        &self.quads
+    }
+}
+
+impl Offscreen {
     pub fn new(width: u32, height: u32, scale: f32) -> Self {
         let mut text = Text::new();
         let metrics = Metrics::measure(&mut text, scale, width, height);

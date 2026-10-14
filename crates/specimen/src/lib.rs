@@ -3,6 +3,7 @@
 mod catalog;
 mod changes;
 mod page;
+mod style;
 
 use std::sync::mpsc;
 
@@ -26,7 +27,15 @@ pub struct Specimen<A: App> {
     state: usize,
     changes: Runner<Changes>,
     looked: Looked,
+    counted: Counted,
     waker: Option<Waker>,
+}
+
+/// How far Specimen has got counting which screens draw in which ink, for the Style place. It counts the first time Style opens, on a thread of its own.
+enum Counted {
+    NotYet,
+    Counting(mpsc::Receiver<style::Reaches>),
+    Done,
 }
 
 /// How far Specimen has got comparing every sheet with its approved proof. It looks the first time Changes opens, on a thread of its own.
@@ -71,9 +80,8 @@ impl<A: App> Specimen<A> {
             })
             .collect();
         let mut catalog = Runner::new(Catalog::default());
-        catalog.hold_effects();
         catalog.run(catalog::Cmd::Go(place));
-        let mut specimen = Specimen { catalog, names, screens, state: 0, changes: Runner::new(Changes::looking()), looked: Looked::NotYet, waker: None };
+        let mut specimen = Specimen { catalog, names, screens, state: 0, changes: Runner::new(Changes::looking()), looked: Looked::NotYet, counted: Counted::NotYet, waker: None };
         specimen.offer();
         specimen
     }
@@ -137,6 +145,19 @@ impl<A: App> Specimen<A> {
     }
 
     fn survey(&mut self) {
+        if self.place() == Place::Style && matches!(self.counted, Counted::NotYet) {
+            let (send, receive) = mpsc::channel();
+            let waker = self.waker.clone();
+            let started = std::thread::Builder::new().name("specimen inks".into()).spawn(move || {
+                let _ = send.send(style::reach::<A>());
+                if let Some(waker) = waker {
+                    waker.wake();
+                }
+            });
+            if started.is_ok() {
+                self.counted = Counted::Counting(receive);
+            }
+        }
         if self.place() != Place::Changes || !matches!(self.looked, Looked::NotYet) {
             return;
         }
@@ -154,6 +175,13 @@ impl<A: App> Specimen<A> {
     }
 
     fn collect(&mut self) -> bool {
+        if let Counted::Counting(receive) = &self.counted
+            && let Ok(found) = receive.try_recv()
+        {
+            self.counted = Counted::Done;
+            self.catalog.run(catalog::Cmd::Reached(found));
+            return true;
+        }
         let Looked::Looking(receive) = &self.looked else { return false };
         let Ok(sheets) = receive.try_recv() else { return false };
         self.looked = Looked::Done;
@@ -192,6 +220,10 @@ impl<A: App> Specimen<A> {
 }
 
 impl<A: App> Face for Specimen<A> {
+    fn look(&self, look: kernel::look::Look) -> kernel::look::Look {
+        if self.catalog.facts.edited() { self.catalog.facts.edited_look(look.appearance) } else { look }
+    }
+
     fn paint(&mut self, painter: &mut Painter, seen: Seen) {
         self.face().paint(painter, seen);
     }

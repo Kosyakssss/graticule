@@ -1,0 +1,212 @@
+window		0 0 120 30	
+  page	Style	0 0 120 24	
+    list		2 3 116 20	33 items
+      list item		2 3 114 1	
+        text	Inks	2 3 4 1	strong
+      list item		2 4 114 3	
+        text	Everything is drawn in one of these inks, so a theme restyles everything at once. Each is given as OKLCH lightness, chroma and hue, then, for inks that text and lines are drawn in, its contrast on the background: text needs 4.5 to 1, faint text 3 to 1. Choose an ink to change it from the bar; a change that would make text hard to read can't be made, and says why. Every screen and component follows as it moves.	2 4 114 3	muted
+      list item		2 7 114 1	
+        group		2 7 114 1	
+          column		2 7 6 1	
+            text	Now	2 7 6 1	muted
+          column		10 7 12 1	
+            text	Ink	10 7 12 1	muted
+          column		24 7 34 1	
+            text	Light, being changed	24 7 34 1	muted
+          column		60 7 34 1	
+            text	Dark	60 7 34 1	muted
+          column		96 7 20 1	
+            text	Drawn	96 7 20 1	muted
+      list item		2 8 114 1	
+        group		2 8 114 1	
+          column		2 8 6 1	
+            swatch	background	2 8 4 1	
+          column		10 8 12 1	
+            text	background	10 8 12 1	
+          column		24 8 34 1	
+            text	0.980 0.003 100	24 8 34 1	mono
+          column		60 8 34 1	
+            text	0.200 0.004 285	60 8 34 1	mono
+          column		96 8 20 1	
+            text		96 8 20 1	muted
+      list item		2 9 114 1	
+        group		2 9 114 1	
+          column		2 9 6 1	
+            swatch	field	2 9 4 1	
+          column		10 9 12 1	
+            text	field	10 9 12 1	
+          column		24 9 34 1	
+            text	0.950 0.003 100	24 9 34 1	mono
+          column		60 9 34 1	
+            text	0.250 0.006 285	60 9 34 1	mono
+          column		96 9 20 1	
+            text		96 9 20 1	muted
+      list item		2 10 114 1	
+        group		2 10 114 1	
+          column		2 10 6 1	
+            swatch	hover	2 10 4 1	
+          column		10 10 12 1	
+            text	hover	10 10 12 1	
+          column		24 10 34 1	
+            text	0.955 0.003 100	24 10 34 1	mono
+          column		60 10 34 1	
+            text	0.250 0.006 285	60 10 34 1	mono
+          column		96 10 20 1	
+            text		96 10 20 1	muted
+      list item		2 11 114 1	
+        group		2 11 114 1	
+          column		2 11 6 1	
+            swatch	cursor	2 11 4 1	
+          column		10 11 12 1	
+            text	cursor	10 11 12 1	
+          column		24 11 34 1	
+            text	0.925 0.003 100	24 11 34 1	mono
+          column		60 11 34 1	
+            text	0.285 0.007 285	60 11 34 1	mono
+          column		96 11 20 1	
+            text		96 11 20 1	muted
+      list item		2 12 114 1	
+        group		2 12 114 1	
+          column		2 12 6 1	
+            swatch	selection	2 12 4 1	
+          column		10 12 12 1	
+            text	selection	10 12 12 1	
+          column		24 12 34 1	
+            text	0.920 0.035 262	24 12 34 1	mono
+          column		60 12 34 1	
+            text	0.320 0.055 262	60 12 34 1	mono
+          column		96 12 20 1	
+            text		96 12 20 1	muted
+      list item		2 13 114 1	
+        group		2 13 114 1	
+          column		2 13 6 1	
+            swatch	ink	2 13 4 1	
+          column		10 13 12 1	
+            text	ink	10 13 12 1	
+          column		24 13 34 1	
+            text	0.220 0.005 285 · 16.4	24 13 34 1	mono
+          column		60 13 34 1	
+            text	0.925 0.004 100 · 14.5	60 13 34 1	mono
+          column		96 13 20 1	
+            text		96 13 20 1	muted
+      list item		2 14 114 1	
+        group		2 14 114 1	
+          column		2 14 6 1	
+            swatch	muted	2 14 4 1	
+          column		10 14 12 1	
+            text	muted	10 14 12 1	
+          column		24 14 34 1	
+            text	0.500 0.008 285 · 5.7	24 14 34 1	mono
+          column		60 14 34 1	
+            text	0.700 0.006 285 · 6.8	60 14 34 1	mono
+          column		96 14 20 1	
+            text		96 14 20 1	muted
+      list item		2 15 114 1	
+        group		2 15 114 1	
+          column		2 15 6 1	
+            swatch	faint	2 15 4 1	
+          column		10 15 12 1	
+            text	faint	10 15 12 1	
+          column		24 15 34 1	
+            text	0.600 0.008 285 · 3.7	24 15 34 1	mono
+          column		60 15 34 1	
+            text	0.580 0.008 285 · 4.2	60 15 34 1	mono
+          column		96 15 20 1	
+            text		96 15 20 1	muted
+      list item		2 16 114 1	
+        group		2 16 114 1	
+          column		2 16 6 1	
+            swatch	rule	2 16 4 1	
+          column		10 16 12 1	
+            text	rule	10 16 12 1	
+          column		24 16 34 1	
+            text	0.780 0.005 285 · 1.9	24 16 34 1	mono
+          column		60 16 34 1	
+            text	0.410 0.007 285 · 2.0	60 16 34 1	mono
+          column		96 16 20 1	
+            text		96 16 20 1	muted
+      list item		2 17 114 1	chosen, focused
+        group		2 17 114 1	
+          column		2 17 6 1	
+            swatch	link	2 17 4 1	
+          column		10 17 12 1	
+            text	link	10 17 12 1	
+          column		24 17 34 1	
+            text	0.480 0.150 262 · 6.3	24 17 34 1	mono
+          column		60 17 34 1	
+            text	0.770 0.110 260 · 8.7	60 17 34 1	mono
+          column		96 17 20 1	
+            text		96 17 20 1	muted
+      list item		2 18 114 1	
+        group		2 18 114 1	
+          column		2 18 6 1	
+            swatch	visited	2 18 4 1	
+          column		10 18 12 1	
+            text	visited	10 18 12 1	
+          column		24 18 34 1	
+            text	0.480 0.150 305 · 6.6	24 18 34 1	mono
+          column		60 18 34 1	
+            text	0.770 0.120 305 · 8.4	60 18 34 1	mono
+          column		96 18 20 1	
+            text		96 18 20 1	muted
+      list item		2 19 114 1	
+        group		2 19 114 1	
+          column		2 19 6 1	
+            swatch	danger	2 19 4 1	
+          column		10 19 12 1	
+            text	danger	10 19 12 1	
+          column		24 19 34 1	
+            text	0.480 0.170 28 · 6.7	24 19 34 1	mono
+          column		60 19 34 1	
+            text	0.770 0.130 26 · 8.3	60 19 34 1	mono
+          column		96 19 20 1	
+            text		96 19 20 1	muted
+      list item		2 20 114 1	
+        group		2 20 114 1	
+          column		2 20 6 1	
+            swatch	warn	2 20 4 1	
+          column		10 20 12 1	
+            text	warn	10 20 12 1	
+          column		24 20 34 1	
+            text	0.480 0.110 70 · 6.3	24 20 34 1	mono
+          column		60 20 34 1	
+            text	0.770 0.120 80 · 8.6	60 20 34 1	mono
+          column		96 20 20 1	
+            text		96 20 20 1	muted
+      list item		2 21 114 1	
+        group		2 21 114 1	
+          column		2 21 6 1	
+            swatch	ok	2 21 4 1	
+          column		10 21 12 1	
+            text	ok	10 21 12 1	
+          column		24 21 34 1	
+            text	0.480 0.120 150 · 5.8	24 21 34 1	mono
+          column		60 21 34 1	
+            text	0.770 0.130 151 · 9.2	60 21 34 1	mono
+          column		96 21 20 1	
+            text		96 21 20 1	muted
+      list item		2 22 114 1	
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Say it	46 26 7 1	unavailable (Type something first)
+    button	Back to all components	55 26 20 1	unavailable (All components are showing)
+    button	Make “link” lighter	77 26 16 1	
+    button	Make “link” darker	95 26 16 1	
+    button	Give “link” more color	2 27 19 1	
+    button	Give “link” less color	23 27 18 1	
+    button	Turn the hue of “link” forward	43 27 25 1	
+    button	Turn the hue of “link” back	70 27 22 1	
+    button	Change the light appearance	94 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	2 28 24 1	
+    button	Use the next weight of lines	28 28 23 1	
+    button	Deepen the shadow	53 28 17 1	
+    button	Make the shadow shallower	72 28 23 1	
+    button	Use the other check mark	2 29 22 1	
+    button	Save the theme and the style	26 29 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	52 29 13 1	unavailable (Nothing to undo)
+    button	Redo	67 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	88 29 15 1	

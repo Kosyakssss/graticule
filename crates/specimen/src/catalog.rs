@@ -1,9 +1,11 @@
 use graticule_macros::{Commands, Facts};
-use kernel::ink::{Theme, contrast, to_oklch};
+use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
-use kernel::{App, Available, Cx, Ink, Message, States, Ui};
+use kernel::{App, Available, Cx, Failure, Ink, Message, Path, States, Ui};
 use ledger::{Edit, Key, List, Outcome, Selection, Text};
+
+use crate::style::{self, Mark, Mix, Nudge, Reach, Reaches, Side, Weight};
 
 /// Specimen's places. Every one is in the bar wherever you are.
 #[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
@@ -57,6 +59,16 @@ pub struct Catalog {
     #[session]
     looking: Selection<Setting>,
     #[session]
+    editing: Side,
+    inks: List<Mix>,
+    lines: Weight,
+    shadow: u32,
+    check: Mark,
+    #[session]
+    reach: List<Reach>,
+    #[session]
+    screens: u32,
+    #[session]
     samples: List<Sample>,
     #[session]
     draft: Text,
@@ -106,14 +118,24 @@ pub struct Setting {
     dark: String,
 }
 
-#[derive(Facts, Debug, Default, PartialEq)]
+#[derive(Facts, Copy, Debug, Default, PartialEq)]
 pub enum Shown {
     #[default]
     Heading,
     Paragraph,
     Columns,
     Ink(Ink),
+    Knob(Knob),
     Value,
+}
+
+/// A value of the style, as a line of the Style place shows it.
+#[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Knob {
+    #[default]
+    Lines,
+    Shadow,
+    Check,
 }
 
 /// Content that breaks careless components: nothing, too much, the other direction, other scripts, pictures and long numbers.
@@ -229,6 +251,36 @@ pub enum Cmd {
     Back,
     #[label("{text}")]
     Echo(#[subject] Key<Sample>),
+    #[label("Make “{name}” lighter", short: "Lighter")]
+    Lighter(#[subject] Key<Setting>),
+    #[label("Make “{name}” darker", short: "Darker")]
+    Darker(#[subject] Key<Setting>),
+    #[label("Give “{name}” more color", short: "More color")]
+    MoreColor(#[subject] Key<Setting>),
+    #[label("Give “{name}” less color", short: "Less color")]
+    LessColor(#[subject] Key<Setting>),
+    #[label("Turn the hue of “{name}” forward", short: "Hue forward")]
+    HueForward(#[subject] Key<Setting>),
+    #[label("Turn the hue of “{name}” back", short: "Hue back")]
+    HueBack(#[subject] Key<Setting>),
+    #[label("Change the light appearance")]
+    EditLight,
+    #[label("Change the dark appearance")]
+    EditDark,
+    #[label("Use the next weight of lines")]
+    NextLines,
+    #[label("Deepen the shadow")]
+    DeeperShadow,
+    #[label("Make the shadow shallower")]
+    ShallowerShadow,
+    #[label("Use the other check mark")]
+    OtherCheck,
+    #[label("Save the theme and the style")]
+    SaveLook,
+    #[internal]
+    SavedLook(Result<Path, Failure>),
+    #[internal]
+    Reached(Reaches),
     #[internal]
     Go(Place),
     #[internal]
@@ -248,6 +300,7 @@ impl Default for Catalog {
     fn default() -> Self {
         let sections = Component::ALL.iter().zip(1..).map(|(&component, n)| Section { id: Key::fixed(n), name: component.name().to_string(), component }).collect();
         let samples = SAMPLES.iter().zip(1..).map(|((what, text), n)| Sample { id: Key::fixed(n), what: what.to_string(), text: text.to_string() }).collect();
+        let (lines, shadow, check) = style::start();
         Catalog {
             place: Place::Components,
             sections,
@@ -257,6 +310,13 @@ impl Default for Catalog {
             reading: Selection::default(),
             settings: settings(),
             looking: Selection::default(),
+            editing: Side::Light,
+            inks: style::mixes(),
+            lines,
+            shadow,
+            check,
+            reach: List::default(),
+            screens: 0,
             samples,
             draft: Text::default(),
             ticked: false,
@@ -274,7 +334,16 @@ impl App for Catalog {
             Cmd::Open(section) => kernel::no_if(!self.sections.has(*section), Message::from("There is no such component")),
             Cmd::Back => kernel::no_if(self.page.is_none(), Message::from("All components are showing")),
             Cmd::Echo(sample) => kernel::no_if(!self.samples.has(*sample), Message::from("There is no such sample")),
-            Cmd::Press | Cmd::Follow | Cmd::Tick | Cmd::Go(_) | Cmd::Edit(_) => Available::Yes,
+            Cmd::Lighter(s) | Cmd::Darker(s) | Cmd::MoreColor(s) | Cmd::LessColor(s) | Cmd::HueForward(s) | Cmd::HueBack(s) => match self.nudge(*s, nudge(cmd)) {
+                Ok(_) => Available::Yes,
+                Err(why) => Available::No(why),
+            },
+            Cmd::EditLight => kernel::no_if(self.editing == Side::Light, Message::from("The light appearance is being changed already")),
+            Cmd::EditDark => kernel::no_if(self.editing == Side::Dark, Message::from("The dark appearance is being changed already")),
+            Cmd::DeeperShadow => kernel::no_if(self.shadow >= 50, Message::from("The shadow is as deep as it goes, half a row")),
+            Cmd::ShallowerShadow => kernel::no_if(self.shadow == 0, Message::from("There is no shadow now")),
+            Cmd::SaveLook => kernel::no_if(!self.edited(), Message::from("Nothing has been changed from Graticule's own theme and style")),
+            Cmd::Press | Cmd::Follow | Cmd::Tick | Cmd::Go(_) | Cmd::Edit(_) | Cmd::NextLines | Cmd::OtherCheck | Cmd::SavedLook(_) | Cmd::Reached(_) => Available::Yes,
         }
     }
 
@@ -315,6 +384,52 @@ impl App for Catalog {
                 self.place = place;
                 Outcome::Changed
             }
+            Cmd::Lighter(s) | Cmd::Darker(s) | Cmd::MoreColor(s) | Cmd::LessColor(s) | Cmd::HueForward(s) | Cmd::HueBack(s) => {
+                let Ok((ink, shade)) = self.nudge(s, nudge(&cmd)) else { return Outcome::Nothing };
+                let Some(key) = self.inks.iter().find(|m| m.ink == ink).map(|m| m.id) else { return Outcome::Nothing };
+                let side = self.editing;
+                self.inks.change(key, |m| if side == Side::Light { m.light = shade } else { m.dark = shade })
+            }
+            Cmd::EditLight => {
+                self.editing = Side::Light;
+                Outcome::Changed
+            }
+            Cmd::EditDark => {
+                self.editing = Side::Dark;
+                Outcome::Changed
+            }
+            Cmd::NextLines => {
+                self.lines = match self.lines {
+                    Weight::Thin => Weight::Regular,
+                    Weight::Regular => Weight::Heavy,
+                    Weight::Heavy => Weight::Thin,
+                };
+                Outcome::Changed
+            }
+            Cmd::DeeperShadow => {
+                self.shadow = (self.shadow + 2).min(50);
+                Outcome::Changed
+            }
+            Cmd::ShallowerShadow => {
+                self.shadow = self.shadow.saturating_sub(2);
+                Outcome::Changed
+            }
+            Cmd::OtherCheck => {
+                self.check = if self.check == Mark::Box { Mark::Tick } else { Mark::Box };
+                Outcome::Changed
+            }
+            Cmd::SaveLook => {
+                let folder = kernel::look::folder();
+                cx.write(Path(folder.join("graticule.theme")), |c: &Catalog| style::theme_file(&c.inks).print(), Cmd::SavedLook);
+                cx.write(Path(folder.join("graticule.style")), |c: &Catalog| style::style_file(c.lines, c.shadow, c.check).print(), Cmd::SavedLook);
+                Outcome::Nothing
+            }
+            Cmd::SavedLook(Ok(path)) => cx.say(Message::plain(format!("Saved {}; every Graticule app draws in it now", path.shortened(60)))),
+            Cmd::SavedLook(Err(failure)) => cx.say_failure(failure),
+            Cmd::Reached(found) => {
+                self.screens = found.screens;
+                self.reach.replace(found.inks.iter().cloned())
+            }
             Cmd::Edit(edit) => edit.apply(self),
         }
     }
@@ -334,7 +449,11 @@ impl App for Catalog {
     }
 
     fn states() -> States<Self> {
-        let start = States::new().add("Components", Catalog::default()).add("Style", Catalog { place: Place::Style, ..Catalog::default() });
+        let mut chosen = Catalog { place: Place::Style, ..Catalog::default() };
+        if let Some(link) = chosen.settings.iter().find(|s| s.shown == Shown::Ink(Ink::Link)).map(|s| s.id) {
+            let _ = chosen.looking.choose(&ledger::Choose::Only(link.raw()));
+        }
+        let start = States::new().add("Components", Catalog::default()).add("Style", Catalog { place: Place::Style, ..Catalog::default() }).add("Style, an ink chosen", chosen);
         Component::ALL.iter().fold(start, |states, &component| {
             states.add(component.name(), Catalog { page: Some(component), blocks: blocks(component), ..Catalog::default() })
         })
@@ -358,6 +477,13 @@ impl Catalog {
     }
 
     fn style(&self, ui: &mut Ui<Cmd>) {
+        let file = style::theme_file(&self.inks);
+        let (light, dark) = (file.theme(Appearance::Light), file.theme(Appearance::Dark));
+        let changing = |side: Side, name: &str| if self.editing == side { format!("{name}, being changed") } else { name.to_string() };
+        let reach = |ink: Ink| match self.reach.iter().find(|r| r.ink == ink) {
+            Some(r) => format!("on {} of {} screens", r.screens, self.screens),
+            None => String::new(),
+        };
         ui.page(Message::from("Style"), |ui| {
             ui.list(&self.settings, Catalog::looking, |ui, setting| match setting.shown {
                 Shown::Heading => ui.strong(&setting.name),
@@ -365,14 +491,27 @@ impl Catalog {
                 Shown::Columns => ui.columns(|ui| {
                     ui.column(SWATCH_COLUMN, |ui| ui.muted("Now"));
                     ui.column(NAME_COLUMN, |ui| ui.muted(&setting.name));
-                    ui.column(kernel::Fill, |ui| ui.muted(&setting.light));
-                    ui.column(kernel::Fill, |ui| ui.muted(&setting.dark));
+                    ui.column(kernel::Fill, |ui| ui.muted(changing(Side::Light, &setting.light)));
+                    ui.column(kernel::Fill, |ui| ui.muted(changing(Side::Dark, &setting.dark)));
+                    ui.column(REACH_COLUMN, |ui| ui.muted("Drawn"));
                 }),
                 Shown::Ink(ink) => ui.columns(|ui| {
                     ui.column(SWATCH_COLUMN, |ui| ui.swatch(ink));
                     ui.column(NAME_COLUMN, |ui| ui.text(&setting.name));
-                    ui.column(kernel::Fill, |ui| ui.mono(&setting.light));
-                    ui.column(kernel::Fill, |ui| ui.mono(&setting.dark));
+                    ui.column(kernel::Fill, |ui| ui.mono(describe(&light, style::shade(&self.inks, ink, Side::Light), ink)));
+                    ui.column(kernel::Fill, |ui| ui.mono(describe(&dark, style::shade(&self.inks, ink, Side::Dark), ink)));
+                    ui.column(REACH_COLUMN, |ui| ui.muted(reach(ink)));
+                }),
+                Shown::Knob(knob) => ui.columns(|ui| {
+                    let value = match knob {
+                        Knob::Lines => format!("{:?}", self.lines).to_lowercase(),
+                        Knob::Shadow if self.shadow == 0 => "none".to_string(),
+                        Knob::Shadow => format!("{:.2} of a row", self.shadow as f32 / 100.0),
+                        Knob::Check => format!("{:?}", self.check).to_lowercase(),
+                    };
+                    ui.column(SWATCH_COLUMN + NAME_COLUMN + GAP, |ui| ui.text(&setting.name));
+                    ui.column(kernel::Fill, |ui| ui.mono(value));
+                    ui.column(kernel::Fill, |ui| ui.muted(&setting.dark));
                 }),
                 Shown::Value => ui.columns(|ui| {
                     ui.column(SWATCH_COLUMN + NAME_COLUMN + GAP, |ui| ui.text(&setting.name));
@@ -382,6 +521,7 @@ impl Catalog {
             });
         });
     }
+
 
     fn sheet(&self, ui: &mut Ui<Cmd>, component: Component) {
         ui.page(Message::plain(component.name()), |ui| {
@@ -540,41 +680,80 @@ fn blocks(component: Component) -> List<Block> {
 
 const SWATCH_COLUMN: i32 = 6;
 const NAME_COLUMN: i32 = 12;
+const REACH_COLUMN: i32 = 20;
 
-/// The Style place's lines: every ink of the theme in both appearances with its contrast on the background, then the values the grid and the type are built from.
+/// The Style place's lines: every ink of the theme in both appearances, the values of the style, then the values the grid and the type are built from. The inks' and the style's numbers come from the facts being edited, when the view draws them.
 fn settings() -> List<Setting> {
-    let light = Theme::of(kernel::ink::Appearance::Light);
-    let dark = Theme::of(kernel::ink::Appearance::Dark);
-    let describe = |theme: &Theme, ink: Ink| {
-        let (l, c, h) = to_oklch(theme.get(ink));
-        let numbers = format!("{l:.2} {c:.3} {h:.0}");
-        if ink.surface() {
-            return numbers;
-        }
-        let ratio = contrast(theme.get(ink), theme.bg);
-        match ink.needs() {
-            Some(needs) if ratio < needs => format!("{numbers} · {ratio:.1}, below {needs}"),
-            _ => format!("{numbers} · {ratio:.1}"),
-        }
-    };
-    let line = |shown: Shown, name: &str, light: String, dark: String| (shown, name.to_string(), light, dark);
+    let line = |shown: Shown, name: &str, light: &str, dark: &str| (shown, name.to_string(), light.to_string(), dark.to_string());
     let mut lines = vec![
-        line(Shown::Heading, "Inks", String::new(), String::new()),
-        line(Shown::Paragraph, "Everything is drawn in one of these inks, so a theme restyles everything at once. Each is given as OKLCH lightness, chroma and hue, then, for inks that text and lines are drawn in, its contrast on the background: text needs 4.5 to 1, faint text 3 to 1. The swatch shows the appearance the window is in now.", String::new(), String::new()),
-        line(Shown::Columns, "Ink", "Light".to_string(), "Dark".to_string()),
+        line(Shown::Heading, "Inks", "", ""),
+        line(Shown::Paragraph, "Everything is drawn in one of these inks, so a theme restyles everything at once. Each is given as OKLCH lightness, chroma and hue, then, for inks that text and lines are drawn in, its contrast on the background: text needs 4.5 to 1, faint text 3 to 1. Choose an ink to change it from the bar; a change that would make text hard to read can't be made, and says why. Every screen and component follows as it moves.", "", ""),
+        line(Shown::Columns, "Ink", "Light", "Dark"),
     ];
-    lines.extend(Ink::ALL.into_iter().map(|ink| line(Shown::Ink(ink), ink.name(), describe(light, ink), describe(dark, ink))));
+    lines.extend(Ink::ALL.into_iter().map(|ink| line(Shown::Ink(ink), ink.name(), "", "")));
     lines.extend([
-        line(Shown::Paragraph, "", String::new(), String::new()),
-        line(Shown::Heading, "The grid and the type", String::new(), String::new()),
-        line(Shown::Paragraph, "Editing these here, and the inks above, comes with style and theme files.", String::new(), String::new()),
-        line(Shown::Value, "Type size", format!("{FONT_POINTS} pt"), "The monospace face at this size sets a cell's width, rounded to a whole point".to_string()),
-        line(Shown::Value, "Line height", format!("{LINE}"), "A cell is this many lines of type tall, rounded to a whole point".to_string()),
-        line(Shown::Value, "Text face", "IBM Plex Sans".to_string(), "For words".to_string()),
-        line(Shown::Value, "Data face", "IBM Plex Mono".to_string(), "For data, code and anything that lines up in cells".to_string()),
-        line(Shown::Value, "Strong weight", "600".to_string(), "Text that heads what follows it; other text is 400".to_string()),
-        line(Shown::Value, "Gap", format!("{GAP} cells"), "Between things side by side".to_string()),
-        line(Shown::Value, "Margin", format!("{MARGIN} cells"), "Around a page".to_string()),
+        line(Shown::Paragraph, "", "", ""),
+        line(Shown::Heading, "The style", "", ""),
+        line(Shown::Paragraph, "How things are drawn, never where. Saving writes the theme and the style to the looks folder, where every Graticule app finds them.", "", ""),
+        line(Shown::Knob(Knob::Lines), "Lines", "", "The edges of boxes and rules: thin, regular or heavy"),
+        line(Shown::Knob(Knob::Shadow), "Shadow", "", "The hard shadow under what you can act on, as a share of a row"),
+        line(Shown::Knob(Knob::Check), "Check mark", "", "What a ticked box shows"),
+        line(Shown::Paragraph, "", "", ""),
+        line(Shown::Heading, "The grid and the type", "", ""),
+        line(Shown::Paragraph, "These are the same in every style, because the grid is built from them.", "", ""),
     ]);
+    let values = [
+        ("Type size", format!("{FONT_POINTS} pt"), "The monospace face at this size sets a cell's width, rounded to a whole point"),
+        ("Line height", format!("{LINE}"), "A cell is this many lines of type tall, rounded to a whole point"),
+        ("Text face", "IBM Plex Sans".to_string(), "For words"),
+        ("Data face", "IBM Plex Mono".to_string(), "For data, code and anything that lines up in cells"),
+        ("Strong weight", "600".to_string(), "Text that heads what follows it; other text is 400"),
+        ("Gap", format!("{GAP} cells"), "Between things side by side"),
+        ("Margin", format!("{MARGIN} cells"), "Around a page"),
+    ];
+    lines.extend(values.iter().map(|(name, value, what)| line(Shown::Value, name, value, what)));
     lines.into_iter().zip(1..).map(|((shown, name, light, dark), n)| Setting { id: Key::fixed(n), shown, name, light, dark }).collect()
+}
+
+/// An ink's numbers in one appearance, and its contrast on the background for inks that text and lines are drawn in.
+fn describe(theme: &kernel::ink::Theme, shade: style::Shade, ink: Ink) -> String {
+    let o = shade.oklch();
+    let numbers = format!("{:.3} {:.3} {:.0}", o.l, o.c, o.h);
+    if ink.surface() {
+        return numbers;
+    }
+    let ratio = contrast(theme.get(ink), theme.bg);
+    match ink.needs() {
+        Some(needs) if ratio < needs => format!("{numbers} · {ratio:.1}, below {needs}"),
+        _ => format!("{numbers} · {ratio:.1}"),
+    }
+}
+
+
+fn nudge(cmd: &Cmd) -> Nudge {
+    match cmd {
+        Cmd::Darker(_) => Nudge::Darker,
+        Cmd::MoreColor(_) => Nudge::MoreColor,
+        Cmd::LessColor(_) => Nudge::LessColor,
+        Cmd::HueForward(_) => Nudge::HueForward,
+        Cmd::HueBack(_) => Nudge::HueBack,
+        _ => Nudge::Lighter,
+    }
+}
+
+impl Catalog {
+    fn nudge(&self, setting: Key<Setting>, by: Nudge) -> Result<(Ink, style::Shade), Message> {
+        let Some(Shown::Ink(ink)) = self.settings.find(setting).map(|s| s.shown) else { return Err(Message::from("Only an ink has a color to change")) };
+        style::nudged(&self.inks, ink, self.editing, by).map(|shade| (ink, shade))
+    }
+
+    /// Whether the theme or the style differs from Graticule's own.
+    pub fn edited(&self) -> bool {
+        style::theme_file(&self.inks) != kernel::look::THEMES[0] || style::style(self.lines, self.shadow, self.check) != kernel::look::STYLES[0].style
+    }
+
+    /// The look being edited, in an appearance.
+    pub fn edited_look(&self, appearance: Appearance) -> kernel::look::Look {
+        kernel::look::Look { theme: style::theme_file(&self.inks).theme(appearance), style: style::style(self.lines, self.shadow, self.check), appearance }
+    }
 }

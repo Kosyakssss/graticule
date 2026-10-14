@@ -163,6 +163,14 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.text_as(text.as_ref(), false, Tone::Muted, Location::caller());
     }
 
+    /// Text that heads what follows it, in the strong weight.
+    #[track_caller]
+    pub fn strong(&mut self, text: impl AsRef<str>) {
+        let i = self.add(Kind::Text { mono: false, tone: Tone::Ink, strong: true }, Location::caller());
+        let r = self.tree.put(text.as_ref());
+        self.tree.nodes[i as usize].text = r;
+    }
+
     fn text_as(&mut self, text: &str, mono: bool, tone: Tone, at: &'static Location<'static>) {
         let i = self.add(Kind::Text { mono, tone, strong: false }, at);
         let r = self.tree.put(text);

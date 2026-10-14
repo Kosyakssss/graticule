@@ -102,9 +102,10 @@ fn button(p: &mut Painter, n: &Node, label: &str, look: Look) {
     }
     let mono = p.m.mono();
     let w = p.measure(label, mono);
-    let x = (r.x + (r.w - w) / 2.0).round();
+    let room = r.w - p.m.cell_w * 2.0;
+    let x = if w > room { r.x + p.m.cell_w } else { (r.x + (r.w - w) / 2.0).round() };
     let y = (r.y + (r.h - p.m.cell_h) / 2.0).floor();
-    p.text(label, mono, (x, y), Some(r.w), ink);
+    p.text(label, mono, (x, y), Some(room.max(0.0)), ink);
 }
 
 fn keycap(p: &mut Painter, at: (f32, f32), keys: &str, enabled: bool) -> f32 {

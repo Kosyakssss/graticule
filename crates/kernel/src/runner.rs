@@ -164,6 +164,7 @@ pub struct Runner<A: App> {
     extras: Vec<Extra>,
     asked: Option<usize>,
     hold: bool,
+    fonts: u64,
 }
 
 impl<A: App> Runner<A> {
@@ -212,6 +213,7 @@ impl<A: App> Runner<A> {
             extras: Vec::new(),
             asked: None,
             hold: false,
+            fonts: 0,
         }
     }
 
@@ -1631,8 +1633,9 @@ impl<A: App> Drop for Runner<A> {
 
 impl<A: App> Face for Runner<A> {
     fn paint(&mut self, p: &mut Painter, _: Seen) {
-        if self.metrics != Some(p.m) {
+        if self.metrics != Some(p.m) || self.fonts != p.text.atlas {
             self.metrics = Some(p.m);
+            self.fonts = p.text.atlas;
             self.kept.reset();
             self.laid = false;
         }

@@ -7,6 +7,7 @@ pub const GAP: i32 = 2;
 pub const MARGIN: i32 = 2;
 pub const CHECK: i32 = 3;
 pub const BUTTON: i32 = 3;
+const BUTTON_MIN: i32 = 16;
 
 /// Lays a tree out in whole cells: each node's `Area` from its parent's, top down, measuring text in columns as it goes.
 pub struct Layout<'t> {
@@ -26,10 +27,20 @@ impl<'t> Layout<'t> {
     }
 
     pub fn cols(&mut self, s: &str, mono: bool) -> i32 {
-        if mono {
-            return s.chars().map(crate::text::cells).sum::<usize>() as i32;
+        let style = self.style(mono);
+        self.cols_as(s, style)
+    }
+
+    fn cols_as(&mut self, s: &str, style: TextStyle) -> i32 {
+        let mono = style.face == crate::text::Face::Mono;
+        let cells = s.chars().map(crate::text::cells).sum::<usize>() as i32;
+        if mono && s.is_ascii() {
+            return cells;
         }
-        let w = self.text.measure(s, self.style(false), self.m.cell_h);
+        let w = self.text.measure(s, style, self.m.cell_h);
+        if mono {
+            return cells.max((w / self.m.cell_w - 0.01).ceil() as i32);
+        }
         (w / self.m.cell_w - 0.01).ceil().max(0.0) as i32
     }
 
@@ -37,19 +48,34 @@ impl<'t> Layout<'t> {
         if mono { self.m.mono() } else { self.m.sans(400.0) }
     }
 
+    fn text_style(&self, kind: Kind) -> TextStyle {
+        match kind {
+            Kind::Text { strong: true, mono: false, .. } => self.m.sans(600.0),
+            Kind::Text { mono, .. } => self.style(mono),
+            _ => self.style(false),
+        }
+    }
+
     /// How many rows `s` takes when wrapped at `cols` columns.
     pub fn wrapped(&mut self, s: &str, mono: bool, cols: i32) -> i32 {
+        let style = self.style(mono);
+        self.wrapped_as(s, style, cols)
+    }
+
+    fn wrapped_as(&mut self, s: &str, style: TextStyle, cols: i32) -> i32 {
+        if s.contains('\n') {
+            return s.split('\n').map(|line| self.wrapped_as(line, style, cols)).sum();
+        }
         if s.is_empty() {
             return 1;
         }
-        if mono {
-            let n = self.cols(s, true);
+        let n = self.cols_as(s, style);
+        if style.face == crate::text::Face::Mono {
             return ((n + cols.max(1) - 1) / cols.max(1)).max(1);
         }
-        if self.cols(s, false) <= cols {
+        if n <= cols {
             return 1;
         }
-        let style = self.style(false);
         let span = SpanStyle { weight: style.weight as u16, ..SpanStyle::plain(style.face) };
         let h = self.text.height(&[(s, span)], style.size, self.m.cell_h, cols.max(1) as f32 * self.m.cell_w);
         ((h / self.m.cell_h).round() as i32).max(1)
@@ -73,13 +99,14 @@ impl<'t> Layout<'t> {
     pub fn size<C>(&mut self, tree: &Tree<C>, i: u32) -> (i32, i32) {
         let n = tree.nodes[i as usize];
         let (min, pref) = match n.kind {
-            Kind::Text { mono, .. } => {
-                let pref = self.cols(tree.str(n.text), mono);
+            Kind::Text { .. } => {
+                let style = self.text_style(n.kind);
+                let pref = self.cols_as(tree.str(n.text), style);
                 (pref.min(8), pref)
             }
             Kind::Button => {
                 let c = self.cols(tree.str(n.text), true) + BUTTON;
-                (c, c)
+                (c.min(BUTTON_MIN + BUTTON), c)
             }
             Kind::Action | Kind::Choice { .. } => {
                 let keys = tree.str(n.keys);
@@ -194,7 +221,10 @@ impl<'t> Layout<'t> {
     pub fn rows<C>(&mut self, tree: &Tree<C>, i: u32, cols: i32) -> i32 {
         let n = tree.nodes[i as usize];
         match n.kind {
-            Kind::Text { mono, .. } => self.wrapped(tree.str(n.text), mono, cols),
+            Kind::Text { .. } => {
+                let style = self.text_style(n.kind);
+                self.wrapped_as(tree.str(n.text), style, cols)
+            }
             Kind::Check { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
             Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Link | Kind::Field | Kind::Status | Kind::Note => 1,
             Kind::List { .. } => 3,

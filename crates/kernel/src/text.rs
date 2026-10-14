@@ -95,6 +95,11 @@ pub fn cells(c: char) -> usize {
     }
 }
 
+/// Whether a character belongs to a script whose letters join, combine or run right to left, so text holding it has to be shaped as a whole rather than drawn a cell at a time.
+pub fn shaped(c: char) -> bool {
+    matches!(c as u32, 0x0300..=0x036F | 0x0590..=0x08FF | 0x0900..=0x0DFF | 0x0E00..=0x0EFF | 0x0F00..=0x0FFF | 0x1000..=0x109F | 0x1780..=0x17FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF)
+}
+
 #[derive(Clone, Copy)]
 struct Slot {
     x: u32,
@@ -276,6 +281,12 @@ impl Text {
         self.fonts = fonts;
         self.fallback = Fallback::Loaded;
         self.layouts.clear();
+        self.clear();
+    }
+
+    /// Whether the system's fonts are still loading for text drawn since they were asked for.
+    pub fn fallback_pending(&self) -> bool {
+        matches!(self.fallback, Fallback::Loading(_))
     }
 
     pub fn begin_frame(&mut self) {

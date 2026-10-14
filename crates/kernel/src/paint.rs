@@ -123,7 +123,7 @@ impl<'a> Painter<'a> {
     pub fn text(&mut self, s: &str, style: TextStyle, at: (f32, f32), limit: Option<f32>, color: Color) -> Drawn {
         if style.face == Face::Mono {
             let cols = limit.map_or(i32::MAX, |l| (l / self.m.cell_w).floor() as i32);
-            if s.chars().any(|c| chars::drawn(c) || !c.is_ascii()) {
+            if s.chars().any(|c| chars::drawn(c) || !c.is_ascii()) && !s.chars().any(crate::text::shaped) {
                 let width = self.cells(at, cols, s, style, color);
                 return Drawn { key: 0, width, height: self.m.cell_h, underlines: Vec::new() };
             }

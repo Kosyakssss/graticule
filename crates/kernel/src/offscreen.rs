@@ -41,14 +41,20 @@ impl Offscreen {
         (self.width, self.height) = (width, height);
     }
 
-    pub fn render(&mut self, theme: Theme, paint: impl FnOnce(&mut Painter)) -> Picture {
-        let started = Instant::now();
-        self.text.wait_for_fallback();
-        self.text.begin_frame();
-        self.quads.clear();
-        let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, theme);
-        paint(&mut painter);
-        let paint_ms = started.elapsed().as_secs_f32() * 1000.0;
+    pub fn render(&mut self, theme: Theme, paint: impl Fn(&mut Painter)) -> Picture {
+        let mut paint_ms = 0.0;
+        for _ in 0..2 {
+            let started = Instant::now();
+            self.text.wait_for_fallback();
+            self.text.begin_frame();
+            self.quads.clear();
+            let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, theme);
+            paint(&mut painter);
+            paint_ms = started.elapsed().as_secs_f32() * 1000.0;
+            if !self.text.fallback_pending() {
+                break;
+            }
+        }
         for u in self.text.uploads.drain(..) {
             self.gpu.upload(u.x, u.y, u.w, u.h, &u.data);
         }
@@ -71,13 +77,19 @@ impl Offscreen {
     /// Renders one frame of a face, from its kept quads when it keeps them.
     pub fn render_face<F: Face>(&mut self, appearance: Appearance, face: &mut F) -> Picture {
         let theme = face.theme(appearance);
-        let started = Instant::now();
-        self.text.wait_for_fallback();
-        self.text.begin_frame();
-        self.quads.clear();
-        let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, theme);
-        face.paint(&mut painter, Seen { appearance, ..Seen::default() });
-        let paint_ms = started.elapsed().as_secs_f32() * 1000.0;
+        let mut paint_ms = 0.0;
+        for _ in 0..2 {
+            let started = Instant::now();
+            self.text.wait_for_fallback();
+            self.text.begin_frame();
+            self.quads.clear();
+            let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, theme);
+            face.paint(&mut painter, Seen { appearance, ..Seen::default() });
+            paint_ms = started.elapsed().as_secs_f32() * 1000.0;
+            if !self.text.fallback_pending() {
+                break;
+            }
+        }
         if let Some(kept) = face.kept() {
             self.quads.clear();
             kept.all(&mut self.quads);

@@ -1025,27 +1025,20 @@ impl<A: App> Runner<A> {
         match effect {
             Effect::SaveAs { name, write, reply } => {
                 let dialog = rfd::AsyncFileDialog::new().set_file_name(&name).set_parent(window).save_file();
-                let facts = self.facts.clone();
-                let (send, receive) = mpsc::channel();
-                let waker = self.waker.clone();
                 let file = name.clone();
-                let started = std::thread::Builder::new().name("graticule job".into()).spawn(move || {
-                    let result = pollster::block_on(dialog).map(|chosen| {
+                self.job(format!("Saving “{name}”"), reply, move |facts| {
+                    pollster::block_on(dialog).map(|chosen| {
                         let path = chosen.path().to_path_buf();
-                        let contents = write(&facts as &dyn Any);
-                        std::fs::write(&path, contents).map(|()| Path(path)).map_err(|e| Failure::new(format!("“{file}” couldn't be saved: {e}")))
-                    });
-                    let _ = send.send(result);
-                    if let Some(waker) = waker {
-                        waker.wake();
-                    }
+                        std::fs::write(&path, write(facts)).map(|()| Path(path)).map_err(|e| Failure::new(format!("“{file}” couldn't be saved: {e}")))
+                    })
                 });
-                match started {
-                    Ok(_) => self.jobs.push(Job { name: format!("Saving “{name}”"), receive, reply }),
-                    Err(e) => {
-                        self.run(reply(Err(Failure::new(format!("“{name}” couldn't be saved: {e}")))));
-                    }
-                }
+            }
+            Effect::Write { path, write, reply } => {
+                let name = path.0.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                self.job(format!("Saving “{name}”"), reply, move |facts| {
+                    let written = path.0.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path.0, write(facts)));
+                    Some(written.map(|()| path).map_err(|e| Failure::new(format!("“{name}” couldn't be saved: {e}"))))
+                });
             }
             Effect::Open { target } => {
                 let opener = if cfg!(target_os = "macos") {
@@ -1062,6 +1055,24 @@ impl<A: App> Runner<A> {
             Effect::Copy { text } => self.copy(text),
         }
         self.stale = true;
+    }
+
+    fn job(&mut self, name: String, reply: fn(Result<Path, Failure>) -> A::Cmd, work: impl FnOnce(&dyn Any) -> Option<Result<Path, Failure>> + Send + 'static) {
+        let facts = self.facts.clone();
+        let (send, receive) = mpsc::channel();
+        let waker = self.waker.clone();
+        let started = std::thread::Builder::new().name("graticule job".into()).spawn(move || {
+            let _ = send.send(work(&facts as &dyn Any));
+            if let Some(waker) = waker {
+                waker.wake();
+            }
+        });
+        match started {
+            Ok(_) => self.jobs.push(Job { name, receive, reply }),
+            Err(e) => {
+                self.run(reply(Err(Failure::new(format!("{name} couldn't start: {e}")))));
+            }
+        }
     }
 
     fn collect(&mut self) {

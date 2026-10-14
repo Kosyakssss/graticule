@@ -172,6 +172,7 @@ pub type Contents = Box<dyn FnOnce(&dyn Any) -> String + Send>;
 /// Work asked for as data. Its result comes back as a command.
 pub enum Effect<C> {
     SaveAs { name: String, write: Contents, reply: fn(Result<Path, Failure>) -> C },
+    Write { path: Path, write: Contents, reply: fn(Result<Path, Failure>) -> C },
     Open { target: String },
     Copy { text: String },
 }
@@ -180,6 +181,7 @@ impl<C> fmt::Debug for Effect<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Effect::SaveAs { name, .. } => write!(f, "save “{name}” as…"),
+            Effect::Write { path, .. } => write!(f, "write {}", path.0.display()),
             Effect::Open { target } => write!(f, "open {target}"),
             Effect::Copy { text } => write!(f, "copy {} characters", text.chars().count()),
         }
@@ -244,6 +246,12 @@ impl<C> Cx<C> {
     pub fn save_as<F: 'static>(&mut self, name: &str, write: fn(&F) -> String, reply: fn(Result<Path, Failure>) -> C) {
         let make = move |facts: &dyn Any| facts.downcast_ref::<F>().map(write).unwrap_or_default();
         self.effects.push(Effect::SaveAs { name: name.to_string(), write: Box::new(make), reply });
+    }
+
+    /// Makes a file's contents from a snapshot of the facts in the background and writes it to a path the app already has, making its folder if needed. The result comes back as `reply`.
+    pub fn write<F: 'static>(&mut self, path: Path, write: impl FnOnce(&F) -> String + Send + 'static, reply: fn(Result<Path, Failure>) -> C) {
+        let make = move |facts: &dyn Any| facts.downcast_ref::<F>().map(write).unwrap_or_default();
+        self.effects.push(Effect::Write { path, write: Box::new(make), reply });
     }
 
     pub fn open(&mut self, target: impl Into<String>) {

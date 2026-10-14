@@ -8,7 +8,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::keyboard::ModifiersState;
 use winit::window::{Window, WindowId};
 
-use crate::gpu::{Gpu, Quad};
+use crate::gpu::{Quad, Screen};
 use crate::ink::Appearance;
 use crate::look::{Look, Looks, Switch};
 use crate::metrics::Metrics;
@@ -162,6 +162,7 @@ fn micros(since: Instant) -> u32 {
 /// What wakes the event loop: the app's own threads, or an assistive tool.
 pub enum Signal {
     Wake,
+    Presented,
     Reload,
     Looks(Box<Looks>),
     Menu(u64),
@@ -224,7 +225,8 @@ struct Shell<F: Face> {
 struct Running<F: Face> {
     face: F,
     window: Arc<Window>,
-    gpu: Gpu,
+    gpu: Screen,
+    held: bool,
     text: Text,
     metrics: Metrics,
     quads: Vec<Quad>,
@@ -268,7 +270,11 @@ macro_rules! frame {
 
 impl<F: Face> Running<F> {
     #[profiling::function]
-    fn render(&mut self) {
+    fn render(&mut self, now: bool) {
+        if !now && self.gpu.waiting() {
+            self.held = true;
+            return;
+        }
         let started = Instant::now();
         self.pace.drawn();
         self.text.begin_frame();
@@ -283,16 +289,22 @@ impl<F: Face> Running<F> {
             stages.paint = micros(started);
         }
         let painted = Instant::now();
-        for u in self.text.uploads.drain(..) {
-            self.gpu.upload(u.x, u.y, u.w, u.h, &u.data);
-        }
-        match self.face.kept() {
-            Some(kept) => {
-                let [under, over] = &mut kept.layers;
-                self.gpu.keep([&under.quads, &over.quads], [under.dirty.take(), over.dirty.take()]);
-                self.gpu.render_kept(theme.bg);
+        let (uploads, kept, quads) = (&mut self.text.uploads, self.face.kept(), &self.quads);
+        self.gpu.stage(|gpu| {
+            for u in uploads.drain(..) {
+                gpu.upload(u.x, u.y, u.w, u.h, &u.data);
             }
-            None => self.gpu.render(&self.quads, theme.bg),
+            match kept {
+                Some(kept) => {
+                    let [under, over] = &mut kept.layers;
+                    gpu.keep([&under.quads, &over.quads], [under.dirty.take(), over.dirty.take()]);
+                    gpu.show_kept(theme.bg);
+                }
+                None => gpu.show(quads, theme.bg),
+            }
+        });
+        if now {
+            self.gpu.present_now();
         }
         let gpu = micros(painted);
         let rendered = Instant::now();
@@ -392,7 +404,10 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
         let access = accesskit_winit::Adapter::with_event_loop_proxy(event_loop, &window, self.proxy.clone());
         marks.push(("window", Instant::now()));
         let size = window.inner_size();
-        let gpu = Gpu::new(Some(window.clone()), (size.width, size.height));
+        let presented = self.proxy.clone();
+        let gpu = Screen::new(window.clone(), (size.width, size.height), move || {
+            let _ = presented.send_event(Signal::Presented);
+        });
         marks.push(("gpu", Instant::now()));
         let mut text = Text::new();
         let wake = self.proxy.clone();
@@ -428,6 +443,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             face,
             window,
             gpu,
+            held: false,
             text,
             metrics,
             quads: Vec::with_capacity(8192),
@@ -446,7 +462,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             _watcher: watcher,
             _menu: menu,
         };
-        running.render();
+        running.render(true);
         running.window.set_visible(true);
         marks.push(("first frame", Instant::now()));
         let mut last = self.started;
@@ -470,6 +486,12 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
         let Some(r) = self.running.as_mut() else { return };
         match signal {
             Signal::Wake => r.input(Input::Woken),
+            Signal::Presented => {
+                if r.held {
+                    r.held = false;
+                    r.window.request_redraw();
+                }
+            }
             Signal::Looks(looks) => {
                 if *looks != r.looks {
                     let since = Instant::now();
@@ -518,7 +540,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
                 r.metrics = Metrics::measure(&mut r.text, r.metrics.scale, size.width, size.height);
                 r.input(Input::Resized);
                 r.recorder.wanted(Cause::Resize, 0);
-                r.render();
+                r.render(true);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 let size = r.window.inner_size();
@@ -526,7 +548,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
                 r.minimum = None;
                 r.input(Input::Resized);
             }
-            WindowEvent::RedrawRequested => r.render(),
+            WindowEvent::RedrawRequested => r.render(false),
             WindowEvent::ModifiersChanged(m) => r.modifiers = m.state(),
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => r.input(Input::Key(event)),
             WindowEvent::Ime(ime) => r.input(Input::Ime(ime)),
@@ -562,7 +584,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
                             let since = Instant::now();
                             let items = r.face.menu(&mut frame!(r));
                             r.recorder.wanted(Cause::Click, micros(since));
-                            r.render();
+                            r.render(true);
                             crate::menu::popup(&r.window, &items);
                         }
                     }

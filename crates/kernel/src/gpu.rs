@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
+use std::thread::JoinHandle;
 
 use bytemuck::{Pod, Zeroable};
 use winit::window::Window;
@@ -99,6 +101,14 @@ pub struct Gpu {
     pictures: std::collections::HashMap<u32, (wgpu::Texture, wgpu::BindGroup)>,
     runs: Vec<(u32, std::ops::Range<u32>)>,
     kept: [(wgpu::Buffer, usize, usize); 2],
+    next: Next,
+    clear: [f32; 4],
+}
+
+#[derive(Clone, Copy)]
+enum Next {
+    Kept,
+    Full(usize),
 }
 
 impl Gpu {
@@ -259,6 +269,8 @@ impl Gpu {
             pictures: std::collections::HashMap::new(),
             runs: Vec::new(),
             kept,
+            next: Next::Full(0),
+            clear: [0.0; 4],
         }
     }
 
@@ -408,23 +420,26 @@ impl Gpu {
         sent
     }
 
-    /// Draws the kept layers into the window and presents it.
-    #[profiling::function]
-    pub fn render_kept(&mut self, clear: [f32; 4]) {
+    /// Makes the kept layers the next frame.
+    pub fn show_kept(&mut self, clear: [f32; 4]) {
         self.queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&Globals { viewport: [self.config.width as f32, self.config.height as f32], pad: [0.0; 2] }));
-        let Some(surface) = &self.surface else { return };
-        let frame = match surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame) | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                surface.configure(&self.device, &self.config);
-                return;
-            }
-            _ => return,
+        self.next = Next::Kept;
+        self.clear = clear;
+    }
+
+    /// Makes `quads` the next frame.
+    pub fn show(&mut self, quads: &[Quad], clear: [f32; 4]) {
+        self.prepare(quads, self.config.width, self.config.height);
+        self.next = Next::Full(quads.len());
+        self.clear = clear;
+    }
+
+    fn draw(&self, view: &wgpu::TextureView) {
+        let encoder = match self.next {
+            Next::Kept => self.encode_kept(view, self.clear),
+            Next::Full(count) => self.encode(view, count, self.clear),
         };
-        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let encoder = self.encode_kept(&view, clear);
         self.queue.submit([encoder.finish()]);
-        self.queue.present(frame);
     }
 
     fn encode_kept(&self, view: &wgpu::TextureView, clear: [f32; 4]) -> wgpu::CommandEncoder {
@@ -454,24 +469,6 @@ impl Gpu {
             }
         }
         encoder
-    }
-
-    #[profiling::function]
-    pub fn render(&mut self, quads: &[Quad], clear: [f32; 4]) {
-        self.prepare(quads, self.config.width, self.config.height);
-        let Some(surface) = &self.surface else { return };
-        let frame = match surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame) | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                surface.configure(&self.device, &self.config);
-                return;
-            }
-            _ => return,
-        };
-        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let encoder = self.encode(&view, quads.len(), clear);
-        self.queue.submit([encoder.finish()]);
-        self.queue.present(frame);
     }
 
     pub fn snapshot(&mut self, quads: &[Quad], clear: [f32; 4]) -> Vec<u8> {
@@ -512,4 +509,101 @@ impl Gpu {
         }
         pixels
     }
+}
+
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// A window's GPU. The main thread stages each frame and returns; a presenter thread of its own waits for the display to take a frame, then draws whatever was staged last, so the main thread never waits for the display.
+pub struct Screen {
+    gpu: Arc<Mutex<Gpu>>,
+    surface: Arc<Mutex<wgpu::Surface<'static>>>,
+    waiting: Arc<AtomicBool>,
+    ready: Option<mpsc::SyncSender<()>>,
+    presenter: Option<JoinHandle<()>>,
+}
+
+impl Screen {
+    /// Opens the GPU for `window`. `presented` is called on the presenter thread each time it has handed a frame to the display.
+    pub fn new(window: Arc<Window>, size: (u32, u32), presented: impl Fn() + Send + 'static) -> Self {
+        let mut gpu = Gpu::new(Some(window), size);
+        let surface = Arc::new(Mutex::new(gpu.surface.take().expect("a window has a surface")));
+        let gpu = Arc::new(Mutex::new(gpu));
+        let waiting = Arc::new(AtomicBool::new(false));
+        let (ready, staged) = mpsc::sync_channel::<()>(1);
+        let presenter = {
+            let (gpu, surface, waiting) = (gpu.clone(), surface.clone(), waiting.clone());
+            std::thread::Builder::new()
+                .name("graticule presenter".into())
+                .spawn(move || {
+                    while staged.recv().is_ok() {
+                        present(&gpu, &lock(&surface), &waiting);
+                        presented();
+                    }
+                })
+                .ok()
+        };
+        Self { gpu, surface, waiting, ready: Some(ready), presenter }
+    }
+
+    /// Whether the last staged frame is still waiting for the display.
+    pub fn waiting(&self) -> bool {
+        self.waiting.load(Ordering::Acquire)
+    }
+
+    /// Stages the next frame and hands it to the presenter. The presenter draws whatever is staged when the display is ready, so frames staged in between are never drawn.
+    pub fn stage(&self, f: impl FnOnce(&mut Gpu)) {
+        f(&mut lock(&self.gpu));
+        self.waiting.store(true, Ordering::Release);
+        if let Some(ready) = &self.ready {
+            let _ = ready.try_send(());
+        }
+    }
+
+    /// Presents the staged frame on this thread, waiting for the display: for the first frame and a resize, which must be on screen before the event returns.
+    pub fn present_now(&self) {
+        present(&self.gpu, &lock(&self.surface), &self.waiting);
+    }
+
+    pub fn resize(&self, width: u32, height: u32) {
+        let surface = lock(&self.surface);
+        let mut gpu = lock(&self.gpu);
+        gpu.config.width = width.max(1);
+        gpu.config.height = height.max(1);
+        surface.configure(&gpu.device, &gpu.config);
+    }
+}
+
+impl Drop for Screen {
+    fn drop(&mut self) {
+        self.ready = None;
+        if let Some(presenter) = self.presenter.take() {
+            let _ = presenter.join();
+        }
+    }
+}
+
+fn present(gpu: &Mutex<Gpu>, surface: &wgpu::Surface<'static>, waiting: &AtomicBool) {
+    let frame = match surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(frame) | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+        wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+            let gpu = lock(gpu);
+            surface.configure(&gpu.device, &gpu.config);
+            waiting.store(false, Ordering::Release);
+            return;
+        }
+        _ => {
+            waiting.store(false, Ordering::Release);
+            return;
+        }
+    };
+    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let queue = {
+        let gpu = lock(gpu);
+        waiting.store(false, Ordering::Release);
+        gpu.draw(&view);
+        gpu.queue.clone()
+    };
+    queue.present(frame);
 }

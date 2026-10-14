@@ -68,8 +68,12 @@ impl<P: Clone> History<P> {
         let typed = ops.iter().any(|op| matches!(op, Op::Splice { .. }));
         let step = typed || ops.iter().any(|op| op.path().kind() == Kind::Document);
         if !step {
-            let moved = ops.iter().any(|op| matches!(op, Op::Select { .. }));
-            self.moves.extend(ops.into_iter().filter(|op| matches!(op, Op::Select { .. })));
+            let gone: Vec<u128> = ops.iter().filter_map(Op::deleted).collect();
+            if !gone.is_empty() {
+                self.forget(&gone);
+            }
+            let moved = ops.iter().any(|op| matches!(op, Op::Select { .. }) && !names(op, &gone));
+            self.moves.extend(ops.into_iter().filter(|op| matches!(op, Op::Select { .. }) && !names(op, &gone)));
             return if moved { Kept::Moved } else { Kept::Nothing };
         }
         let only_typing = ops.iter().all(|op| matches!(op, Op::Splice { .. } | Op::Select { .. }));
@@ -101,6 +105,14 @@ impl<P: Clone> History<P> {
         });
         self.at = Some(index);
         Kept::Step
+    }
+
+    fn forget(&mut self, gone: &[u128]) {
+        self.moves.retain(|op| !names(op, gone));
+        for step in &mut self.steps {
+            step.moves_before.retain(|op| !names(op, gone));
+            step.moves_after.retain(|op| !names(op, gone));
+        }
     }
 
     /// How many steps undo can take back from here, along the current branch.
@@ -159,4 +171,16 @@ impl<P: Clone> History<P> {
 
 fn reverse(ops: &[Op], out: &mut Vec<Op>) {
     out.extend(ops.iter().rev().map(Op::inverse));
+}
+
+fn names(op: &Op, gone: &[u128]) -> bool {
+    fn mentions(value: &crate::Value, gone: &[u128]) -> bool {
+        match value {
+            crate::Value::Key(k) => gone.contains(k),
+            crate::Value::List(items) => items.iter().any(|v| mentions(v, gone)),
+            crate::Value::Some(v) => mentions(v, gone),
+            _ => false,
+        }
+    }
+    matches!(op, Op::Select { before, after, .. } if mentions(before, gone) || mentions(after, gone))
 }

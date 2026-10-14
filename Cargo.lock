@@ -2892,7 +2892,9 @@ dependencies = [
 name = "specimen"
 version = "0.1.0"
 dependencies = [
+ "graticule-macros",
  "kernel",
+ "ledger",
 ]
 
 [[package]]

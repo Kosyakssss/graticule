@@ -1694,6 +1694,31 @@ impl<A: App> Face for Runner<A> {
         self.stages
     }
 
+    fn keep(&self) -> Value {
+        let facts = match self.keep {
+            Keep::Store(_) => Value::None,
+            Keep::Nothing | Keep::Memory(_) => ledger::Field::value(&self.facts),
+        };
+        Value::Map(vec![("facts".into(), facts), ("place".into(), self.whereabouts())])
+    }
+
+    fn restore(&mut self, kept: &Value) {
+        match kept.field("facts") {
+            None | Some(Value::None) => {}
+            Some(value) => match A::from_value(value) {
+                Some(mut facts) => {
+                    ledger::Field::attach(&mut facts, ErasedPath::ROOT);
+                    self.facts = facts;
+                }
+                None => self.said = Some(Said::Note(Message::from("The facts from before the reload don't fit this build, so it starts afresh"))),
+            },
+        }
+        if let Some(place) = kept.field("place") {
+            self.return_to(place);
+        }
+        self.stale = true;
+    }
+
     fn painted(&mut self, frame: &mut Frame) {
         for effect in std::mem::take(&mut self.effects) {
             self.start(effect, frame.window);

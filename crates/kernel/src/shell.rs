@@ -14,6 +14,7 @@ use crate::metrics::Metrics;
 use crate::pace::Pace;
 use crate::scope::{Cause, Recorder, Stages};
 use crate::paint::Painter;
+use crate::reload::{Handoff, Reload};
 use crate::text::Text;
 
 pub struct Config {
@@ -111,6 +112,12 @@ pub trait Face: 'static {
     fn stages(&self) -> Stages {
         Stages::default()
     }
+    /// What this face hands to the next build of itself when `bindery dev` reloads the app: whatever the new build can't get back on its own, such as facts that aren't saved and where the user was.
+    fn keep(&self) -> ledger::Value {
+        ledger::Value::None
+    }
+    /// Takes back what the previous build kept, right after the face is made.
+    fn restore(&mut self, _: &ledger::Value) {}
 }
 
 fn cause(input: &Input) -> Cause {
@@ -133,6 +140,7 @@ fn micros(since: Instant) -> u32 {
 /// What wakes the event loop: the app's own threads, or an assistive tool.
 pub enum Signal {
     Wake,
+    Reload,
     Access(accesskit_winit::Event),
 }
 
@@ -162,7 +170,15 @@ pub fn run<F: Face>(config: Config, make: impl FnOnce(Waker) -> F + 'static) -> 
     let event_loop = EventLoop::<Signal>::with_user_event().build().map_err(|e| e.to_string())?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
-    let mut shell = Shell::<F> { config, proxy, running: None, failed: None, make: Some(Box::new(make)), started, loop_ready: Instant::now() };
+    let reload = Reload::from_env();
+    let handoff = reload.as_ref().and_then(Reload::take);
+    if let Some(reload) = &reload {
+        let proxy = proxy.clone();
+        reload.listen(move || {
+            let _ = proxy.send_event(Signal::Reload);
+        });
+    }
+    let mut shell = Shell::<F> { config, proxy, running: None, failed: None, make: Some(Box::new(make)), started, loop_ready: Instant::now(), reload, handoff };
     event_loop.run_app(&mut shell).map_err(|e| e.to_string())?;
     shell.failed.map_or(Ok(()), Err)
 }
@@ -177,6 +193,8 @@ struct Shell<F: Face> {
     make: Option<Make<F>>,
     started: Instant,
     loop_ready: Instant,
+    reload: Option<Reload>,
+    handoff: Option<Handoff>,
 }
 
 struct Running<F: Face> {
@@ -301,11 +319,15 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             return;
         }
         let mut marks = vec![("event loop", self.loop_ready), ("system", Instant::now())];
-        let attributes = Window::default_attributes()
+        let handoff = self.handoff.take();
+        let mut attributes = Window::default_attributes()
             .with_title(&self.config.title)
             .with_inner_size(LogicalSize::new(self.config.size.0, self.config.size.1))
             .with_min_inner_size(LogicalSize::new(self.config.min_size.0, self.config.min_size.1))
             .with_visible(false);
+        if let Some((position, size)) = handoff.as_ref().and_then(|h| h.frame) {
+            attributes = attributes.with_position(position).with_inner_size(size);
+        }
         let window = match event_loop.create_window(attributes) {
             Ok(w) => Arc::new(w),
             Err(e) => {
@@ -327,7 +349,10 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
         let metrics = Metrics::measure(&mut text, window.scale_factor() as f32, size.width, size.height);
         marks.push(("fonts", Instant::now()));
         let Some(make) = self.make.take() else { return };
-        let face = make(Waker { proxy: self.proxy.clone() });
+        let mut face = make(Waker { proxy: self.proxy.clone() });
+        if let Some(handoff) = &handoff {
+            face.restore(&handoff.face);
+        }
         marks.push(("app", Instant::now()));
         let appearance = match window.theme() {
             Some(winit::window::Theme::Dark) => Appearance::Dark,
@@ -377,6 +402,14 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
         let Some(r) = self.running.as_mut() else { return };
         match signal {
             Signal::Wake => r.input(Input::Woken),
+            Signal::Reload => {
+                if let Some(reload) = &self.reload {
+                    match reload.save(&r.window, r.face.keep()) {
+                        Ok(()) => event_loop.exit(),
+                        Err(e) => eprintln!("reload: {e}"),
+                    }
+                }
+            }
             Signal::Access(e) => match e.window_event {
                 accesskit_winit::WindowEvent::InitialTreeRequested => r.update_access(),
                 accesskit_winit::WindowEvent::ActionRequested(request) => {

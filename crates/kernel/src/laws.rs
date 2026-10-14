@@ -667,6 +667,19 @@ mod commands {
             let _ = std::fs::remove_dir_all(&folder);
             prop_assert_eq!(reopened, kept);
         }
+
+        #[test]
+        fn a_reload_keeps_the_state(done in prop::collection::vec(any::<bool>(), 0..8), steps in prop::collection::vec(step(), 0..40)) {
+            use crate::shell::Face;
+            let mut runner = Runner::new(shelf(&done));
+            for step in &steps {
+                take(&mut runner, step);
+            }
+            let mut reloaded = Runner::new(Shelf::default());
+            reloaded.restore(&runner.keep());
+            prop_assert_eq!(ledger::Field::value(&reloaded.facts), ledger::Field::value(&runner.facts));
+            prop_assert_eq!(reloaded.whereabouts(), runner.whereabouts());
+        }
     }
 
 

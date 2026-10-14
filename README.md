@@ -10,7 +10,13 @@ It is being built now, item by item, from the build plan at the end of the spec.
 - [`AGENTS.md`](AGENTS.md): how to work on it.
 
 ```
-cargo run -p todo
+cargo run -p todo                        # the to-do app
+cargo run -p todo -- --specimen          # Specimen over its named states
+cargo run --release -p todo -- --assay   # every law and budget, as a report
+cargo run -p specimen                    # Specimen on its own
+cargo run -p scope                       # attach to a running app and watch its frames
+cargo run -p bindery -- new apps/hello   # start an app
+cargo run -p bindery -- dev apps/hello   # rebuild and reload it on every saved change
 ```
 
 Licensed under the [Mozilla Public License 2.0](LICENSE).

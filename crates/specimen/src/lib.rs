@@ -246,6 +246,26 @@ impl<A: App> Face for Specimen<A> {
             Showing::Catalog => self.catalog.stages(),
         }
     }
+
+    fn keep(&self) -> ledger::Value {
+        let screens = self.screens.iter().map(Face::keep).collect();
+        ledger::Value::Map(vec![("catalog".into(), self.catalog.keep()), ("state".into(), ledger::Value::UInt(self.state as u64)), ("screens".into(), ledger::Value::List(screens))])
+    }
+
+    fn restore(&mut self, kept: &ledger::Value) {
+        if let Some(catalog) = kept.field("catalog") {
+            self.catalog.restore(catalog);
+        }
+        if let Some(ledger::Value::UInt(state)) = kept.field("state") {
+            self.state = (*state as usize).min(self.screens.len().saturating_sub(1));
+        }
+        if let Some(ledger::Value::List(screens)) = kept.field("screens") {
+            for (runner, screen) in self.screens.iter_mut().zip(screens) {
+                runner.restore(screen);
+            }
+        }
+        self.offer();
+    }
 }
 
 /// Renders every named state of an app in both appearances, at its normal size and at the smallest window it allows, into pictures in `folder`, then the Changes page for them, and prints how long each took to paint. It also writes `index.html` there, a page with every picture and what changed, with any images from `references` pinned beside the state they are named after.

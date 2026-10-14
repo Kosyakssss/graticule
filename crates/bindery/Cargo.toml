@@ -1,0 +1,10 @@
+[package]
+name = "bindery"
+description = "BD-01, Bindery: starts Graticule apps and runs the development loop."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true

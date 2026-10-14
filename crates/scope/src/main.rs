@@ -189,6 +189,15 @@ impl Face for Window {
     fn stages(&self) -> Stages {
         self.runner.stages()
     }
+
+    fn keep(&self) -> ledger::Value {
+        self.runner.keep()
+    }
+
+    fn restore(&mut self, kept: &ledger::Value) {
+        self.runner.restore(kept);
+        self.follow();
+    }
 }
 
 fn main() {

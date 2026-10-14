@@ -2,7 +2,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-use ledger::{Change, Choose, Edit, ErasedPath, History, Op, Transaction};
+use ledger::{Change, Choose, Edit, ErasedPath, History, Op, Store, Transaction, Value};
 use winit::event::{Ime, KeyEvent};
 
 use crate::app::{App, Cx, Moment, Said};
@@ -51,6 +51,29 @@ enum Target<C> {
 /// The list commands act on right now, and the keys they act on.
 type Here = Option<(ListInfo, Vec<u128>)>;
 
+/// What a command was given that isn't the same on every run: whose keys, from which counter, the time and a seed. The command log keeps it, so a replay gives the same facts.
+#[derive(Clone, Copy, Debug)]
+struct Clock {
+    replica: u64,
+    counter: u64,
+    now: Moment,
+    seed: u64,
+}
+
+impl Clock {
+    fn of(entry: &Value) -> Option<Clock> {
+        let (Some(Value::UInt(replica)), Some(Value::UInt(counter)), Some(Value::Int(now)), Some(Value::UInt(seed))) = (entry.field("replica"), entry.field("counter"), entry.field("now"), entry.field("seed")) else { return None };
+        Some(Clock { replica: *replica, counter: *counter, now: Moment(*now), seed: *seed })
+    }
+}
+
+/// Where committed entries go: nowhere, a list in memory for replays, or the store on disk.
+enum Keep {
+    Nothing,
+    Memory(Vec<Value>),
+    Store(Store),
+}
+
 /// Runs an app in a window: builds its tree from the facts, lays it out, keeps its quads and turns input into commands.
 pub struct Runner<A: App> {
     pub facts: A,
@@ -85,6 +108,7 @@ pub struct Runner<A: App> {
     reveal: bool,
     ime: bool,
     repairing: bool,
+    keep: Keep,
 }
 
 impl<A: App> Runner<A> {
@@ -108,7 +132,7 @@ impl<A: App> Runner<A> {
             status: NONE,
             stack: Vec::new(),
             widths: Vec::new(),
-            replica: std::process::id() as u64 | 1 << 40,
+            replica: ledger::fresh_replica(),
             counter: 0,
             gesture: 0,
             minimum: None,
@@ -124,6 +148,32 @@ impl<A: App> Runner<A> {
             reveal: false,
             ime: false,
             repairing: false,
+            keep: Keep::Nothing,
+        }
+    }
+
+    /// Opens the facts kept in `folder`, or makes them with `fresh` on the first launch, puts the user back where they were and saves every change there from now on. If the folder can't be used, the app runs unsaved and the message line says why.
+    pub fn open(folder: &std::path::Path, fresh: impl Fn() -> A) -> Self
+    where
+        A: Send,
+    {
+        match Store::open(folder, &fresh) {
+            Ok((store, opened)) => {
+                let mut runner = Self::new(opened.facts);
+                runner.save_to(store, opened.counter);
+                if let Some(place) = &opened.place {
+                    runner.return_to(place);
+                }
+                if let Some(trouble) = opened.trouble {
+                    runner.said = Some(Said::Failure(trouble));
+                }
+                runner
+            }
+            Err(e) => {
+                let mut runner = Self::new(fresh());
+                runner.said = Some(Said::Failure(format!("Changes won't be saved, because {} couldn't be opened: {e}", folder.display())));
+                runner
+            }
         }
     }
 
@@ -511,7 +561,7 @@ impl<A: App> Runner<A> {
             self.say(reason);
             return false;
         }
-        self.transact(vec![cmd]);
+        self.transact(vec![cmd], None);
         true
     }
 
@@ -526,7 +576,7 @@ impl<A: App> Runner<A> {
             }
         }
         if !take.is_empty() {
-            self.transact(take);
+            self.transact(take, None);
         }
         match skipped.first() {
             Some((what, why)) if skipped.len() == 1 => self.said = Some(Said::Note(Message::plain(format!("{what} was skipped: {}", why.as_str())))),
@@ -537,7 +587,7 @@ impl<A: App> Runner<A> {
         true
     }
 
-    fn transact(&mut self, cmds: Vec<A::Cmd>) {
+    fn transact(&mut self, cmds: Vec<A::Cmd>, clock: Option<Clock>) {
         let many = cmds.len();
         let (label, gesture) = match cmds.first().and_then(Commands::as_edit) {
             Some(edit) if edit.is_typing() => ("typing".to_string(), edit.gesture),
@@ -547,14 +597,24 @@ impl<A: App> Runner<A> {
                 (cmds.first().map_or_else(String::new, |c| format!("“{}”", c.label_string(&self.facts, form))), self.gesture)
             }
         };
+        let clock = clock.unwrap_or(Clock { replica: self.replica, counter: self.counter, now: Moment::now(), seed: self.counter ^ 0x9e37_79b9_7f4a_7c15 });
+        let entry = Value::Map(vec![
+            ("do".into(), Value::Str("command".into())),
+            ("commands".into(), Value::List(cmds.iter().map(ledger::Field::value).collect())),
+            ("replica".into(), Value::UInt(clock.replica)),
+            ("counter".into(), Value::UInt(clock.counter)),
+            ("now".into(), Value::Int(clock.now.0)),
+            ("seed".into(), Value::UInt(clock.seed)),
+        ]);
         let marks = self.marks();
         let place = self.place();
-        let mut cx = Cx::new(self.replica, self.counter, Moment::now(), self.counter ^ 0x9e37_79b9_7f4a_7c15);
+        let mut cx = Cx::new(clock.replica, clock.counter, clock.now, clock.seed);
         let before = self.facts.snap();
         let tx = Transaction::begin();
+        let mut changed = false;
         let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             for cmd in cmds {
-                let _ = self.facts.update(cmd, &mut cx);
+                changed |= self.facts.update(cmd, &mut cx).changed();
             }
         }));
         let mut ops = tx.end();
@@ -571,10 +631,67 @@ impl<A: App> Runner<A> {
         }
         self.counter = cx.counter;
         self.said = cx.said.pop();
+        if cfg!(debug_assertions) && !changed && !ops.is_empty() {
+            self.said = Some(Said::Failure(format!("{label} returned Outcome::Nothing but changed the facts")));
+        }
         let pruned = self.prune(&ops);
         ops.extend(pruned);
+        if !ops.is_empty() {
+            self.record(entry, &ops);
+        }
         self.history.commit(ops, || label, gesture, place);
         self.repair(marks);
+    }
+
+    fn record(&mut self, entry: Value, ops: &[Op]) {
+        match &mut self.keep {
+            Keep::Nothing => {}
+            Keep::Memory(entries) => entries.push(entry),
+            Keep::Store(store) => {
+                store.record(entry, ops.to_vec(), self.counter);
+                if let Some(trouble) = store.trouble() {
+                    self.said = Some(Said::Failure(trouble));
+                }
+            }
+        }
+    }
+
+    /// Keeps every entry of the command log in memory, for replaying it.
+    pub fn remember(&mut self) {
+        self.keep = Keep::Memory(Vec::new());
+    }
+
+    /// The command log kept in memory since `remember`.
+    pub fn entries(&self) -> &[Value] {
+        match &self.keep {
+            Keep::Memory(entries) => entries,
+            _ => &[],
+        }
+    }
+
+    /// Runs a command log again, entry by entry, with the keys, times and random numbers each command was given the first time.
+    pub fn replay(&mut self, entries: &[Value]) -> bool {
+        let repairing = std::mem::replace(&mut self.repairing, true);
+        let mut whole = true;
+        for entry in entries {
+            match entry.field("do") {
+                Some(Value::Str(what)) if what == "undo" || what == "redo" => whole &= self.undo(what == "undo"),
+                Some(Value::Str(what)) if what == "command" => {
+                    let clock = Clock::of(entry);
+                    let cmds = match entry.field("commands") {
+                        Some(Value::List(cmds)) => cmds.iter().map(<A::Cmd as ledger::Field>::from_value).collect::<Option<Vec<_>>>(),
+                        _ => None,
+                    };
+                    match (cmds, clock) {
+                        (Some(cmds), Some(clock)) => self.transact(cmds, Some(clock)),
+                        _ => whole = false,
+                    }
+                }
+                _ => whole = false,
+            }
+        }
+        self.repairing = repairing;
+        whole
     }
 
     fn place(&self) -> Place {
@@ -604,12 +721,54 @@ impl<A: App> Runner<A> {
         let place = self.place();
         let moved = if back { self.history.undo(&mut self.facts, place) } else { self.history.redo(&mut self.facts) };
         let Some(moved) = moved else { return false };
-        let (ops, place) = (moved.ops, *moved.place);
-        self.prune(&ops);
+        let (mut ops, place) = (moved.ops, *moved.place);
+        let pruned = self.prune(&ops);
+        ops.extend(pruned);
+        self.record(Value::Map(vec![("do".into(), Value::Str(if back { "undo" } else { "redo" }.into()))]), &ops);
         self.restore(place);
         self.said = None;
         self.stale = true;
         true
+    }
+
+    /// Where the user is, as the store keeps it: the focused component, its caret and where each list is scrolled.
+    pub fn whereabouts(&self) -> Value {
+        let caret = self.place().caret.map_or(Value::None, |c| Value::List(vec![Value::UInt(c.caret as u64), Value::UInt(c.anchor as u64)]));
+        let scrolls = self.scrolls.iter().map(|(id, s)| Value::List(vec![Value::UInt(id.0), s.anchor.map_or(Value::None, Value::Key), Value::UInt(s.index as u64)]));
+        Value::Map(vec![("focus".into(), self.focus.map_or(Value::None, |f| Value::UInt(f.0))), ("caret".into(), caret), ("scrolls".into(), Value::List(scrolls.collect()))])
+    }
+
+    /// Puts the user back where `whereabouts` said they were.
+    pub fn return_to(&mut self, place: &Value) {
+        if let Some(Value::UInt(focus)) = place.field("focus") {
+            self.focus = Some(Id(*focus));
+            if let Some(Value::List(c)) = place.field("caret")
+                && let [Value::UInt(caret), Value::UInt(anchor)] = c.as_slice()
+            {
+                self.carets.insert(Id(*focus), Caret { caret: *caret as usize, anchor: *anchor as usize });
+            }
+        }
+        if let Some(Value::List(scrolls)) = place.field("scrolls") {
+            for s in scrolls {
+                if let Value::List(parts) = s
+                    && let [Value::UInt(id), anchor, Value::UInt(index)] = parts.as_slice()
+                {
+                    let anchor = match anchor {
+                        Value::Key(k) => Some(*k),
+                        _ => None,
+                    };
+                    self.scrolls.insert(Id(*id), Scroll { anchor, index: *index as u32, rows: 0 });
+                }
+            }
+        }
+        self.stale = true;
+    }
+
+    /// Saves into `store` from now on, and goes on from where its facts were opened.
+    pub fn save_to(&mut self, store: Store, counter: u64) {
+        self.replica = store.replica;
+        self.counter = self.counter.max(counter);
+        self.keep = Keep::Store(store);
     }
 
     fn marks(&self) -> Vec<(Id, u128, u32)> {
@@ -1119,6 +1278,14 @@ impl<A: App> Runner<A> {
     }
 }
 
+impl<A: App> Drop for Runner<A> {
+    fn drop(&mut self) {
+        if let Keep::Store(store) = &self.keep {
+            store.place(self.whereabouts());
+        }
+    }
+}
+
 impl<A: App> Face for Runner<A> {
     fn paint(&mut self, p: &mut Painter, _: Seen) {
         if self.metrics != Some(p.m) {
@@ -1290,4 +1457,10 @@ fn label<F, C: Commands<F>>(text: &mut String, cmd: &C, facts: &F, form: Form) -
     let start = text.len() as u32;
     cmd.label(facts, form, text);
     Range32 { start, end: text.len() as u32 }
+}
+
+/// Where this app keeps its facts: a folder named after the program, in the operating system's place for app data.
+pub fn folder() -> std::path::PathBuf {
+    let name = std::env::current_exe().ok().and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned())).unwrap_or_else(|| "app".into());
+    dirs::data_dir().unwrap_or_else(std::env::temp_dir).join("Graticule").join(name)
 }

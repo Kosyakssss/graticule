@@ -10,6 +10,7 @@ mod outcome;
 mod path;
 mod plain;
 mod selection;
+mod store;
 mod text;
 mod value;
 
@@ -23,5 +24,6 @@ pub use outcome::Outcome;
 pub use path::{DEPTH, ErasedPath, FactPath, Facts, Field, FieldInfo, Find, Kind, Record, Step};
 pub use plain::Document;
 pub use selection::{Choose, Selection};
+pub use store::{Opened, Store, entries, fresh_replica};
 pub use text::Text;
 pub use value::{Malformed, Value};

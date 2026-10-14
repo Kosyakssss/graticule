@@ -11,8 +11,8 @@ pub mod prelude {
     pub use ledger::{Edit, Key, List, Outcome, Selection, Text};
 }
 
-/// Opens the app's window with fresh facts and runs it until the window closes. With `--render <folder>`, it instead renders every named state in both appearances into that folder as pictures, and prints how long each took to paint.
-pub fn run<A: kernel::App + Default>(title: kernel::Message) {
+/// Opens the app's window with the facts it kept last time (fresh ones on the first launch) and runs it until the window closes, saving every change. With `--render <folder>`, it instead renders every named state in both appearances into that folder as pictures, and prints how long each took to paint.
+pub fn run<A: kernel::App + Default + Send>(title: kernel::Message) {
     let mut args = std::env::args().skip(1);
     if let Some("--render") = args.next().as_deref() {
         let folder = std::path::PathBuf::from(args.next().unwrap_or_else(|| ".".into()));
@@ -23,7 +23,7 @@ pub fn run<A: kernel::App + Default>(title: kernel::Message) {
         return;
     }
     let config = kernel::shell::Config::new(title.as_str());
-    if let Err(e) = kernel::shell::run(config, |_| kernel::runner::Runner::new(A::default())) {
+    if let Err(e) = kernel::shell::run(config, |_| kernel::runner::Runner::open(&kernel::runner::folder(), A::default)) {
         eprintln!("{e}");
         std::process::exit(1);
     }

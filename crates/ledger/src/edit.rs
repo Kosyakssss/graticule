@@ -106,7 +106,7 @@ impl Field for Edit {
     }
 }
 
-fn kind_index(kind: crate::Kind) -> u64 {
+pub(crate) fn kind_index(kind: crate::Kind) -> u64 {
     match kind {
         crate::Kind::Document => 0,
         crate::Kind::Session => 1,
@@ -115,7 +115,7 @@ fn kind_index(kind: crate::Kind) -> u64 {
     }
 }
 
-fn kind_of(i: u64) -> Option<crate::Kind> {
+pub(crate) fn kind_of(i: u64) -> Option<crate::Kind> {
     Some(match i {
         0 => crate::Kind::Document,
         1 => crate::Kind::Session,

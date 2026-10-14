@@ -369,6 +369,8 @@ mod commands {
         Remove(#[subject] Key<Item>),
         #[internal]
         Edit(Edit),
+        #[internal]
+        Explode,
     }
 
     impl App for Shelf {
@@ -381,7 +383,7 @@ mod commands {
                 Cmd::Finish(item) | Cmd::Remove(item) if !self.items.has(*item) => Available::No(Message::from("That item is gone")),
                 Cmd::Finish(item) => no_if(done(item), Message::from("It is finished already")),
                 Cmd::Remove(item) => no_if(done(item), Message::from("Finished items stay")),
-                Cmd::Edit(_) => Available::Yes,
+                Cmd::Edit(_) | Cmd::Explode => Available::Yes,
             }
         }
 
@@ -395,6 +397,10 @@ mod commands {
                 Cmd::Finish(item) => self.items.change(item, |item| item.done = true),
                 Cmd::Remove(item) => self.items.remove(item),
                 Cmd::Edit(edit) => edit.apply(self),
+                Cmd::Explode => {
+                    let _ = self.items.push(Item { id: cx.key(), title: "half done".into(), done: false });
+                    panic!("it broke halfway")
+                }
             }
         }
 
@@ -555,5 +561,91 @@ mod commands {
                 prop_assert_eq!(&ledger::Field::value(&runner.facts), after);
             }
         }
+    }
+    fn scratch_folder() -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        std::env::temp_dir().join(format!("graticule laws {} {n}", std::process::id()))
+    }
+
+    proptest! {
+        #[test]
+        fn replaying_the_command_log_gives_the_same_facts(done in prop::collection::vec(any::<bool>(), 0..8), steps in prop::collection::vec(step(), 0..60)) {
+            let mut runner = Runner::new(shelf(&done));
+            runner.remember();
+            for step in &steps {
+                take(&mut runner, step);
+                if runner.history.undo_label().is_some() && undoes_after(step) {
+                    runner.run_named("undo");
+                }
+            }
+            let mut again = Runner::new(shelf(&done));
+            prop_assert!(again.replay(runner.entries()));
+            prop_assert_eq!(ledger::Field::value(&again.facts), ledger::Field::value(&runner.facts));
+        }
+
+        #[test]
+        fn a_transaction_rolled_back_after_a_panic_leaves_the_facts_as_they_were(done in prop::collection::vec(any::<bool>(), 0..8), steps in prop::collection::vec(step(), 0..30)) {
+            let mut runner = Runner::new(shelf(&done));
+            for step in &steps {
+                take(&mut runner, step);
+            }
+            let (before, len) = (ledger::Field::value(&runner.facts), runner.history.len());
+            runner.run(Cmd::Explode);
+            prop_assert!(runner.failure().is_some_and(|f| f.contains("nothing changed")));
+            prop_assert_eq!(ledger::Field::value(&runner.facts), before);
+            prop_assert_eq!(runner.history.len(), len);
+        }
+
+        #[test]
+        fn a_selection_never_holds_a_key_that_no_longer_exists(done in prop::collection::vec(any::<bool>(), 0..12), steps in prop::collection::vec(step(), 0..60)) {
+            let mut runner = Runner::new(shelf(&done));
+            for step in &steps {
+                take(&mut runner, step);
+                prop_assert!(runner.facts.chosen.iter().all(|k| runner.facts.items.has(k)));
+            }
+        }
+
+        #[test]
+        fn a_lists_tallies_always_equal_a_count_over_its_items(done in prop::collection::vec(any::<bool>(), 0..12), steps in prop::collection::vec(step(), 0..60)) {
+            let mut runner = Runner::new(shelf(&done));
+            for step in &steps {
+                take(&mut runner, step);
+                prop_assert_eq!(runner.facts.items.count(Item::done), runner.facts.items.iter().filter(|i| i.done).count());
+            }
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(64))]
+
+        #[test]
+        fn saved_facts_reopen_as_they_were(done in prop::collection::vec(any::<bool>(), 0..8), first in prop::collection::vec(step(), 0..40), then in prop::collection::vec(step(), 0..40)) {
+            let folder = scratch_folder();
+            let fresh = || shelf(&done);
+            let mut runner = Runner::open(&folder, fresh);
+            for step in &first {
+                take(&mut runner, step);
+            }
+            let kept = ledger::Field::value(&runner.facts);
+            drop(runner);
+            let mut runner = Runner::open(&folder, fresh);
+            prop_assert_eq!(runner.failure(), None);
+            prop_assert_eq!(&ledger::Field::value(&runner.facts), &kept);
+            for step in &then {
+                take(&mut runner, step);
+            }
+            let kept = ledger::Field::value(&runner.facts);
+            drop(runner);
+            let runner = Runner::open(&folder, fresh);
+            let reopened = ledger::Field::value(&runner.facts);
+            drop(runner);
+            let _ = std::fs::remove_dir_all(&folder);
+            prop_assert_eq!(reopened, kept);
+        }
+    }
+
+    fn undoes_after(step: &Step) -> bool {
+        matches!(step, Step::Type('a' | 'c') | Step::Press("delete" | "space"))
     }
 }

@@ -1,0 +1,47 @@
+window		0 0 120 30	
+  page	List	0 0 120 26	
+    list		2 3 116 22	18 items
+      list item		2 3 114 2	
+        text	A list of the records in a List field, scrolled by whole rows, with its selection in a Selection field. The view describes one row; the kernel calls it only for the rows that show, so a list of fifty million items costs what a screenful does.	2 3 114 2	
+      list item		2 5 114 1	
+      list item		2 6 114 1	
+        text	Use it for	2 6 7 1	strong
+      list item		2 7 114 1	
+        text	Any collection the user goes through: items, files, messages.	2 7 45 1	
+      list item		2 8 114 1	
+      list item		2 9 114 1	
+        text	Code	2 9 4 1	strong
+      list item		2 10 114 4	
+        text	ui.list(&self.items, Todo::selection, |ui, item| {\n    ui.check(&item.title, item.done, Cmd::Toggle);\n    ui.link(Cmd::Remove);\n});	2 10 114 4	mono
+      list item		2 14 114 1	
+        group		2 14 114 1	
+          column		2 14 14 1	
+            text	Live	2 14 14 1	muted
+          column		18 14 98 1	
+            text	This page is one: the arrows move through it, Shift with them chooses several	18 14 98 1	muted
+      list item		2 15 114 1	
+        text	A command with a #[subject] inside a row acts on that row's item; from the bar, the palette or a key, it acts on the chosen items.	2 15 96 1	
+      list item		2 16 114 1	
+      list item		2 17 114 1	
+        text	Keys	2 17 4 1	strong
+      list item		2 18 114 2	
+        text	Up and Down move through it, Home and End go to the top and the bottom, Shift with the arrows chooses several, select all chooses everything, and Escape lets go of all but the focused one. The scroll wheel scrolls.	2 18 114 2	
+      list item		2 20 114 1	
+      list item		2 21 114 1	
+        text	Narrow windows	2 21 14 1	strong
+      list item		2 22 114 1	
+        text	A list takes the rows the page has to spare, at least three.	2 22 43 1	
+      list item		2 23 114 1	
+      list item		2 24 114 1	
+        text	Screen reader	2 24 11 1	strong
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Press	2 28 7 1	
+    button	Follow the link	11 28 13 1	
+    button	Tick or untick the box	26 28 18 1	
+    button	Say it	46 28 7 1	unavailable (Type something first)
+    button	Back to all components	55 28 20 1	
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

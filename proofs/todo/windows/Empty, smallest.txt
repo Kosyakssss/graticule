@@ -1,0 +1,18 @@
+window		0 0 33 17	
+  page	To do	0 0 33 11	
+    group		2 3 29 1	
+      text field	Something to do	2 3 21 1	
+      button	Add	25 3 6 1	unavailable (Type something first)
+    list		2 5 29 3	0 items
+    group		2 9 29 1	
+      button	Clear finished	2 9 17 1	unavailable (Nothing is finished yet)
+      button	Export…	21 9 10 1	unavailable (The list is empty)
+  alert		2 11 29 1	
+  status		2 12 29 1	
+  toolbar		2 13 29 4	
+    button	Add	2 13 5 1	unavailable (Type something first)
+    button	Clear finished	9 13 13 1	unavailable (Nothing is finished yet)
+    button	Export…	2 14 9 1	unavailable (The list is empty)
+    button	Undo	13 14 13 1	unavailable (Nothing to undo)
+    button	Redo	2 15 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 16 28 1	

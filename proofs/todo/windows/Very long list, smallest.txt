@@ -1,0 +1,27 @@
+window		0 0 33 17	
+  page	To do	0 0 33 11	
+    group		2 3 29 1	
+      text field	Something to do	2 3 21 1	
+      button	Add	25 3 6 1	unavailable (Type something first)
+    list		2 5 29 3	10000 items
+      list item		2 5 27 1	
+        checkbox	Thing number 1	2 5 18 1	
+        link	Remove	22 5 7 1	
+      list item		2 6 27 1	
+        checkbox	Thing number 2	2 6 18 1	
+        link	Remove	22 6 7 1	
+      list item		2 7 27 1	
+        checkbox	Thing number 3	2 7 18 1	ticked
+        link	Remove	22 7 7 1	
+    group		2 9 29 1	
+      button	Clear finished	2 9 17 1	
+      button	Export…	21 9 10 1	
+  alert		2 11 29 1	
+  status		2 12 29 1	
+  toolbar		2 13 29 4	
+    button	Add	2 13 5 1	unavailable (Type something first)
+    button	Clear finished	9 13 13 1	
+    button	Export…	2 14 9 1	
+    button	Undo	13 14 13 1	unavailable (Nothing to undo)
+    button	Redo	2 15 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 16 28 1	

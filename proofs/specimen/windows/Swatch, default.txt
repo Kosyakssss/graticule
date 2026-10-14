@@ -1,0 +1,41 @@
+window		0 0 120 30	
+  page	Swatch	0 0 120 26	
+    list		2 3 116 22	11 items
+      list item		2 3 114 2	
+        text	A small box filled with one of the theme's inks: a label's color, a series in a legend, a choice of color. The ink is named, not mixed, so the swatch follows the theme and the appearance like everything else.	2 3 114 2	
+      list item		2 5 114 1	
+      list item		2 6 114 1	
+        text	Use it for	2 6 7 1	strong
+      list item		2 7 114 1	
+        text	Showing which color stands for what. Every ink is shown this way in Specimen's Style place.	2 7 69 1	
+      list item		2 8 114 1	
+      list item		2 9 114 1	
+        text	Code	2 9 4 1	strong
+      list item		2 10 114 1	
+        text	ui.swatch(Ink::Danger);	2 10 23 1	mono
+      list item		2 11 114 1	
+        group		2 11 114 1	
+          column		2 11 14 1	
+            text	Live	2 11 14 1	muted
+          column		18 11 98 1	
+            group		18 11 98 1	
+              swatch	link	18 11 4 1	
+              swatch	danger	24 11 4 1	
+              swatch	ok	30 11 4 1	
+              swatch	selection	36 11 4 1	
+      list item		2 12 114 1	
+      list item		2 13 114 1	
+        text	Screen reader	2 13 11 1	strong
+      list item		2 14 114 1	
+        text	An image, named after its ink ("danger").	2 14 31 1	
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Press	2 28 7 1	
+    button	Follow the link	11 28 13 1	
+    button	Tick or untick the box	26 28 18 1	
+    button	Say it	46 28 7 1	unavailable (Type something first)
+    button	Back to all components	55 28 20 1	
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

@@ -371,7 +371,7 @@ Order, by difficulty, because each forces new pieces into the kernel: Galley's e
 
 ## 15. Open questions
 1. The Linux details (§10), after testing on a real machine.
-2. Proofs kept as images, as text descriptions of the tree, or both.
+2. Proofs kept as images, as text descriptions of the tree, or both; text for now, in the repository, one folder per platform (`docs/internals/proofs.md`).
 3. Whether saved facts should be the CRDT's document from the start, or Ledger's own snapshot until a second device appears (§13.2, `docs/internals/ledger.md`); Ledger's own for now.
 4. The four kinds of state as marks on fields or as separate structs (§3.2); marks for now.
 5. Fractional display scales (Linux), where a cell can't be whole pixels and whole points at once.
@@ -406,7 +406,7 @@ The first slice builds the first part of most items below: the kernel, Ledger wi
 ### 17.3 Tooling
 Tooling comes before the apps, by the owner's decision, so every later piece is reviewed as pictures, measured and checked from its first commit.
 
-4. **Taken.** SP-01 Specimen properly (§13.5): Components (the live overview and component pages), Screens, Style, Changes, reference images, offscreen pages. Built in parts: (a) the four places, always in the bar, and Specimen's own app with the live overview, done; (b) component pages, one per component from `docs/components/`, each with its live example and its awkward content, done; (c) Style, every ink of the theme in both appearances with its contrast, and the grid and type values, shown but not yet editable (editing comes with item 10), done; (d) Changes; (e) reference images and offscreen pages.
+4. **Taken.** SP-01 Specimen properly (§13.5): Components (the live overview and component pages), Screens, Style, Changes, reference images, offscreen pages. Built in parts: (a) the four places, always in the bar, and Specimen's own app with the live overview, done; (b) component pages, one per component from `docs/components/`, each with its live example and its awkward content, done; (c) Style, every ink of the theme in both appearances with its contrast, and the grid and type values, shown but not yet editable (editing comes with item 10), done; (d) Changes, every sheet compared with its approved proof and the differences said in words, approved one by one or all at once, in the window or with `--changes` and `--approve`, done but for before-and-after pictures, blink and a heatmap, which wait for open question 2 and a component that shows a picture; (e) reference images and offscreen pages.
 5. **Open.** SC-01 Scope, small (§13.6): the ring buffer, its own window, why it redrew, time.
 6. **Open.** AS-01 Assay, small (§13.7): the universal laws over generated command sequences, the grid and contrast laws, the frame, allocation and idle budgets, the `assay` report.
 7. **Open.** BD-01 Bindery's development loop moved in: `bindery new` and `bindery dev` with the in-place reload.

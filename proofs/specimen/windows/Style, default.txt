@@ -1,0 +1,173 @@
+window		0 0 120 30	
+  page	Style	0 0 120 26	
+    list		2 3 116 22	27 items
+      list item		2 3 114 1	
+        text	Inks	2 3 4 1	strong
+      list item		2 4 114 2	
+        text	Everything is drawn in one of these inks, so a theme restyles everything at once. Each is given as OKLCH lightness, chroma and hue, then, for inks that text and lines are drawn in, its contrast on the background: text needs 4.5 to 1, faint text 3 to 1. The swatch shows the appearance the window is in now.	2 4 114 2	muted
+      list item		2 6 114 1	
+        group		2 6 114 1	
+          column		2 6 6 1	
+            text	Now	2 6 6 1	muted
+          column		10 6 12 1	
+            text	Ink	10 6 12 1	muted
+          column		24 6 45 1	
+            text	Light	24 6 45 1	muted
+          column		71 6 45 1	
+            text	Dark	71 6 45 1	muted
+      list item		2 7 114 1	
+        group		2 7 114 1	
+          column		2 7 6 1	
+            swatch	background	2 7 4 1	
+          column		10 7 12 1	
+            text	background	10 7 12 1	
+          column		24 7 45 1	
+            text	0.98 0.003 100	24 7 45 1	mono
+          column		71 7 45 1	
+            text	0.20 0.004 285	71 7 45 1	mono
+      list item		2 8 114 1	
+        group		2 8 114 1	
+          column		2 8 6 1	
+            swatch	field	2 8 4 1	
+          column		10 8 12 1	
+            text	field	10 8 12 1	
+          column		24 8 45 1	
+            text	0.95 0.003 100	24 8 45 1	mono
+          column		71 8 45 1	
+            text	0.25 0.006 285	71 8 45 1	mono
+      list item		2 9 114 1	
+        group		2 9 114 1	
+          column		2 9 6 1	
+            swatch	hover	2 9 4 1	
+          column		10 9 12 1	
+            text	hover	10 9 12 1	
+          column		24 9 45 1	
+            text	0.95 0.003 100	24 9 45 1	mono
+          column		71 9 45 1	
+            text	0.25 0.006 285	71 9 45 1	mono
+      list item		2 10 114 1	
+        group		2 10 114 1	
+          column		2 10 6 1	
+            swatch	cursor	2 10 4 1	
+          column		10 10 12 1	
+            text	cursor	10 10 12 1	
+          column		24 10 45 1	
+            text	0.93 0.003 100	24 10 45 1	mono
+          column		71 10 45 1	
+            text	0.28 0.007 285	71 10 45 1	mono
+      list item		2 11 114 1	
+        group		2 11 114 1	
+          column		2 11 6 1	
+            swatch	selection	2 11 4 1	
+          column		10 11 12 1	
+            text	selection	10 11 12 1	
+          column		24 11 45 1	
+            text	0.92 0.035 262	24 11 45 1	mono
+          column		71 11 45 1	
+            text	0.32 0.055 262	71 11 45 1	mono
+      list item		2 12 114 1	
+        group		2 12 114 1	
+          column		2 12 6 1	
+            swatch	ink	2 12 4 1	
+          column		10 12 12 1	
+            text	ink	10 12 12 1	
+          column		24 12 45 1	
+            text	0.22 0.005 285 · 16.4	24 12 45 1	mono
+          column		71 12 45 1	
+            text	0.93 0.004 100 · 14.5	71 12 45 1	mono
+      list item		2 13 114 1	
+        group		2 13 114 1	
+          column		2 13 6 1	
+            swatch	muted	2 13 4 1	
+          column		10 13 12 1	
+            text	muted	10 13 12 1	
+          column		24 13 45 1	
+            text	0.50 0.008 285 · 5.7	24 13 45 1	mono
+          column		71 13 45 1	
+            text	0.70 0.006 285 · 6.8	71 13 45 1	mono
+      list item		2 14 114 1	
+        group		2 14 114 1	
+          column		2 14 6 1	
+            swatch	faint	2 14 4 1	
+          column		10 14 12 1	
+            text	faint	10 14 12 1	
+          column		24 14 45 1	
+            text	0.60 0.008 285 · 3.7	24 14 45 1	mono
+          column		71 14 45 1	
+            text	0.58 0.008 285 · 4.2	71 14 45 1	mono
+      list item		2 15 114 1	
+        group		2 15 114 1	
+          column		2 15 6 1	
+            swatch	rule	2 15 4 1	
+          column		10 15 12 1	
+            text	rule	10 15 12 1	
+          column		24 15 45 1	
+            text	0.78 0.005 285 · 1.9	24 15 45 1	mono
+          column		71 15 45 1	
+            text	0.41 0.007 285 · 2.0	71 15 45 1	mono
+      list item		2 16 114 1	
+        group		2 16 114 1	
+          column		2 16 6 1	
+            swatch	link	2 16 4 1	
+          column		10 16 12 1	
+            text	link	10 16 12 1	
+          column		24 16 45 1	
+            text	0.48 0.150 262 · 6.3	24 16 45 1	mono
+          column		71 16 45 1	
+            text	0.77 0.110 260 · 8.7	71 16 45 1	mono
+      list item		2 17 114 1	
+        group		2 17 114 1	
+          column		2 17 6 1	
+            swatch	visited	2 17 4 1	
+          column		10 17 12 1	
+            text	visited	10 17 12 1	
+          column		24 17 45 1	
+            text	0.48 0.150 305 · 6.6	24 17 45 1	mono
+          column		71 17 45 1	
+            text	0.77 0.120 305 · 8.4	71 17 45 1	mono
+      list item		2 18 114 1	
+        group		2 18 114 1	
+          column		2 18 6 1	
+            swatch	danger	2 18 4 1	
+          column		10 18 12 1	
+            text	danger	10 18 12 1	
+          column		24 18 45 1	
+            text	0.48 0.170 28 · 6.7	24 18 45 1	mono
+          column		71 18 45 1	
+            text	0.77 0.130 26 · 8.3	71 18 45 1	mono
+      list item		2 19 114 1	
+        group		2 19 114 1	
+          column		2 19 6 1	
+            swatch	warn	2 19 4 1	
+          column		10 19 12 1	
+            text	warn	10 19 12 1	
+          column		24 19 45 1	
+            text	0.48 0.104 70 · 6.3	24 19 45 1	mono
+          column		71 19 45 1	
+            text	0.77 0.120 80 · 8.6	71 19 45 1	mono
+      list item		2 20 114 1	
+        group		2 20 114 1	
+          column		2 20 6 1	
+            swatch	ok	2 20 4 1	
+          column		10 20 12 1	
+            text	ok	10 20 12 1	
+          column		24 20 45 1	
+            text	0.48 0.120 150 · 5.8	24 20 45 1	mono
+          column		71 20 45 1	
+            text	0.77 0.130 151 · 9.2	71 20 45 1	mono
+      list item		2 21 114 1	
+      list item		2 22 114 1	
+        text	The grid and the type	2 22 17 1	strong
+      list item		2 23 114 1	
+        text	Editing these here, and the inks above, comes with style and theme files.	2 23 55 1	muted
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Press	2 28 7 1	
+    button	Follow the link	11 28 13 1	
+    button	Tick or untick the box	26 28 18 1	
+    button	Say it	46 28 7 1	unavailable (Type something first)
+    button	Back to all components	55 28 20 1	unavailable (All components are showing)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

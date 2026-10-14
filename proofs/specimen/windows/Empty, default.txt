@@ -1,0 +1,37 @@
+window		0 0 120 30	
+  page	Empty	0 0 120 26	
+    list		2 3 116 22	11 items
+      list item		2 3 114 1	
+        text	What the page shows where there is nothing yet: a sentence, and a button for the command that makes something.	2 3 86 1	
+      list item		2 4 114 1	
+      list item		2 5 114 1	
+        text	Use it for	2 5 7 1	strong
+      list item		2 6 114 1	
+        text	An empty list, a search with no results, a first launch.	2 6 40 1	
+      list item		2 7 114 1	
+      list item		2 8 114 1	
+        text	Code	2 8 4 1	strong
+      list item		2 9 114 1	
+        text	ui.empty(t!("Nothing to do yet"), Cmd::Add);	2 9 44 1	mono
+      list item		2 10 114 1	
+        group		2 10 114 1	
+          column		2 10 14 1	
+            text	Live	2 10 14 1	muted
+          column		18 10 98 1	
+            text	What a list shows when it has nothing, with the command that fills it	18 10 98 1	muted
+      list item		2 11 114 1	
+      list item		2 12 114 1	
+        text	Screen reader	2 12 11 1	strong
+      list item		2 13 114 1	
+        text	Reads the sentence, then the button.	2 13 28 1	
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Press	2 28 7 1	
+    button	Follow the link	11 28 13 1	
+    button	Tick or untick the box	26 28 18 1	
+    button	Say it	46 28 7 1	unavailable (Type something first)
+    button	Back to all components	55 28 20 1	
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

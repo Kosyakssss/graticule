@@ -1,0 +1,68 @@
+window		0 0 120 30	
+  page	Check	0 0 120 26	
+    list		2 3 116 22	25 items
+      list item		2 3 114 1	
+        text	A checkbox: a yes-or-no fact and its label. Clicking it runs a command, which changes the fact; the box only shows what the facts say.	2 3 100 1	
+      list item		2 4 114 1	
+      list item		2 5 114 1	
+        text	Use it for	2 5 7 1	strong
+      list item		2 6 114 1	
+        text	A fact that is true or false, such as whether an item is done.	2 6 44 1	
+      list item		2 7 114 1	
+      list item		2 8 114 1	
+        text	Code	2 8 4 1	strong
+      list item		2 9 114 1	
+        text	ui.check(&item.title, item.done, Cmd::Toggle);	2 9 46 1	mono
+      list item		2 10 114 1	
+        group		2 10 114 1	
+          column		2 10 14 1	
+            text	Live	2 10 14 1	muted
+          column		18 10 98 1	
+            checkbox	A yes-or-no fact	18 10 98 1	
+      list item		2 11 114 1	
+      list item		2 12 114 1	
+        text	Keys	2 12 4 1	strong
+      list item		2 13 114 1	
+        text	Tab reaches it; Return or Space runs its command.	2 13 38 1	
+      list item		2 14 114 1	
+      list item		2 15 114 1	
+        text	Narrow windows	2 15 14 1	strong
+      list item		2 16 114 1	
+        text	The label wraps beside the box.	2 16 24 1	
+      list item		2 17 114 1	
+      list item		2 18 114 1	
+        text	Screen reader	2 18 11 1	strong
+      list item		2 19 114 1	
+        text	Says "checkbox", the label and whether it is ticked.	2 19 38 1	
+      list item		2 20 114 1	
+      list item		2 21 114 1	
+        text	With awkward content	2 21 18 1	strong
+      list item		2 22 114 1	
+        group		2 22 114 1	
+          column		2 22 14 1	
+            text	Nothing	2 22 14 1	muted
+          column		18 22 98 1	
+            checkbox		18 22 98 1	
+      list item		2 23 114 1	
+        group		2 23 114 1	
+          column		2 23 14 1	
+            text	Very long	2 23 14 1	muted
+          column		18 23 98 1	
+            checkbox	A label that goes on and on, well past the edge of any reasonable window, to see where it wraps and what it pushes aside	18 23 98 1	
+      list item		2 24 114 1	
+        group		2 24 114 1	
+          column		2 24 14 1	
+            text	Right to left	2 24 14 1	muted
+          column		18 24 98 1	
+            checkbox	مرحبا بالعالم	18 24 98 1	
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Press	2 28 7 1	
+    button	Follow the link	11 28 13 1	
+    button	Tick or untick the box	26 28 18 1	
+    button	Say it	46 28 7 1	unavailable (Type something first)
+    button	Back to all components	55 28 20 1	
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

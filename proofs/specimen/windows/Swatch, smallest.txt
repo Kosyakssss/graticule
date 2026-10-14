@@ -1,0 +1,16 @@
+window		0 0 44 13	
+  page	Swatch	0 0 44 7	
+    list		2 3 40 3	11 items
+      list item		2 3 38 3	
+        text	A small box filled with one of the theme's inks: a label's color, a series in a legend, a choice of color. The ink is named, not mixed, so the swatch follows the theme and the appearance like everything else.	2 3 38 3	
+  alert		2 7 40 1	
+  status		2 8 40 1	
+  toolbar		2 9 40 4	
+    button	Press	2 9 7 1	
+    button	Follow the link	11 9 13 1	
+    button	Tick or untick the box	2 10 18 1	
+    button	Say it	22 10 7 1	unavailable (Type something first)
+    button	Back to all components	2 11 20 1	
+    button	Undo	24 11 13 1	unavailable (Nothing to undo)
+    button	Redo	2 12 19 1	unavailable (Nothing to redo)
+    button	Open the palette	23 12 15 1	

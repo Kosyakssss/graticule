@@ -1,0 +1,16 @@
+window		0 0 30 16	
+  page	Status line	0 0 30 7	
+    list		2 3 26 3	8 items
+      list item		2 3 24 3	
+        text	The line above the bar. It says what the thing under the pointer, or the focused thing, does, and when it can't, why. Work running in the background shows here first, with its progress ("“Clear finished”: 10000 of 33333").	2 3 24 3	
+  alert		2 7 26 1	
+  status		2 8 26 1	
+  toolbar		2 9 26 7	
+    button	Press	2 9 7 1	
+    button	Follow the link	11 9 13 1	
+    button	Tick or untick the box	2 10 18 1	
+    button	Say it	2 11 7 1	unavailable (Type something first)
+    button	Back to all components	2 12 20 1	
+    button	Undo	2 13 13 1	unavailable (Nothing to undo)
+    button	Redo	2 14 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 15 15 1	

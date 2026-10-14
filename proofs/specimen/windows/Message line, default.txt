@@ -1,0 +1,32 @@
+window		0 0 120 30	
+  page	Message line	0 0 120 26	
+    list		2 3 116 22	8 items
+      list item		2 3 114 1	
+        text	The line under the page, for what a command said, or what failed and why. It stays until the next command says something else.	2 3 96 1	
+      list item		2 4 114 1	
+      list item		2 5 114 1	
+        text	Code	2 5 4 1	strong
+      list item		2 6 114 1	
+        text	cx.say(t!("Saved to {path}"))	2 6 29 1	mono
+      list item		2 7 114 1	
+        group		2 7 114 1	
+          column		2 7 14 1	
+            text	Live	2 7 14 1	muted
+          column		18 7 98 1	
+            text	Under the page: press the button above	18 7 98 1	muted
+      list item		2 8 114 1	
+      list item		2 9 114 1	
+        text	Screen reader	2 9 11 1	strong
+      list item		2 10 114 1	
+        text	An alert, read when it appears.	2 10 23 1	
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Press	2 28 7 1	
+    button	Follow the link	11 28 13 1	
+    button	Tick or untick the box	26 28 18 1	
+    button	Say it	46 28 7 1	unavailable (Type something first)
+    button	Back to all components	55 28 20 1	
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

@@ -11,11 +11,13 @@ pub mod prelude {
     pub use ledger::{Edit, Key, List, Outcome, Selection, Text};
 }
 
-/// Opens the app's window with the facts it kept last time (fresh ones on the first launch) and runs it until the window closes, saving every change. With `--specimen`, it opens Specimen over the app instead: every named state, live on a copy, with nothing saved. With `--render <folder>`, it renders every named state in both appearances into that folder as pictures, and prints how long each took to paint.
+/// Opens the app's window with the facts it kept last time (fresh ones on the first launch) and runs it until the window closes, saving every change. With `--specimen`, it opens Specimen over the app instead: every named state, live on a copy, with nothing saved. With `--render <folder>`, it renders every named state in both appearances into that folder as pictures, and prints how long each took to paint. With `--changes`, it prints what renders differently from the proofs last approved, in words; `--approve` approves them all as they are.
 pub fn run<A: kernel::App + Default>(title: kernel::Message) {
     let mut args = std::env::args().skip(1);
     let ran = match args.next().as_deref() {
         Some("--render") => specimen::render::<A>(&std::path::PathBuf::from(args.next().unwrap_or_else(|| ".".into()))),
+        Some("--changes") => specimen::changes::<A>(),
+        Some("--approve") => specimen::approve::<A>(),
         Some("--specimen") => {
             let config = kernel::shell::Config::new(format!("{} — Specimen", title.as_str()));
             kernel::shell::run(config, |waker| specimen::Specimen::over(A::default()).wake_with(waker))

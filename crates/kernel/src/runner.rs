@@ -166,6 +166,7 @@ pub struct Runner<A: App> {
     reading_drag: bool,
     drag: Option<Id>,
     pending: Vec<Chord>,
+    count: u32,
     keymap: Keymap,
     palette: Option<Palette>,
     clipboard: Option<arboard::Clipboard>,
@@ -226,6 +227,7 @@ impl<A: App> Runner<A> {
             reading_drag: false,
             drag: None,
             pending: Vec::new(),
+            count: 0,
             keymap,
             palette: None,
             clipboard: None,
@@ -302,7 +304,7 @@ impl<A: App> Runner<A> {
         }
         self.status = self.tree.add(root, Kind::Status, Some(Id::ROOT.mix(2)), std::panic::Location::caller());
         let bar = self.tree.add(root, Kind::Bar, Some(Id::ROOT.mix(3)), std::panic::Location::caller());
-        if self.pending.is_empty() {
+        if self.pending.is_empty() && self.count == 0 {
             self.build_bar(bar, &here);
         } else {
             self.build_which(bar, &here);
@@ -348,7 +350,7 @@ impl<A: App> Runner<A> {
                 next.push((chord, name.map(str::to_string)));
             }
         }
-        let typed = keys::label(&self.pending);
+        let typed = self.so_far();
         for (k, (chord, name)) in next.into_iter().enumerate() {
             let a = self.tree.add(bar, Kind::Action, Some(Id::ROOT.mix(6).mix(k as u64)), std::panic::Location::caller());
             self.tree.nodes[a as usize].keys = self.tree.put(&format!("{typed} {chord}"));
@@ -650,8 +652,17 @@ impl<A: App> Runner<A> {
         let Some((list, subjects)) = here.as_ref().filter(|(l, _)| entry.subject_type.is_none_or(|t| t() == l.item)) else {
             return Target::Refused(None, Message::from("There is nothing here for it to act on"));
         };
+        let focused = || list.focused.and_then(|k| A::Cmd::make(e, Some(k)));
         match subjects.as_slice() {
             [] => Target::Refused(None, Message::from("Nothing is chosen")),
+            _ if self.count > 1 && !entry.many => Target::Refused(focused(), Message::from("It takes one item at a time, so a count can't go with it")),
+            _ if self.count > 1 && list.chosen > 1 => Target::Refused(focused(), Message::from("Several items are chosen already, so a count has nothing to add")),
+            _ if self.count > 1 => {
+                let Some(from) = list.focus_index else { return Target::Refused(None, Message::from("Nothing is chosen")) };
+                let cmds: Vec<_> = (from..from.saturating_add(self.count)).map_while(|i| (list.nth)(&self.facts as &dyn Any, list.items, i)).filter_map(|k| A::Cmd::make(e, Some(k))).collect();
+                let n = cmds.len();
+                Target::Many(cmds, n)
+            }
             some if entry.many && list.chosen > 1 => Target::Many(some.iter().filter_map(|k| A::Cmd::make(e, Some(*k))).collect(), list.chosen as usize),
             [one] => A::Cmd::make(e, Some(*one)).map_or(Target::Refused(None, Message::from("Nothing is chosen")), Target::One),
             _ => list.focused.and_then(|k| A::Cmd::make(e, Some(k))).map_or(Target::Refused(None, Message::from("Nothing is chosen")), Target::One),
@@ -728,6 +739,25 @@ impl<A: App> Runner<A> {
         true
     }
 
+    fn repeat(&mut self, cmd: A::Cmd, times: u32) -> bool {
+        if let Available::No(reason) = self.facts.available(&cmd) {
+            return self.say(reason);
+        }
+        self.transact(vec![cmd; times as usize], None);
+        true
+    }
+
+    fn builtin_times(&mut self, b: Builtin, times: u32) -> bool {
+        let mut ran = self.builtin(b);
+        for _ in 1..if b.repeats() { times } else { 1 } {
+            if !self.builtin_available(b).is_yes() {
+                break;
+            }
+            ran |= self.builtin(b);
+        }
+        ran
+    }
+
     /// Runs one command over several subjects as one transaction. Subjects it can't take are skipped, and the message line says which and why.
     pub fn run_many(&mut self, cmds: Vec<A::Cmd>) -> bool {
         let mut skipped: Vec<(String, Message)> = Vec::new();
@@ -752,8 +782,13 @@ impl<A: App> Runner<A> {
 
     fn transact(&mut self, cmds: Vec<A::Cmd>, clock: Option<Clock>) {
         let many = cmds.len();
+        let repeated = many > 1 && cmds.windows(2).all(|w| ledger::Field::value(&w[0]) == ledger::Field::value(&w[1]));
         let (label, gesture) = match cmds.first().and_then(Commands::as_edit) {
             Some(edit) if edit.is_typing() => ("typing".to_string(), edit.gesture),
+            _ if repeated => {
+                self.gesture += 1;
+                (cmds.first().map_or_else(String::new, |c| format!("“{}” {many} times", c.label_string(&self.facts, Form::Long))), self.gesture)
+            }
             _ => {
                 self.gesture += 1;
                 let form = if many > 1 { Form::Many(many) } else { Form::Long };
@@ -776,8 +811,13 @@ impl<A: App> Runner<A> {
         let _ = ledger::take_replaced();
         let tx = Transaction::begin();
         let mut changed = false;
+        let mut stopped = None;
         let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            for cmd in cmds {
+            for (done, cmd) in cmds.into_iter().enumerate() {
+                if repeated && let Available::No(reason) = self.facts.available(&cmd) {
+                    stopped = Some((done, reason));
+                    break;
+                }
                 changed |= self.facts.update(cmd, &mut cx).changed();
             }
         }));
@@ -796,6 +836,9 @@ impl<A: App> Runner<A> {
         }
         self.counter = cx.counter;
         self.said = cx.said.pop();
+        if let Some((done, reason)) = stopped {
+            self.said = Some(Said::Note(Message::plain(format!("{label} stopped after {done}: {}", reason.as_str()))));
+        }
         if self.hold && !cx.effects.is_empty() {
             let asked: Vec<String> = cx.effects.iter().map(|e| format!("{e:?}")).collect();
             self.said = Some(Said::Note(Message::plain(format!("Specimen didn't run what the app asked for: {}", asked.join(", then ")))));
@@ -1271,9 +1314,12 @@ impl<A: App> Runner<A> {
             self.build();
         }
         let here = self.here();
-        match self.named(name, &here) {
-            Target::Builtin(b) => self.builtin(b),
+        let target = self.named(name, &here);
+        let times = std::mem::take(&mut self.count).max(1);
+        match target {
+            Target::Builtin(b) => self.builtin_times(b, times),
             Target::Host(e) => self.ask(e),
+            Target::One(cmd) if times > 1 => self.repeat(cmd, times),
             Target::One(cmd) => {
                 self.run(cmd);
                 true
@@ -1284,9 +1330,18 @@ impl<A: App> Runner<A> {
     }
 
     fn fire(&mut self, i: u32) -> bool {
+        let fired = self.fire_once(i);
+        if self.count > 0 {
+            self.count = 0;
+            self.stale = true;
+        }
+        fired
+    }
+
+    fn fire_once(&mut self, i: u32) -> bool {
         let n = self.tree.nodes[i as usize];
-        if !n.enabled && n.cmd == NONE {
-            let why = self.tree.str(n.reason).to_string();
+        let why = self.tree.str(n.reason).to_string();
+        if !n.enabled && (n.cmd == NONE || !why.is_empty()) {
             return !why.is_empty() && self.say(Message::plain(why));
         }
         if let Some(b) = n.builtin {
@@ -1317,6 +1372,7 @@ impl<A: App> Runner<A> {
             Builtin::Palette => {
                 self.palette = Some(Palette::default());
                 self.pending.clear();
+                self.count = 0;
                 self.stale = true;
                 true
             }
@@ -1412,8 +1468,9 @@ impl<A: App> Runner<A> {
     }
 
     fn cancel(&mut self) -> bool {
-        if self.palette.take().is_some() || !self.pending.is_empty() {
+        if self.palette.take().is_some() || !self.pending.is_empty() || self.count > 0 {
             self.pending.clear();
+            self.count = 0;
             self.stale = true;
             return true;
         }
@@ -1497,12 +1554,25 @@ impl<A: App> Runner<A> {
         {
             return self.fire(i);
         }
-        if !self.pending.is_empty() && chord.key == Key::Escape {
+        if (!self.pending.is_empty() || self.count > 0) && chord.key == Key::Escape {
             self.pending.clear();
+            self.count = 0;
             self.stale = true;
             return true;
         }
-        match self.keymap.lookup(&self.pending, chord) {
+        let lookup = self.keymap.lookup(&self.pending, chord);
+        if self.pending.is_empty()
+            && matches!(lookup, Lookup::Nothing)
+            && chord.mods == Mods::default()
+            && let Key::Char(c) = chord.key
+            && let Some(digit) = c.to_digit(10)
+            && (digit > 0 || self.count > 0)
+        {
+            self.count = self.count.saturating_mul(10).saturating_add(digit).min(MOST_TIMES);
+            self.stale = true;
+            return true;
+        }
+        match lookup {
             Lookup::Run(name) => {
                 let name = name.to_string();
                 self.pending.clear();
@@ -1513,10 +1583,17 @@ impl<A: App> Runner<A> {
                 self.stale = true;
                 return true;
             }
-            Lookup::Nothing if !self.pending.is_empty() => {
+            Lookup::Nothing if !self.pending.is_empty() || self.count > 0 => {
                 self.pending.push(chord);
-                let typed = keys::label(&self.pending);
+                let typed = self.so_far();
+                if let (true, Some(b)) = (self.pending.len() == 1, Builtin::ALL.into_iter().find(|b| b.convention().contains(&chord))) {
+                    self.pending.clear();
+                    let times = std::mem::take(&mut self.count);
+                    self.stale = true;
+                    return self.builtin_times(b, times);
+                }
                 self.pending.clear();
+                self.count = 0;
                 return self.say(Message::plain(format!("{typed} does nothing")));
             }
             Lookup::Nothing => {}
@@ -1524,6 +1601,15 @@ impl<A: App> Runner<A> {
         match Builtin::ALL.into_iter().find(|b| b.convention().contains(&chord)) {
             Some(b) => self.builtin(b),
             None => false,
+        }
+    }
+
+    fn so_far(&self) -> String {
+        let keys = keys::label(&self.pending);
+        match self.count {
+            0 => keys,
+            n if keys.is_empty() => n.to_string(),
+            n => format!("{n} {keys}"),
         }
     }
 
@@ -2167,6 +2253,8 @@ fn read_keymap<A: App>(source: &str, file: &str) -> Result<(Keymap, Option<Said>
     let said = unknown.map(|c| Said::Failure(format!("{file} names “{c}”, which is not a command")));
     Ok((keymap, said))
 }
+
+const MOST_TIMES: u32 = 9999;
 
 const KEYMAP: &str = "keymap.txt";
 

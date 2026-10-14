@@ -185,6 +185,14 @@ impl Builtin {
         }
     }
 
+    /// Whether a count before its keys runs it that many times; the rest run once.
+    pub fn repeats(self) -> bool {
+        matches!(
+            self,
+            Builtin::Undo | Builtin::Redo | Builtin::Next | Builtin::Previous | Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::NextTheme | Builtin::NextStyle
+        )
+    }
+
     /// Commands that move around or change only how everything looks, rather than the facts; they never become undo steps and aren't offered in the action bar.
     pub fn moves(self) -> bool {
         !matches!(self, Builtin::Palette | Builtin::Undo | Builtin::Redo)

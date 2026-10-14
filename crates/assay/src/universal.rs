@@ -83,7 +83,7 @@ struct Played {
     broke: Option<(Law, String)>,
     done: Vec<String>,
     ran: Vec<&'static str>,
-    seen: Vec<&'static str>,
+    seen: Vec<(&'static str, usize)>,
 }
 
 pub fn run<A: App>(starts: &[(String, A)], plan: Plan) -> Universal {
@@ -94,32 +94,34 @@ pub fn run<A: App>(starts: &[(String, A)], plan: Plan) -> Universal {
     let mut measure = Measure::default();
     let mut findings: Vec<Finding> = Vec::new();
     let mut ran = BTreeSet::new();
-    let mut seen: Vec<(&'static str, usize)> = Vec::new();
+    let mut seen: Vec<(&'static str, usize, Vec<Step>)> = Vec::new();
     for (name, facts) in starts {
         if let Some(said) = internal_reached(facts) {
             findings.push(Finding { law: Law::NothingInternalReachable, said, from: name.clone(), steps: Vec::new() });
         }
     }
     for sequence in 0..plan.sequences {
-        let guided = (sequence % 2 == 1).then(|| seen.iter().find(|(name, _)| !ran.contains(name)).map(|&(_, start)| start)).flatten();
-        let start = guided.unwrap_or(sequence % starts.len());
+        let guided = (sequence % 2 == 1).then(|| seen.iter().find(|(name, ..)| !ran.contains(name))).flatten();
+        let (start, lead) = guided.map_or((sequence % starts.len(), Vec::new()), |(_, start, lead)| (*start, lead.clone()));
         let (from, facts) = &starts[start];
         let unrun: Vec<&'static str> = names.iter().copied().filter(|n| !ran.contains(n)).collect();
-        let steps: Vec<Step> = (0..plan.steps)
-            .map(|_| match dice.below(11) {
+        let fresh = plan.steps.saturating_sub(lead.len());
+        let steps: Vec<Step> = lead
+            .into_iter()
+            .chain((0..fresh).map(|_| match dice.below(11) {
                 0..=3 => Step::Press(KEYS[dice.below(KEYS.len())]),
                 4 | 5 => Step::Type(TYPED[dice.below(TYPED.len())]),
                 6 | 7 if !unrun.is_empty() => Step::Run(unrun[dice.below(unrun.len())]),
                 6 | 7 => Step::Run(names[dice.below(names.len())]),
                 8 => Step::Fill(dice.next() as u32),
                 _ => Step::Click(dice.next() as u32),
-            })
+            }))
             .collect();
         let played = play(facts, &steps, &mut screen, Some((&mut measure, from)));
         ran.extend(played.ran);
-        for name in played.seen {
-            if !seen.iter().any(|(n, _)| *n == name) {
-                seen.push((name, start));
+        for (name, at) in played.seen {
+            if !seen.iter().any(|(n, ..)| *n == name) {
+                seen.push((name, start, steps[..at].to_vec()));
             }
         }
         let Some((law, said)) = played.broke else { continue };
@@ -277,8 +279,8 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
                 let asked = Instant::now();
                 let available = std::hint::black_box(runner.facts.available(cmd));
                 let ns = asked.elapsed().as_nanos().min(u32::MAX as u128) as u32;
-                if available.is_yes() && !played.seen.contains(&cmd.name()) {
-                    played.seen.push(cmd.name());
+                if available.is_yes() && !played.seen.iter().any(|(name, _)| *name == cmd.name()) {
+                    played.seen.push((cmd.name(), n + 1));
                 }
                 measure.available.push((ns, format!("for “{}” from {from}", cmd.name())));
             }

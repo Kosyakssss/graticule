@@ -1,7 +1,8 @@
-//! The derives behind Graticule apps: `Facts`, `Commands` and `t!`.
+//! The derives behind Graticule apps: `Facts`, `Commands`, `Form`, `Choice` and `t!`.
 
 mod commands;
 mod facts;
+mod form;
 mod message;
 
 use proc_macro::TokenStream;
@@ -18,6 +19,18 @@ pub fn derive_facts(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(Commands, attributes(label, subject, internal))]
 pub fn derive_commands(input: TokenStream) -> TokenStream {
     commands::derive(syn::parse_macro_input!(input as syn::DeriveInput)).unwrap_or_else(syn::Error::into_compile_error).into()
+}
+
+/// Form: a struct of settings. Each field marked `#[label("…")]` is one setting, drawn by `ui.form` with a control chosen by its type and compared with the struct's `Default`.
+#[proc_macro_derive(Form, attributes(label))]
+pub fn derive_form(input: TokenStream) -> TokenStream {
+    form::derive_form(syn::parse_macro_input!(input as syn::DeriveInput)).unwrap_or_else(syn::Error::into_compile_error).into()
+}
+
+/// Choice: an enum of named options a setting can take, each labelled by `#[label("…")]` or by its name in words.
+#[proc_macro_derive(Choice, attributes(label))]
+pub fn derive_choice(input: TokenStream) -> TokenStream {
+    form::derive_choice(syn::parse_macro_input!(input as syn::DeriveInput)).unwrap_or_else(syn::Error::into_compile_error).into()
 }
 
 /// Text the user reads, written in English and marked for translation: `t!("Saved to {path}")`.

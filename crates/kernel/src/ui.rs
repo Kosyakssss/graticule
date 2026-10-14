@@ -6,6 +6,7 @@ use std::panic::Location;
 use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
 use crate::app::Moment;
+use crate::form::{Control, Item, Settings};
 use crate::ink::Ink;
 use crate::message::Message;
 use crate::picture::Picture;
@@ -291,6 +292,102 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.tree.nodes[i as usize].span = crate::tree::Fill.min(CHECK_MIN);
         self.command(i, cmd);
         Placed { ui: self, node: i }
+    }
+
+    /// Every setting of the form at `path`, each with the control its type asks for: a switch, a row of options, a stepper or a field. Each change arrives in `update` as an `Edit` and is one undo step.
+    #[track_caller]
+    pub fn form<F: Field, T: Settings>(&mut self, path: FactPath<F, T>) {
+        let at = Location::caller();
+        let Some(form) = self.facts::<F>().and_then(|f| path.get(f)) else { return };
+        let mut items = Vec::new();
+        form.items(&mut items);
+        let base = path.erased();
+        let only = self.tree.only_changed;
+        let column = self.add(Kind::Column, at);
+        self.tree.nodes[column as usize].span = crate::tree::Fill;
+        let subject = self.subject;
+        let mut ui = self.child::<S>(column, subject);
+        let shown: Vec<Item> = items.into_iter().filter(|item| !only || item.changed()).collect();
+        if shown.is_empty() {
+            ui.muted("Every setting is as it was at first");
+        }
+        for item in shown {
+            let mut path = base;
+            for step in item.path.steps() {
+                path = path.push(*step, item.path.kind());
+            }
+            ui.setting(path, item, at);
+        }
+    }
+
+    fn setting(&mut self, path: ledger::ErasedPath, item: Item, at: &'static Location<'static>) {
+        let id = Id::ROOT.mix(path.hash64());
+        match &item.control {
+            Control::Switch => {
+                let on = item.value == ledger::Value::Bool(true);
+                let i = self.tree.add(self.parent, Kind::Check { on }, Some(id), at);
+                let r = self.tree.put(item.label);
+                self.tree.nodes[i as usize].text = r;
+                self.tree.nodes[i as usize].span = crate::tree::Fill.min(CHECK_MIN);
+                self.set(i, path, ledger::Value::Bool(!on), format!("{}: {}", item.label, if on { "off" } else { "on" }));
+            }
+            Control::Text => {
+                let i = self.tree.add(self.parent, Kind::Field, Some(id), at);
+                self.tree.nodes[i as usize].path = Some(path);
+                let r = self.tree.put(&item.shown());
+                self.tree.nodes[i as usize].text = r;
+                let r = self.tree.put(item.label);
+                self.tree.nodes[i as usize].name = r;
+                self.tree.nodes[i as usize].span = crate::tree::Fill.min(16);
+            }
+            Control::Choice(options) => {
+                let row = self.tree.add(self.parent, Kind::Row, Some(id), at);
+                let label = self.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(1)), at);
+                let r = self.tree.put(item.label);
+                self.tree.nodes[label as usize].text = r;
+                for (k, (option, value)) in options.iter().enumerate() {
+                    let c = self.tree.add(row, Kind::Choice { chosen: *value == item.value }, Some(id.mix(2).mix(k as u64)), at);
+                    let r = self.tree.put(option);
+                    self.tree.nodes[c as usize].text = r;
+                    let r = self.tree.put(&format!("{}: {option}", item.label));
+                    self.tree.nodes[c as usize].name = r;
+                    self.set(c, path, value.clone(), format!("{}: {option}", item.label));
+                }
+            }
+            Control::Whole { least, most } => {
+                let row = self.tree.add(self.parent, Kind::Row, Some(id), at);
+                let label = self.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(1)), at);
+                let r = self.tree.put(item.label);
+                self.tree.nodes[label as usize].text = r;
+                let count = self.tree.add(row, Kind::Value { value: Value::Count }, Some(id.mix(2)), at);
+                let r = self.tree.put(&item.shown());
+                self.tree.nodes[count as usize].text = r;
+                for (k, (sign, by, verb, end)) in [("−", -1, "Lower", "least"), ("+", 1, "Raise", "most")].into_iter().enumerate() {
+                    let b = self.tree.add(row, Kind::Button, Some(id.mix(3).mix(k as u64)), at);
+                    let r = self.tree.put(sign);
+                    self.tree.nodes[b as usize].text = r;
+                    let r = self.tree.put(&format!("{verb} {}", item.label));
+                    self.tree.nodes[b as usize].name = r;
+                    match crate::form::step(&item.value, by, *least, *most) {
+                        Some(next) => {
+                            let said = format!("{}: {}", item.label, crate::form::shown(&item.control, &next));
+                            self.set(b, path, next, said);
+                        }
+                        None => {
+                            let r = self.tree.put(&format!("{} is at its {end}, {}", item.label, item.shown()));
+                            let n = &mut self.tree.nodes[b as usize];
+                            (n.reason, n.enabled) = (r, false);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn set(&mut self, node: u32, path: ledger::ErasedPath, value: ledger::Value, said: String) {
+        let n = &mut self.tree.nodes[node as usize];
+        (n.path, n.set) = (Some(path), self.tree.sets.len() as u32);
+        self.tree.sets.push((value, said));
     }
 
     /// A one-line field that types into the `Text` at `path`. Its caret and selection are the field's own; each change arrives in `update` as an `Edit`.

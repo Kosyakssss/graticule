@@ -13,7 +13,7 @@ The app's facts are plain Rust values that live on the main thread. A command re
 | Crate | Package | Depends on | Holds |
 |---|---|---|---|
 | `crates/ledger` | `ledger` | nothing of ours | `Facts`, `List`, `Map`, `Text`, `Key`, `Selection`, `Edit`, `Op`, the journal, the undo tree, saving. No screen. |
-| `crates/macros` | `graticule-macros` | nothing of ours (proc-macro) | `derive(Facts)`, `derive(Commands)`, `t!`; later `derive(Form)` and `derive(Choice)` |
+| `crates/macros` | `graticule-macros` | nothing of ours (proc-macro) | `derive(Facts)`, `derive(Commands)`, `derive(Form)`, `derive(Choice)`, `t!` |
 | `crates/kernel` | `kernel` | `ledger` | the shell (window, event loop, input), the tree, layout, painting, hit testing, the registry and keymaps, `Cx`, effects, jobs, live and derived values, the components |
 | `crates/specimen` | `specimen` | `kernel` | Specimen's places, offscreen renders (S7) |
 | `crates/graticule` | `graticule` | all of the above | the prelude and `graticule::run`, which opens the app or, with `--specimen`, Specimen over it |
@@ -250,6 +250,12 @@ A key goes, in order, to the palette when it is open; to the focused field, whic
 The built-in "What's this?" (`whats-this`) makes the next click, or the next Return or Space on a focused control, describe instead of act: for a command, its label, its keys, its documentation and whether it can run now or why not; for anything else, what it is and that it has no command. The description goes to the message line, which the screen reader reads. Escape stops without describing.
 
 The built-in "Show what was done" (`log`) draws, on the same kind of page, what the user did in this window, newest first, each with when as a date value (so it follows the date setting): every change that became an undo step under its label, every undo and redo ("Undid “Add”"), and every switch of the look. Typing that joins a step is not logged again, and moving around is not logged. The window keeps the last 500 in memory and doesn't save them; the command log in Ledger is the record that lasts.
+
+### 9.7 Settings
+
+Settings are derived from the app's data (spec §8.3). `derive(Form)` on a struct of facts makes each field marked `#[label("…")]` one setting (`kernel::Settings`): its label, its path inside the struct, its value now and its value in the struct's `Default`, and the control its type asks for (`kernel::Setting`): a switch for `bool`, a stepper for the whole numbers (stopping at the type's bounds, with the reason), a field for `Text`, and a row of options for an enum with `derive(Choice)`, each option labelled by `#[label("…")]` or its name in words. A type that is none of these is a compile error at the field.
+
+`ui.form(Player::playback)` draws them top to bottom. A switch, an option or a step is pressed like any control, and the kernel sends an `Edit` setting the new value at the field's path, so it arrives in `update` like every edit, is one undo step and is logged under how it reads ("Speed: Double", "Volume: 51"); the field types like any field. The values the controls set live beside the tree's commands (`Tree::sets`). "Show only the changed settings" narrows every form to what differs from its defaults, and "Show every setting" brings the rest back. A form in `#[session]` facts changes without undo steps, as every session change does. Searching a long form waits for the typed filter field of item 15, and so do a slider for fractions and percentages.
 
 ### 9.5 Bindable everywhere
 

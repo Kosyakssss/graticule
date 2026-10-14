@@ -7,7 +7,7 @@ pub use ledger;
 
 /// Everything an app's code uses, in one import.
 pub mod prelude {
-    pub use graticule_macros::{Commands, Facts, t};
+    pub use graticule_macros::{Choice, Commands, Facts, Form, t};
     pub use kernel::Available::{self, No, Yes};
     pub use kernel::{App, Cx, Failure, Fill, Ink, Message, Moment, Path, Picture, States, Ui, cols, icons, no_if};
     pub use ledger::{Edit, Key, List, Outcome, Selection, Text};

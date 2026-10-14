@@ -196,6 +196,8 @@ pub struct Runner<A: App> {
     sheet: Option<(Sheet, i32)>,
     done: VecDeque<(Moment, String)>,
     inspecting: bool,
+    naming: Option<String>,
+    only_changed: bool,
     palette: Option<Palette>,
     clipboard: Option<arboard::Clipboard>,
     reveal: bool,
@@ -261,6 +263,8 @@ impl<A: App> Runner<A> {
             sheet: None,
             done: VecDeque::new(),
             inspecting: false,
+            naming: None,
+            only_changed: false,
             palette: None,
             clipboard: None,
             reveal: false,
@@ -317,6 +321,7 @@ impl<A: App> Runner<A> {
             self.calendar.now = Moment::now();
         }
         self.tree.calendar = self.calendar.clone();
+        self.tree.only_changed = self.only_changed;
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
@@ -960,6 +965,8 @@ impl<A: App> Runner<A> {
             Builtin::NextStyle if self.offered.styles < 2 => Available::No(Message::from("There is only one style")),
             Builtin::AbsoluteDates if self.offered.dates == Dates::Absolute => Available::No(Message::from("Dates are written as the day and time already")),
             Builtin::RelativeDates if self.offered.dates == Dates::Relative => Available::No(Message::from("Dates are written as how long ago already")),
+            Builtin::ChangedSettings if self.only_changed => Available::No(Message::from("Only the changed settings show already")),
+            Builtin::AllSettings if !self.only_changed => Available::No(Message::from("Every setting shows already")),
             Builtin::EditKeys if self.keys_file.is_none() => Available::No(Message::from("This window keeps no files, so its keys can't be edited")),
             Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode if !self.keymap.modal => Available::No(Message::from("These keys have no modes")),
             Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode if b.mode() == Some(self.mode) => Available::No(Message::plain(format!("In {} mode already", self.mode.name()))),
@@ -1040,7 +1047,12 @@ impl<A: App> Runner<A> {
     fn transact(&mut self, cmds: Vec<A::Cmd>, clock: Option<Clock>) {
         let many = cmds.len();
         let repeated = many > 1 && cmds.windows(2).all(|w| ledger::Field::value(&w[0]) == ledger::Field::value(&w[1]));
+        let named = self.naming.take();
         let (label, gesture) = match cmds.first().and_then(Commands::as_edit) {
+            _ if let Some(named) = named => {
+                self.gesture += 1;
+                (format!("“{named}”"), self.gesture)
+            }
             Some(edit) if edit.is_typing() => ("typing".to_string(), edit.gesture),
             _ if repeated => {
                 self.gesture += 1;
@@ -1627,6 +1639,17 @@ impl<A: App> Runner<A> {
         if n.asks != NONE {
             return self.ask_for(n.asks as usize);
         }
+        if n.set != NONE
+            && let Some(path) = n.path
+        {
+            let (value, said) = self.tree.sets[n.set as usize].clone();
+            self.gesture += 1;
+            let Some(cmd) = <A::Cmd as Commands<A>>::edit(Edit::new(path, Change::Set(value), self.gesture)) else { return false };
+            self.naming = Some(said);
+            let ran = self.run(cmd);
+            self.naming = None;
+            return ran;
+        }
         if n.cmd == NONE {
             return false;
         }
@@ -1664,6 +1687,11 @@ impl<A: App> Runner<A> {
             Builtin::EditKeys => self.edit_keys(),
             Builtin::Help => {
                 self.sheet = if matches!(self.sheet, Some((Sheet::Help, _))) { None } else { Some((Sheet::Help, 0)) };
+                self.stale = true;
+                true
+            }
+            Builtin::ChangedSettings | Builtin::AllSettings => {
+                self.only_changed = b == Builtin::ChangedSettings;
                 self.stale = true;
                 true
             }

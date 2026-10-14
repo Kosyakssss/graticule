@@ -34,10 +34,12 @@ pub enum Builtin {
     Help,
     WhatsThis,
     Log,
+    ChangedSettings,
+    AllSettings,
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 28] = [
+    pub const ALL: [Builtin; 30] = [
         Builtin::Palette,
         Builtin::Undo,
         Builtin::Redo,
@@ -66,6 +68,8 @@ impl Builtin {
         Builtin::Help,
         Builtin::WhatsThis,
         Builtin::Log,
+        Builtin::ChangedSettings,
+        Builtin::AllSettings,
     ];
 
     pub fn name(self) -> &'static str {
@@ -98,6 +102,8 @@ impl Builtin {
             Builtin::Help => "help",
             Builtin::WhatsThis => "whats-this",
             Builtin::Log => "log",
+            Builtin::ChangedSettings => "changed-settings",
+            Builtin::AllSettings => "all-settings",
         }
     }
 
@@ -131,6 +137,8 @@ impl Builtin {
             Builtin::Help => "Show the help",
             Builtin::WhatsThis => "What's this?",
             Builtin::Log => "Show what was done",
+            Builtin::ChangedSettings => "Show only the changed settings",
+            Builtin::AllSettings => "Show every setting",
         }
     }
 
@@ -211,7 +219,9 @@ impl Builtin {
             | Builtin::SelectMode
             | Builtin::Help
             | Builtin::WhatsThis
-            | Builtin::Log => &[],
+            | Builtin::Log
+            | Builtin::ChangedSettings
+            | Builtin::AllSettings => &[],
         }
     }
 

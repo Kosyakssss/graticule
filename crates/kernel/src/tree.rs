@@ -184,6 +184,7 @@ pub struct Node {
     pub list: u32,
     pub many: u32,
     pub asks: u32,
+    pub set: u32,
     pub at: &'static Location<'static>,
 }
 
@@ -213,6 +214,7 @@ impl Node {
             list: NONE,
             many: 0,
             asks: NONE,
+            set: NONE,
             at,
         }
     }
@@ -256,11 +258,15 @@ pub struct Tree<C> {
     pub calendar: Calendar,
     /// The first moment a date written relative to now would read differently.
     pub changes: Option<crate::app::Moment>,
+    /// The values settings' controls set when pressed, by `Node::set`, each with how the change reads in undo and the log.
+    pub sets: Vec<(ledger::Value, String)>,
+    /// Whether forms show only the settings that differ from their defaults.
+    pub only_changed: bool,
 }
 
 impl<C> Default for Tree<C> {
     fn default() -> Self {
-        Self { nodes: Vec::new(), text: String::new(), commands: Vec::new(), counts: HashMap::new(), index: HashMap::new(), lists: Vec::new(), calendar: Calendar::default(), changes: None }
+        Self { nodes: Vec::new(), text: String::new(), commands: Vec::new(), counts: HashMap::new(), index: HashMap::new(), lists: Vec::new(), calendar: Calendar::default(), changes: None, sets: Vec::new(), only_changed: false }
     }
 }
 
@@ -270,6 +276,7 @@ impl<C> Tree<C> {
         self.lists.clear();
         self.text.clear();
         self.commands.clear();
+        self.sets.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;

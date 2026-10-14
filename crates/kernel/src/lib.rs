@@ -8,6 +8,7 @@ pub mod command;
 pub mod components;
 pub mod field;
 pub mod fonts;
+pub mod form;
 pub mod gpu;
 pub mod grid;
 pub mod hit;
@@ -41,6 +42,7 @@ pub use ink::Ink;
 pub use message::Message;
 pub use picture::{Layer, Picture, icons};
 pub use tree::{Fill, Span, cols};
+pub use form::{Control, Setting, Settings};
 pub use ui::{Bind, Ui};
 pub use value::{Dates, Integer};
 

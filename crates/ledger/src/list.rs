@@ -183,6 +183,19 @@ impl<T: Record> List<T> {
         Outcome::Changed
     }
 
+    /// Replaces every record with these, as one change that undo takes back whole. Assigning a new list to a field instead isn't recorded, and the kernel says so.
+    pub fn replace(&mut self, records: impl IntoIterator<Item = T>) -> Outcome {
+        let keys: Vec<Key<T>> = self.keys().collect();
+        let mut outcome = Outcome::Nothing;
+        for key in keys.into_iter().rev() {
+            outcome = outcome.or(self.remove(key));
+        }
+        for record in records {
+            outcome = outcome.or(self.push(record));
+        }
+        outcome
+    }
+
     pub fn remove(&mut self, key: Key<T>) -> Outcome {
         let Some((p, i)) = self.locate(key) else { return Outcome::Nothing };
         if journal::recording() {
@@ -462,7 +475,11 @@ impl<T: Record> Field for List<T> {
 
     fn snap(&self) {}
 
-    fn diff(&self, _: &(), _: ErasedPath, _: &mut Vec<Op>) {}
+    fn diff(&self, _: &(), at: ErasedPath, _: &mut Vec<Op>) {
+        if self.at != at {
+            journal::replaced(std::any::type_name::<Self>());
+        }
+    }
 
     fn same(&self, other: &Self) -> bool {
         self.len == other.len && self.iter().zip(other.iter()).all(|(a, b)| a.same(b))
@@ -508,6 +525,14 @@ impl<T: Record> Field for List<T> {
                 outcome
             }
             _ => Outcome::Nothing,
+        }
+    }
+
+    fn item_type(&self, steps: &[Step]) -> Option<std::any::TypeId> {
+        match steps {
+            [] => Some(std::any::TypeId::of::<T>()),
+            [Step::Key(k), rest @ ..] => self.find(Key::from_raw(*k))?.item_type(rest),
+            _ => None,
         }
     }
 

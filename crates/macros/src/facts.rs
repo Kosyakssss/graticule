@@ -232,7 +232,7 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
                 }
             }
 
-            fn prune(&mut self, deleted: &[u128]) {
+            fn prune(&mut self, deleted: &[(::std::any::TypeId, u128)]) {
                 #(#ledger::Field::prune(&mut self.#idents, deleted);)*
             }
 
@@ -250,6 +250,13 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
                     },
                     #([#ledger::Step::Field(#indexes), rest @ ..] => #ledger::Field::edit(&mut self.#idents, rest, change),)*
                     _ => #ledger::Outcome::Nothing,
+                }
+            }
+
+            fn item_type(&self, steps: &[#ledger::Step]) -> ::std::option::Option<::std::any::TypeId> {
+                match steps {
+                    #([#ledger::Step::Field(#indexes), rest @ ..] => #ledger::Field::item_type(&self.#idents, rest),)*
+                    _ => ::std::option::Option::None,
                 }
             }
 

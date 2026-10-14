@@ -143,7 +143,7 @@ impl App for Scope {
                 Outcome::Changed
             }
             Cmd::Found(apps) => {
-                self.apps = apps.into_iter().collect();
+                let _ = self.apps.replace(apps);
                 if self.attached.is_some_and(|a| !self.apps.has(a)) {
                     self.attached = None;
                     self.view = View::Apps;
@@ -152,8 +152,8 @@ impl App for Scope {
             }
             Cmd::Attach(app) => {
                 self.attached = Some(app);
-                self.launch = List::default();
-                self.frames = List::default();
+                let _ = self.launch.replace([]);
+                let _ = self.frames.replace([]);
                 self.view = View::Time;
                 Outcome::Changed
             }
@@ -166,7 +166,7 @@ impl App for Scope {
             Cmd::Time => self.show(View::Time),
             Cmd::Redraws => self.show(View::Redraws),
             Cmd::Launched(stages) => {
-                self.launch = stages.into_iter().collect();
+                let _ = self.launch.replace(stages);
                 Outcome::Changed
             }
             Cmd::Arrived(frames) => {

@@ -125,7 +125,11 @@ impl Field for Text {
 
     fn snap(&self) {}
 
-    fn diff(&self, _: &(), _: ErasedPath, _: &mut Vec<Op>) {}
+    fn diff(&self, _: &(), at: ErasedPath, _: &mut Vec<Op>) {
+        if self.at != at {
+            journal::replaced(std::any::type_name::<Self>());
+        }
+    }
 
     fn same(&self, other: &Self) -> bool {
         self.text == other.text

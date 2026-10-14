@@ -37,3 +37,17 @@ impl Transaction {
         ops.unwrap_or_default()
     }
 }
+
+thread_local! {
+    static REPLACED: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Notes that a container was replaced by assigning a new one, which no operation records, so undo couldn't take it back.
+pub fn replaced(what: &'static str) {
+    REPLACED.with(|r| r.borrow_mut().push(what));
+}
+
+/// The containers replaced by assignment since this was last asked, so the kernel can say so.
+pub fn take_replaced() -> Vec<&'static str> {
+    REPLACED.with(|r| std::mem::take(&mut *r.borrow_mut()))
+}

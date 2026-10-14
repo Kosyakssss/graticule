@@ -93,7 +93,9 @@ The four kinds of state (spec §3.2) don't change how a field looks on the main 
 
 ### 4.4 Containers know where they are
 
-An operation must name what it changed. Each container carries a `ContainerId`, its path from the root (`items`, or `items/⟨key⟩/tags`), assigned by `Facts::attach` when facts are loaded, built from `states()`, or pushed into a list. `List::push` attaches the new record's containers. After `update`, the derive checks the top-level containers (a few field reads) for one that was replaced by assignment (`self.items = List::new()`), and records that as a whole-value replacement. Records inside a list can only be changed through `List::change`, which re-attaches what it handed out, so nothing escapes.
+An operation must name what it changed. Each container carries a `ContainerId`, its path from the root (`items`, or `items/⟨key⟩/tags`), assigned by `Facts::attach` when facts are loaded, built from `states()`, or pushed into a list. `List::push` attaches the new record's containers. Records inside a list can only be changed through `List::change`, which re-attaches what it handed out, so nothing escapes.
+
+A container replaced by assignment (`self.items = List::new()`) is the one change that does escape: its operations would have been recorded by its own methods, and the new one never had them called. After `update`, each `List`, `Text` and `Selection` compares the path it was attached at with the path the derive reaches it by (one comparison per container), and a mismatch means it was replaced. Recording the replacement would need the old contents, which are gone by then, and keeping a copy before every command would cost each command as much as the list holds; so the kernel re-attaches the facts and says it as a failure in the message line ("“Open” replaced a List<Block> by assigning a new one, which undo can't take back; change it with its own methods, like replace or set"), and Assay reports it. `List::replace` and `Text::set` are the recorded ways to replace everything.
 
 ### 4.5 The transaction is per thread
 
@@ -260,7 +262,7 @@ The kernel has `trait Bind<C, Marker>` with `impl<C> Bind<C, Whole> for C where 
 | A keymap sequence, the palette, the menu bar | the focused list's selection if it has more than the focused row; otherwise the focused row |
 | Nothing focused or selected | none: the command is unavailable, and says "Nothing is chosen" |
 
-A command started on several subjects runs `update` once per subject, in list order, inside one transaction, so it is one undo step. The owner decided (§21) how it reads and what happens when some subjects can't take it:
+A command started on several subjects runs `update` once per subject, in list order, inside one transaction, so it is one undo step. Gathering the subjects in list order costs as much as the selection holds, so it happens only when a command runs; the bar, which-key and the palette are built from the chosen count and the focused row alone (`Runner::glance`). The owner decided (§21) how it reads and what happens when some subjects can't take it:
 
 - A command runs on several subjects only if its label says what it is called then: `#[label("Remove “{title}”", short: "Remove", many: "Remove {count} items")]`. Without `many`, the command takes only the focused row, so no command shows a label nobody wrote.
 - Subjects that `available` refuses are skipped, the others run, and the message line says which were skipped and why ("Remove “Call mum” was skipped: That item is gone").
@@ -269,7 +271,7 @@ A command started on several subjects runs `update` once per subject, in list or
 
 `Selection<T>` is a set of keys plus the focused key, in the session part of the facts, defined by Ledger. Clicking, Shift-clicking, Cmd-clicking, the arrows and Cmd-A in a list change it, following React Aria's list behavior. The kernel sends each change as an `Edit` on the selection's path, through the app's `update` like every other change to the facts (§11), so an app could keep an invariant on its selection in the same place it keeps one on its text.
 
-After every commit, Ledger removes the keys that the commit's operations deleted from every `Selection` of that key's type (`derive(Facts)` lists the selection fields), locally or arriving through sync. The cost is the number of deleted keys.
+After every commit, Ledger removes the keys that the commit's operations deleted from every `Selection` of that key's type, locally or arriving through sync. Each removed key goes with the type of record its list holds (`Field::item_type`, found by following the operation's path), so a selection over another list keeps an equal key. The cost is the number of deleted keys.
 
 When a command removes the focused row, the kernel focuses the row now in its place, as a selection edit after the command, so the keys keep working on the next item. It knows the place because it remembers where the focused row was each time it builds the list.
 
@@ -469,6 +471,7 @@ New laws need the owner's approval (`AGENTS.md`). These are the ones the design 
 - Versions finer than a top-level field.
 - Late reading and frame pacing (build-plan item 13).
 - Undoing or redoing a bulk change applies all its operations at once: 50 ms for 33,000 removals. It should land in slices like the change itself (build-plan item 13).
+- A command run on thousands of chosen items (Remove with everything chosen) runs as one transaction on the main thread: about 10 ms with thousands of items. It should become a bulk change landed in slices too (build-plan item 13).
 - Versions (§4.7): nothing reads them until derived values arrive, so they are built with them in item 13.
 
 ## 21. The owner's answers

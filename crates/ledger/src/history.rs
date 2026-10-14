@@ -103,6 +103,11 @@ impl<P: Clone> History<P> {
         Kept::Step
     }
 
+    /// How many steps undo can take back from here, along the current branch.
+    pub fn depth(&self) -> usize {
+        std::iter::successors(self.at, |&at| self.steps[at].parent).count()
+    }
+
     /// The label of the step undo would take back.
     pub fn undo_label(&self) -> Option<&str> {
         self.at.map(|at| self.steps[at].label.as_str())

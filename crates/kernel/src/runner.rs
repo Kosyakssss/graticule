@@ -47,7 +47,7 @@ enum Target<C> {
     Builtin(Builtin),
     Host(usize),
     One(C),
-    Many(Vec<C>),
+    Many(Vec<C>, usize),
     Refused(Option<C>, Message),
 }
 
@@ -247,7 +247,7 @@ impl<A: App> Runner<A> {
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
         self.follow();
-        let here = self.here();
+        let here = self.glance();
         if self.palette.is_some() {
             self.build_palette(root, &here);
         }
@@ -340,7 +340,7 @@ impl<A: App> Runner<A> {
             let target = self.target(e, here);
             let label = match &target {
                 Target::One(c) | Target::Refused(Some(c), _) => c.label_string(&self.facts, Form::Long),
-                Target::Many(cs) => cs.first().map(|c| c.label_string(&self.facts, Form::Many(cs.len()))).unwrap_or_default(),
+                Target::Many(cs, count) => cs.first().map(|c| c.label_string(&self.facts, Form::Many(*count))).unwrap_or_default(),
                 Target::Refused(None, _) | Target::Builtin(_) | Target::Host(_) => title(entry.name),
             };
             let keys = self.keymap.keys_for(entry.name).map(keys::label).unwrap_or_default();
@@ -385,8 +385,8 @@ impl<A: App> Runner<A> {
                 }
             }
             Target::One(cmd) => self.push_command(node, cmd),
-            Target::Many(mut cmds) => {
-                self.tree.nodes[node as usize].many = cmds.len() as u32;
+            Target::Many(mut cmds, count) => {
+                self.tree.nodes[node as usize].many = count as u32;
                 if !cmds.is_empty() {
                     self.push_command(node, cmds.swap_remove(0));
                 }
@@ -576,6 +576,14 @@ impl<A: App> Runner<A> {
         Some((list, keys))
     }
 
+    fn glance(&self) -> Here {
+        let list = self.current_list()?;
+        match list.focused.or(list.anchor) {
+            Some(one) => Some((list, vec![one])),
+            None => self.here(),
+        }
+    }
+
     fn current_list(&self) -> Option<ListInfo> {
         let from_focus = self.focus.and_then(|id| self.tree.find(id)).and_then(|i| self.tree.ancestor(i, |n| matches!(n.kind, Kind::List { .. })));
         let l = match from_focus {
@@ -599,8 +607,8 @@ impl<A: App> Runner<A> {
         };
         match subjects.as_slice() {
             [] => Target::Refused(None, Message::from("Nothing is chosen")),
+            some if entry.many && list.chosen > 1 => Target::Many(some.iter().filter_map(|k| A::Cmd::make(e, Some(*k))).collect(), list.chosen as usize),
             [one] => A::Cmd::make(e, Some(*one)).map_or(Target::Refused(None, Message::from("Nothing is chosen")), Target::One),
-            many if entry.many => Target::Many(many.iter().filter_map(|k| A::Cmd::make(e, Some(*k))).collect()),
             _ => list.focused.and_then(|k| A::Cmd::make(e, Some(k))).map_or(Target::Refused(None, Message::from("Nothing is chosen")), Target::One),
         }
     }
@@ -643,6 +651,11 @@ impl<A: App> Runner<A> {
             Some(Said::Failure(f)) => Some(f),
             _ => None,
         }
+    }
+
+    /// What the message line says after the last command: its note or its failure, if it said anything.
+    pub fn said(&self) -> Option<&Said> {
+        self.said.as_ref()
     }
 
     fn say(&mut self, message: Message) -> bool {
@@ -706,6 +719,7 @@ impl<A: App> Runner<A> {
         let place = self.place();
         let mut cx = Cx::new(clock.replica, clock.counter, clock.now, clock.seed);
         let before = self.facts.snap();
+        let _ = ledger::take_replaced();
         let tx = Transaction::begin();
         let mut changed = false;
         let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -736,6 +750,12 @@ impl<A: App> Runner<A> {
         }
         if cfg!(debug_assertions) && !changed && !ops.is_empty() {
             self.said = Some(Said::Failure(format!("{label} returned Outcome::Nothing but changed the facts")));
+        }
+        let replaced = ledger::take_replaced();
+        if !replaced.is_empty() {
+            ledger::Field::attach(&mut self.facts, ErasedPath::ROOT);
+            let names: Vec<String> = replaced.iter().map(|t| shortened(t)).collect();
+            self.said = Some(Said::Failure(format!("{label} replaced a {} by assigning a new one, which undo can't take back; change it with its own methods, like replace or set", names.join(" and a "))));
         }
         let pruned = self.prune(&ops);
         ops.extend(pruned);
@@ -826,7 +846,8 @@ impl<A: App> Runner<A> {
             Op::Insert { key, .. } => Some(*key),
             _ => None,
         }).collect();
-        let deleted: Vec<u128> = ops.iter().filter_map(Op::deleted).filter(|k| !inserted.contains(k)).collect();
+        let deleted: Vec<(std::any::TypeId, u128)> =
+            ops.iter().filter_map(|op| op.deleted().filter(|k| !inserted.contains(k)).and_then(|k| Some((self.facts.item_type(op.path().steps())?, k)))).collect();
         if deleted.is_empty() {
             return Vec::new();
         }
@@ -1162,7 +1183,7 @@ impl<A: App> Runner<A> {
                 self.run(cmd);
                 true
             }
-            Target::Many(cmds) => self.run_many(cmds),
+            Target::Many(cmds, _) => self.run_many(cmds),
             Target::Refused(_, reason) => self.say(reason),
         }
     }
@@ -1185,7 +1206,7 @@ impl<A: App> Runner<A> {
         let cmd = self.tree.commands[n.cmd as usize].clone();
         if n.many > 0
             && let Some(e) = cmd.entry()
-            && let Target::Many(cmds) = self.target(e, &self.here())
+            && let Target::Many(cmds, _) = self.target(e, &self.here())
         {
             return self.run_many(cmds);
         }
@@ -1844,4 +1865,19 @@ fn label<F, C: Commands<F>>(text: &mut String, cmd: &C, facts: &F, form: Form) -
 pub fn folder() -> std::path::PathBuf {
     let name = std::env::current_exe().ok().and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned())).unwrap_or_else(|| "app".into());
     dirs::data_dir().unwrap_or_else(std::env::temp_dir).join("Graticule").join(name)
+}
+
+fn shortened(type_name: &str) -> String {
+    let mut out = String::new();
+    let mut word = String::new();
+    for c in type_name.chars().chain(std::iter::once(' ')) {
+        if c.is_alphanumeric() || c == '_' || c == ':' {
+            word.push(c);
+        } else {
+            out.push_str(word.rsplit("::").next().unwrap_or_default());
+            word.clear();
+            out.push(c);
+        }
+    }
+    out.trim_end().to_string()
 }

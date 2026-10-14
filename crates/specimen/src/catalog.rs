@@ -293,12 +293,12 @@ impl App for Catalog {
             Cmd::Open(section) => {
                 let Some(component) = self.sections.find(section).map(|s| s.component) else { return Outcome::Nothing };
                 self.page = Some(component);
-                self.blocks = blocks(component);
+                let _ = self.blocks.replace(blocks(component).iter().cloned());
                 Outcome::Changed
             }
             Cmd::Back => {
                 self.page = None;
-                self.blocks = List::default();
+                let _ = self.blocks.replace([]);
                 Outcome::Changed
             }
             Cmd::Echo(sample) => {

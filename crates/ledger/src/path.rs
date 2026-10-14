@@ -215,7 +215,13 @@ pub trait Field: Clone + 'static {
         }
     }
 
-    fn prune(&mut self, _deleted: &[u128]) {}
+    /// Lets go of keys removed from a list: each with the type of record it named, so a selection over another list keeps a key that happens to be equal.
+    fn prune(&mut self, _deleted: &[(std::any::TypeId, u128)]) {}
+
+    /// The type of record held by the list at the end of this path, if a list is there.
+    fn item_type(&self, _steps: &[Step]) -> Option<std::any::TypeId> {
+        None
+    }
 
     fn reach(&self, steps: &[Step]) -> Option<&dyn Any> {
         steps.is_empty().then_some(self as &dyn Any)

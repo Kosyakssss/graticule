@@ -153,7 +153,11 @@ impl<T: 'static> Field for Selection<T> {
 
     fn snap(&self) {}
 
-    fn diff(&self, _: &(), _: ErasedPath, _: &mut Vec<Op>) {}
+    fn diff(&self, _: &(), at: ErasedPath, _: &mut Vec<Op>) {
+        if self.at != at {
+            journal::replaced(std::any::type_name::<Self>());
+        }
+    }
 
     fn same(&self, other: &Self) -> bool {
         self == other
@@ -187,12 +191,14 @@ impl<T: 'static> Field for Selection<T> {
         }
     }
 
-    fn prune(&mut self, deleted: &[u128]) {
+    fn prune(&mut self, deleted: &[(std::any::TypeId, u128)]) {
+        let mine = std::any::TypeId::of::<T>();
+        let deleted: Vec<u128> = deleted.iter().filter(|(t, _)| *t == mine).map(|(_, k)| *k).collect();
         if deleted.is_empty() {
             return;
         }
         let before = self.value();
-        for k in deleted {
+        for k in &deleted {
             self.keys.remove(&Key::from_raw(*k));
         }
         if self.focus.is_some_and(|f| deleted.contains(&f.raw())) {

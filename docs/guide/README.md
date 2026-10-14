@@ -74,7 +74,7 @@ The build plan, at the end of the spec, is one list from top to bottom, and anyo
 
 1. **A first slice through everything**: a tiny to-do app that runs in a real window with undo, saving and the palette. It isn't a demo app; it's the smallest thing that touches every layer, so design mistakes show up while they're cheap.
 2. **The tools**: Specimen properly, Scope and Assay small, the development loop, icons.
-3. **The components**, from HeroUI and Blueprint, chosen with the owner and built in batches, each with its page in Specimen.
+3. **The components**: every one from HeroUI and Blueprint, built in batches, each with its page in Specimen. The owner then removes the ones Graticule doesn't keep.
 4. **The units' engines**: Ledger in full with sync, Galley, Plotter.
 5. **The demo apps**, each one using every component it touches.
 6. **Linux, then Windows.**

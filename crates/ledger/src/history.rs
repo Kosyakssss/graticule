@@ -1,5 +1,5 @@
 use crate::op::Op;
-use crate::path::{Field, Kind};
+use crate::path::Kind;
 
 /// What became of a transaction once committed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,10 +34,10 @@ struct Node<P> {
     after: Option<P>,
 }
 
-/// What undo or redo did: the operations it applied to the facts, in order, and where to put the user.
-pub struct Moved<'a, P> {
+/// What undo or redo does: the operations to apply to the facts, in order, and where to put the user once they have landed.
+pub struct Turn<P> {
     pub ops: Vec<Op>,
-    pub place: &'a P,
+    pub place: P,
 }
 
 impl<P> Default for History<P> {
@@ -125,49 +125,38 @@ impl<P: Clone> History<P> {
         }
     }
 
-    /// Takes back the newest step of the current branch: the selection moves since, the step's own changes, then the moves before it, so the facts are as they were just before the step. `place` is where the user is now, kept for redo.
-    pub fn undo<F: Field>(&mut self, facts: &mut F, place: P) -> Option<Moved<'_, P>> {
+    /// Takes back the newest step of the current branch: the selection moves since, the step's own changes, then the moves before it, so once its operations land the facts are as they were just before the step. `place` is where the user is now, kept for redo.
+    pub fn undo(&mut self, place: P) -> Option<Turn<P>> {
         let at = self.at?;
         let trailing = std::mem::take(&mut self.moves);
         let mut ops = Vec::new();
-        reverse(facts, &trailing, &mut ops);
+        reverse(&trailing, &mut ops);
         let node = &mut self.steps[at];
-        reverse(facts, &node.ops, &mut ops);
+        reverse(&node.ops, &mut ops);
         node.moves_after = trailing;
         node.after = Some(place);
         self.moves = node.moves_before.clone();
         self.at = node.parent;
-        Some(Moved { ops, place: &self.steps[at].before })
+        Some(Turn { ops, place: self.steps[at].before.clone() })
     }
 
     /// Puts back the newest step undone from here, and the selection as it was when it was undone.
-    pub fn redo<F: Field>(&mut self, facts: &mut F) -> Option<Moved<'_, P>> {
+    pub fn redo(&mut self) -> Option<Turn<P>> {
         let next = self.next()?;
         let trailing = std::mem::take(&mut self.moves);
         let mut ops = Vec::new();
-        reverse(facts, &trailing, &mut ops);
+        reverse(&trailing, &mut ops);
         let node = &self.steps[next];
         for list in [&node.moves_before, &node.ops, &node.moves_after] {
-            forward(facts, list, &mut ops);
+            ops.extend(list.iter().cloned());
         }
         self.moves = node.moves_after.clone();
         self.at = Some(next);
         let node = &self.steps[next];
-        Some(Moved { ops, place: node.after.as_ref().unwrap_or(&node.before) })
+        Some(Turn { ops, place: node.after.clone().unwrap_or_else(|| node.before.clone()) })
     }
 }
 
-fn reverse<F: Field>(facts: &mut F, ops: &[Op], out: &mut Vec<Op>) {
-    for op in ops.iter().rev() {
-        let inverse = op.inverse();
-        facts.apply(inverse.path().steps(), &inverse);
-        out.push(inverse);
-    }
-}
-
-fn forward<F: Field>(facts: &mut F, ops: &[Op], out: &mut Vec<Op>) {
-    for op in ops {
-        facts.apply(op.path().steps(), op);
-        out.push(op.clone());
-    }
+fn reverse(ops: &[Op], out: &mut Vec<Op>) {
+    out.extend(ops.iter().rev().map(Op::inverse));
 }

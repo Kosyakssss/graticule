@@ -127,6 +127,14 @@ struct Background {
     parts: VecDeque<Part>,
 }
 
+/// An undo or redo too big for one frame, landing a slice per frame: its operations, how many have landed, and where to put the user when the last one does.
+struct Turning {
+    label: String,
+    ops: Vec<Op>,
+    next: usize,
+    place: Place,
+}
+
 struct Part {
     bulk: ledger::Bulk,
     found: Found,
@@ -209,6 +217,7 @@ pub struct Runner<A: App> {
     repairing: bool,
     keep: Keep,
     background: VecDeque<Background>,
+    turning: Option<Turning>,
     waker: Option<Waker>,
     replaying: bool,
     effects: Vec<Effect<A::Cmd>>,
@@ -282,6 +291,7 @@ impl<A: App> Runner<A> {
             repairing: false,
             keep: Keep::Nothing,
             background: VecDeque::new(),
+            turning: None,
             waker: None,
             replaying: false,
             effects: started.effects,
@@ -968,6 +978,7 @@ impl<A: App> Runner<A> {
         match b {
             Builtin::Undo if self.undo_label().is_none() => Available::No(Message::from("Nothing to undo")),
             Builtin::Copy if self.chosen().is_empty() => Available::No(Message::from("No text is chosen: drag across text to choose some")),
+            Builtin::Undo | Builtin::Redo if self.turning.is_some() => Available::No(Message::from("Wait for the change in progress to finish")),
             Builtin::Redo if !self.background.is_empty() => Available::No(Message::from("Wait for the change in progress to finish")),
             Builtin::Redo if self.history.redo_label().is_none() => Available::No(Message::from("Nothing to redo")),
             Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::First | Builtin::Last | Builtin::SelectAll if self.tree.lists.is_empty() => {
@@ -1060,6 +1071,7 @@ impl<A: App> Runner<A> {
     }
 
     fn transact(&mut self, cmds: Vec<A::Cmd>, clock: Option<Clock>) {
+        self.turn(Slice::Items(usize::MAX), None);
         let many = cmds.len();
         let repeated = many > 1 && cmds.windows(2).all(|w| ledger::Field::value(&w[0]) == ledger::Field::value(&w[1]));
         let named = self.naming.take();
@@ -1196,6 +1208,7 @@ impl<A: App> Runner<A> {
             match entry.field("do") {
                 Some(Value::Str(what)) if what == "undo" || what == "redo" => whole &= self.undo(what == "undo"),
                 Some(Value::Str(what)) if what == "stop" => whole &= self.stop(),
+                Some(Value::Str(what)) if what == "turn" => {}
                 Some(Value::Str(what)) if what == "slice" => match entry.field("count") {
                     Some(Value::UInt(count)) => whole &= self.slice(Slice::Items(*count as usize)),
                     _ => whole = false,
@@ -1253,22 +1266,43 @@ impl<A: App> Runner<A> {
         if back && !self.background.is_empty() {
             return self.stop();
         }
-        if !back && !self.background.is_empty() {
+        if self.turning.is_some() || (!back && !self.background.is_empty()) {
             return false;
         }
-        let step = if back { self.history.undo_label() } else { self.history.redo_label() }.map(str::to_string);
+        let step = if back { self.history.undo_label() } else { self.history.redo_label() }.map(str::to_string).unwrap_or_default();
         let place = self.place();
-        let moved = if back { self.history.undo(&mut self.facts, place) } else { self.history.redo(&mut self.facts) };
-        let Some(moved) = moved else { return false };
-        let (mut ops, place) = (moved.ops, *moved.place);
+        let turn = if back { self.history.undo(place) } else { self.history.redo() };
+        let Some(turn) = turn else { return false };
+        self.did(format!("{} {step}", if back { "Undid" } else { "Redid" }));
+        let label = format!("{} {step}", if back { "Undoing" } else { "Redoing" });
+        self.turning = Some(Turning { label, ops: turn.ops, next: 0, place: turn.place });
+        self.said = None;
+        let slice = if self.waker.is_none() || self.replaying { Slice::Items(usize::MAX) } else { Slice::Time(SLICE) };
+        self.turn(slice, Some(Value::Map(vec![("do".into(), Value::Str(if back { "undo" } else { "redo" }.into()))])));
+        true
+    }
+
+    fn turn(&mut self, slice: Slice, entry: Option<Value>) -> bool {
+        let Some(turning) = &mut self.turning else { return false };
+        let (started, from) = (Instant::now(), turning.next);
+        while turning.next < turning.ops.len() {
+            match slice {
+                Slice::Time(budget) if turning.next > from && started.elapsed() >= budget => break,
+                Slice::Items(most) if turning.next - from >= most => break,
+                _ => {}
+            }
+            let op = &turning.ops[turning.next];
+            self.facts.apply(op.path().steps(), op);
+            turning.next += 1;
+        }
+        let finished = turning.next >= turning.ops.len();
+        let mut ops = turning.ops[from..turning.next].to_vec();
         let pruned = self.prune(&ops);
         ops.extend(pruned);
-        self.record(Value::Map(vec![("do".into(), Value::Str(if back { "undo" } else { "redo" }.into()))]), &ops);
-        if let Some(step) = step {
-            self.did(format!("{} {step}", if back { "Undid" } else { "Redid" }));
+        self.record(entry.unwrap_or_else(|| Value::Map(vec![("do".into(), Value::Str("turn".into()))])), &ops);
+        if finished && let Some(done) = self.turning.take() {
+            self.restore(done.place);
         }
-        self.restore(place);
-        self.said = None;
         self.stale = true;
         true
     }
@@ -1334,6 +1368,9 @@ impl<A: App> Runner<A> {
 
     /// Applies the next slice of the oldest bulk change still landing, and returns whether anything moved. When its last slice lands, the whole change becomes one undo step.
     pub fn slice(&mut self, slice: Slice) -> bool {
+        if self.turning.is_some() {
+            return self.turn(slice, None);
+        }
         let Some(background) = self.background.front_mut() else { return false };
         let Some(part) = background.parts.front_mut() else { return false };
         if let Found::Searching(receive) = &part.found {
@@ -1399,6 +1436,7 @@ impl<A: App> Runner<A> {
 
     /// Lands every bulk change still running, waiting for their searches.
     pub fn finish(&mut self) {
+        self.turn(Slice::Items(usize::MAX), None);
         while self.slice(Slice::Items(usize::MAX)) {}
     }
 
@@ -1425,6 +1463,9 @@ impl<A: App> Runner<A> {
     }
 
     fn progress(&self) -> Option<String> {
+        if let Some(turning) = &self.turning {
+            return Some(format!("{}: {} of {}", turning.label, turning.next, turning.ops.len()));
+        }
         let working = || A::derivations().iter().find(|d| self.working.contains(&d.field)).map(|d| format!("Working out “{}”", d.name));
         let Some(background) = self.background.front() else { return self.jobs.first().map(|job| job.name.clone()).or_else(working) };
         let part = background.parts.front()?;
@@ -2613,7 +2654,7 @@ impl<A: App> Face for Runner<A> {
         for effect in std::mem::take(&mut self.effects) {
             self.start(effect, frame.window);
         }
-        if self.background.front().and_then(|b| b.parts.front()).is_some_and(|p| matches!(p.found, Found::Ready(_)))
+        if (self.turning.is_some() || self.background.front().and_then(|b| b.parts.front()).is_some_and(|p| matches!(p.found, Found::Ready(_))))
             && let Some(waker) = &self.waker
         {
             waker.wake();

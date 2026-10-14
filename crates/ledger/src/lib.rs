@@ -17,7 +17,7 @@ mod value;
 
 pub use bulk::{Bulk, Search, deferred};
 pub use edit::{Change, Edit};
-pub use history::{History, Kept, Moved};
+pub use history::{History, Kept, Turn};
 pub use journal::{Transaction, record, recording, replaced, take_replaced};
 pub use key::Key;
 pub use list::List;

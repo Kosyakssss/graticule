@@ -240,6 +240,8 @@ pub struct Runner<A: App> {
     naming: Option<String>,
     only_changed: bool,
     palette: Option<Palette>,
+    marked: std::collections::HashSet<u128>,
+    unwatched: bool,
     menu: Option<Menu>,
     clipboard: Option<arboard::Clipboard>,
     reveal: bool,
@@ -315,6 +317,8 @@ impl<A: App> Runner<A> {
             naming: None,
             only_changed: false,
             palette: None,
+            marked: std::collections::HashSet::new(),
+            unwatched: false,
             menu: None,
             clipboard: None,
             reveal: false,
@@ -976,6 +980,11 @@ impl<A: App> Runner<A> {
         let (hover, pressed) = (self.hover, self.pressed);
         let focus = if self.palette.is_some() { Some(PALETTE) } else { self.focus };
         let composed = self.composed;
+        let marked: std::collections::HashSet<Id> = if self.marked.is_empty() {
+            Default::default()
+        } else {
+            self.tree.nodes.iter().filter(|n| matches!(n.kind, Kind::ListRow { key, .. } if self.marked.contains(&key))).map(|n| n.id).collect()
+        };
         let chosen: HashMap<Id, (u32, u32)> = self.chosen().into_iter().map(|(i, r)| (self.tree.nodes[i as usize].id, (r.start as u32, r.end as u32))).collect();
         let caret = match &self.palette {
             Some(p) => Some((PALETTE, p.caret)),
@@ -991,6 +1000,7 @@ impl<A: App> Runner<A> {
                 anchor: at.map_or(u32::MAX, |c| c.anchor as u32),
                 composing: if focus == Some(id) { composed } else { Range32::default() },
                 chosen: chosen.get(&id).copied().unwrap_or_default(),
+                marked: marked.contains(&id),
             }
         }
     }
@@ -1210,6 +1220,9 @@ impl<A: App> Runner<A> {
         }
         let stopped = batch.stopped;
         let ops = self.conclude(&label, batch.ops, batch.cx, batch.changed);
+        if self.unwatched {
+            self.mark(&ops);
+        }
         if let Some((done, reason)) = stopped {
             self.said = Some(Said::Note(Message::plain(format!("{label} stopped after {done}: {}", reason.as_str()))));
         }
@@ -1478,6 +1491,7 @@ impl<A: App> Runner<A> {
         }
         let finished = turning.next >= turning.ops.len();
         let mut ops = turning.ops[from..turning.next].to_vec();
+        self.mark(&ops);
         let pruned = self.prune(&ops);
         ops.extend(pruned);
         self.record(entry.unwrap_or_else(|| Value::Map(vec![("do".into(), Value::Str("turn".into()))])), &ops);
@@ -1904,8 +1918,27 @@ impl<A: App> Runner<A> {
                 }
             }
         }
+        self.unwatched = true;
         for cmd in results {
             self.run(cmd);
+        }
+        self.unwatched = false;
+    }
+
+    fn mark(&mut self, ops: &[Op]) {
+        for op in ops {
+            let key = match op {
+                Op::Insert { key, .. } => Some(*key),
+                Op::Set { at, .. } | Op::Splice { text: at, .. } => at.steps().iter().find_map(|s| match s {
+                    ledger::Step::Key(k) => Some(*k),
+                    ledger::Step::Field(_) => None,
+                }),
+                Op::Remove { .. } | Op::Select { .. } => None,
+            };
+            if let Some(key) = key {
+                self.marked.insert(key);
+                self.stale = true;
+            }
         }
     }
 
@@ -2965,6 +2998,10 @@ impl<A: App> Face for Runner<A> {
     }
 
     fn input(&mut self, input: Input, frame: &mut Frame) -> bool {
+        if !self.marked.is_empty() && matches!(input, Input::Key(_) | Input::Press { .. } | Input::Wheel { .. } | Input::Ime(_)) {
+            self.marked.clear();
+            self.stale = true;
+        }
         match input {
             Input::Moved { x, .. } => {
                 if self.reading_drag

@@ -23,6 +23,8 @@ pub struct Look {
     pub composing: crate::tree::Range32,
     /// The bytes of this node's text chosen with the pointer, as a start and an end.
     pub chosen: (u32, u32),
+    /// Whether the node changed in a way the user didn't watch happen, such as an undo or something arriving, and is marked until their next input.
+    pub marked: bool,
 }
 
 /// The two lists a frame is drawn from: what lies under, then what lies on top. Boxes on the grid never overlap, so this is the only ordering painting needs.
@@ -367,6 +369,11 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
                 let r = p.rect(n.area);
                 let t = p.style.line(p.m);
                 p.fill(Rect::new(r.x, r.y, t * 2.0, r.h), theme.ink);
+            }
+            if look.marked {
+                let r = p.rect(n.area);
+                let t = p.style.line(p.m);
+                p.fill(Rect::new(r.right() - t * 3.0, r.y, t * 3.0, r.h), theme.link);
             }
         }
         (Layer::Over, Kind::List { count, first, shown }) => {

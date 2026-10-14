@@ -202,6 +202,10 @@ The quads are kept in two layers, under and over: a list row's selection and hov
 
 An overlay (spec §4.4) is a node of kind `Overlay` whose anchor is the node that opened it or the cell the pointer was on. It and everything inside it are marked `over` when the tree is built. Layout leaves overlays out of their parent's flow, so they take no room, and places each one after the rest of the tree: as wide as its content wants plus a column each side, under its anchor if it fits, else above, else wherever the window has room, and never past the window's edges. Kept quads have two more layers for them, under and over again, drawn after the page's two, so an overlay covers whatever it lies on however the buffer ranges fall. The hit cells are filled twice, page first, then overlays; an overlay's own box marks its cells as covered, so a click on its background reaches nothing beneath. It is painted as a box on the grid with the style's hard shadow, like a button.
 
+### 7.4 The mark after a change you didn't watch
+
+The runner keeps the keys of rows changed by something other than the user's own command: each slice of an undo or redo, and the commands that come back from jobs. A key is taken from an inserted item, or from the first key on the path of a changed field; removals leave nothing to mark. The look of a list row whose key is kept says `marked`, and the row is drawn with a bar at its right edge in the link ink. The next key, click, scroll or input method event forgets them all before it is handled, so an undo pressed with a key marks what it changed and the following input clears it. The mark's look is a maintainer's choice.
+
 A law (§19) checks that patching the quad list gives the same pixels as building it from scratch. It compares the quads themselves, layer by layer, which is enough because boxes on the grid never overlap.
 
 ## 8. Hit testing

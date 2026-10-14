@@ -22,6 +22,7 @@ pub mod pace;
 pub mod paint;
 pub mod proof;
 mod reload;
+pub mod picture;
 pub mod px;
 pub mod runner;
 pub mod scope;
@@ -35,6 +36,7 @@ pub use app::{App, Cx, Effect, Failure, Moment, Path, Said, States};
 pub use command::{Available, Commands, Entry, Form, Subject, no_if};
 pub use ink::Ink;
 pub use message::Message;
+pub use picture::{Layer, Picture, icons};
 pub use tree::{Fill, Span, cols};
 pub use ui::{Bind, Ui};
 

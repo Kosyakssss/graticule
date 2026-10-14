@@ -17,6 +17,7 @@ cargo run -p specimen                    # Specimen on its own
 cargo run -p scope                       # attach to a running app and watch its frames
 cargo run -p bindery -- new apps/hello   # start an app
 cargo run -p bindery -- dev apps/hello   # rebuild and reload it on every saved change
+cargo run -p engraver -- FOLDER          # what a folder of SVG files compiles to
 ```
 
 Licensed under the [Mozilla Public License 2.0](LICENSE).

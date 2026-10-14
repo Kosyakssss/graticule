@@ -1,5 +1,6 @@
 use crate::grid::Area;
 use crate::metrics::Metrics;
+use crate::picture::Picture;
 use crate::text::{SpanStyle, Text, TextStyle};
 use crate::tree::{Kind, NONE, Tree, Width};
 
@@ -43,6 +44,11 @@ impl<'t> Layout<'t> {
             return cells.max((w / self.m.cell_w - 0.01).ceil() as i32);
         }
         (w / self.m.cell_w - 0.01).ceil().max(0.0) as i32
+    }
+
+    fn picture_cols(&self, p: &Picture, rows: i32) -> i32 {
+        let height = rows as f32 * self.m.cell_h;
+        ((height * p.width / p.height.max(f32::EPSILON)) / self.m.cell_w - 0.01).ceil().max(1.0) as i32
     }
 
     fn style(&self, mono: bool) -> TextStyle {
@@ -125,6 +131,10 @@ impl<'t> Layout<'t> {
             }
             Kind::Field => (16, 32),
             Kind::Swatch { .. } => (SWATCH, SWATCH),
+            Kind::Picture { picture, rows } => {
+                let c = self.picture_cols(picture, rows);
+                (c, c)
+            }
             Kind::Row | Kind::ListRow { .. } | Kind::Columns => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref, mut count) = (0, 0, 0);
@@ -252,6 +262,7 @@ impl<'t> Layout<'t> {
             }
             Kind::Check { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
             Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Link | Kind::Field | Kind::Status | Kind::Note | Kind::Swatch { .. } => 1,
+            Kind::Picture { rows, .. } => rows,
             Kind::List { .. } => 3,
             Kind::Bar => {
                 let (start, end) = self.children(tree, i);
@@ -398,7 +409,7 @@ impl<'t> Layout<'t> {
                 self.rows(tree, c, area.cols)
             };
             let rows = rows.min(area.bottom() - row).max(0);
-            let cols = if matches!(tree.nodes[c as usize].kind, Kind::Button | Kind::Link | Kind::Swatch { .. }) { self.size(tree, c).1.min(area.cols) } else { area.cols };
+            let cols = if matches!(tree.nodes[c as usize].kind, Kind::Button | Kind::Link | Kind::Swatch { .. } | Kind::Picture { .. }) { self.size(tree, c).1.min(area.cols) } else { area.cols };
             let a = if rows > 0 { Area::new(area.col, row, cols, rows) } else { Area::default() };
             self.place(tree, c, a);
             row += rows + gap;

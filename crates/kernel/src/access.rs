@@ -20,7 +20,7 @@ fn role(kind: Kind) -> Role {
         Kind::Note => Role::Alert,
         Kind::Palette => Role::Dialog,
         Kind::Choice { .. } => Role::ListBoxOption,
-        Kind::Swatch { .. } => Role::Image,
+        Kind::Swatch { .. } | Kind::Picture { .. } => Role::Image,
     }
 }
 

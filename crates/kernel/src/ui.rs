@@ -7,6 +7,7 @@ use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
 use crate::ink::Ink;
 use crate::message::Message;
+use crate::picture::Picture;
 use crate::tree::{Id, Kind, ListInfo, NONE, Span, Tone, Tree};
 
 const CHECK_MIN: i32 = 12;
@@ -76,6 +77,14 @@ impl<C, S> Placed<'_, '_, C, S> {
         if let Some(cmd) = cmd.bind(self.ui.subject) {
             self.ui.tree.nodes[self.node as usize].submit = self.ui.tree.commands.len() as u32;
             self.ui.tree.commands.push(cmd);
+        }
+        self
+    }
+
+    /// How tall a picture is, in rows; its width follows from its shape.
+    pub fn height(self, rows: i32) -> Self {
+        if let Kind::Picture { rows: r, .. } = &mut self.ui.tree.nodes[self.node as usize].kind {
+            *r = rows.max(1);
         }
         self
     }
@@ -179,6 +188,15 @@ impl<'a, C, S> Ui<'a, C, S> {
         let i = self.add(Kind::Swatch { ink }, Location::caller());
         let r = self.tree.put(ink.name());
         self.tree.nodes[i as usize].text = r;
+    }
+
+    /// A picture compiled by Engraver, one row tall unless `.height(rows)` says otherwise, as wide as its shape needs. A screen reader reads its label.
+    #[track_caller]
+    pub fn picture(&mut self, picture: &'static Picture) -> Placed<'_, 'a, C, S> {
+        let i = self.add(Kind::Picture { picture, rows: 1 }, Location::caller());
+        let r = self.tree.put(picture.label);
+        self.tree.nodes[i as usize].text = r;
+        Placed { ui: self, node: i }
     }
 
     fn text_as(&mut self, text: &str, mono: bool, tone: Tone, at: &'static Location<'static>) {

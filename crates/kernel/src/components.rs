@@ -1,9 +1,12 @@
+use std::hash::{Hash, Hasher};
+
 use crate::grid::Area;
 use crate::ink::Color;
 use crate::layout::{CHECK, MARGIN};
 use crate::paint::Painter;
 use crate::px::Rect;
-use crate::text::{Block, Paint, SpanStyle};
+use crate::picture::Picture;
+use crate::text::{Block, Data, Outline, Paint, SpanStyle};
 use crate::tree::{Kind, Node, Tone, Tree};
 
 /// How the pointer and the keyboard are touching a node right now. Changing it repaints the node without building the tree again.
@@ -327,6 +330,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let t = p.m.hair();
             border(p, r, t, rule);
         }
+        (Layer::Over, Kind::Picture { picture, .. }) => draw_picture(p, p.rect(n.area), picture),
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);
@@ -345,5 +349,26 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             p.write(n.area, text, style, color);
         }
         _ => {}
+    }
+}
+
+/// Draws a picture scaled to fit `r` and centred in it, each layer in its ink, from the atlas once it has been drawn at this size.
+pub fn draw_picture(p: &mut Painter, r: Rect, picture: &'static Picture) {
+    let scale = (r.w / picture.width).min(r.h / picture.height);
+    if scale.is_nan() || scale <= 0.0 {
+        return;
+    }
+    let (w, h) = (picture.width * scale, picture.height * scale);
+    let origin = ((r.x + (r.w - w) / 2.0).round(), (r.y + (r.h - h) / 2.0).round());
+    let clip = p.clip();
+    for (i, layer) in picture.layers.iter().enumerate() {
+        let key = {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            (std::ptr::from_ref(picture) as usize, i, scale.to_bits()).hash(&mut h);
+            h.finish()
+        };
+        let color = p.theme.get(layer.ink);
+        let outline = Outline { path: Data::Svg(layer.path), stroke: None, even_odd: layer.even_odd, scale };
+        p.text.shape(p.quads, key, outline, Paint { origin, limit: None, colors: &[color], clip });
     }
 }

@@ -92,6 +92,7 @@ pub enum Piece {
     Code,
     Live,
     Awkward,
+    Icon,
 }
 
 /// One line of the Style place: a heading, a sentence, an ink in both appearances, or a value of the style.
@@ -136,6 +137,7 @@ pub enum Component {
     List,
     Empty,
     Swatch,
+    Picture,
     Row,
     Columns,
     Bar,
@@ -145,7 +147,7 @@ pub enum Component {
 }
 
 impl Component {
-    const ALL: [Component; 15] = [
+    const ALL: [Component; 16] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -157,6 +159,7 @@ impl Component {
         Component::List,
         Component::Empty,
         Component::Swatch,
+        Component::Picture,
         Component::Bar,
         Component::Status,
         Component::Message,
@@ -174,6 +177,7 @@ impl Component {
             Component::List => "List",
             Component::Empty => "Empty",
             Component::Swatch => "Swatch",
+            Component::Picture => "Picture",
             Component::Row => "Row",
             Component::Columns => "Columns",
             Component::Bar => "Action bar",
@@ -194,6 +198,7 @@ impl Component {
             Component::List => include_str!("../../../docs/components/list.md"),
             Component::Empty => include_str!("../../../docs/components/empty.md"),
             Component::Swatch => include_str!("../../../docs/components/swatch.md"),
+            Component::Picture => include_str!("../../../docs/components/picture.md"),
             Component::Row => include_str!("../../../docs/components/row.md"),
             Component::Columns => include_str!("../../../docs/components/columns.md"),
             Component::Bar => include_str!("../../../docs/components/bar.md"),
@@ -389,6 +394,19 @@ impl Catalog {
                     ui.column(14, |ui| ui.muted("Live"));
                     ui.column(kernel::Fill, |ui| self.example(ui, component));
                 }),
+                Piece::Icon => {
+                    let Some((name, icon)) = kernel::icons::ALL.iter().find(|(name, _)| *name == block.text) else { return };
+                    ui.columns(|ui| {
+                        ui.column(14, |ui| ui.mono(name));
+                        ui.column(kernel::Fill, |ui| {
+                            ui.row(|ui| {
+                                ui.picture(icon);
+                                ui.picture(icon).height(2);
+                                ui.muted(icon.label);
+                            })
+                        });
+                    });
+                }
                 Piece::Awkward => {
                     let Some(sample) = self.samples.iter().find(|s| s.what == block.text) else { return };
                     ui.columns(|ui| {
@@ -436,6 +454,11 @@ impl Catalog {
             Component::Status => ui.muted("Just above the bar: hover over something"),
             Component::Message => ui.muted("Under the page: press the button above"),
             Component::Palette => ui.muted("Open it from the bar"),
+            Component::Picture => ui.row(|ui| {
+                ui.picture(&kernel::icons::WARNING);
+                ui.text("One row tall, beside text");
+                ui.picture(&kernel::icons::STAR).height(3);
+            }),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);
@@ -501,6 +524,11 @@ fn blocks(component: Component) -> List<Block> {
     flush(&mut pieces, &mut paragraph);
     if !pieces.iter().any(|(p, _)| *p == Piece::Live) {
         pieces.insert(pieces.len().min(1), (Piece::Live, String::new()));
+    }
+    if component == Component::Picture {
+        pieces.push((Piece::Paragraph, String::new()));
+        pieces.push((Piece::Heading, "The built-in icons".to_string()));
+        pieces.extend(kernel::icons::ALL.iter().map(|(name, _)| (Piece::Icon, name.to_string())));
     }
     if component.awkward() {
         pieces.push((Piece::Paragraph, String::new()));

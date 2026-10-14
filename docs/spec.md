@@ -347,7 +347,7 @@ Named for the test of what something is made of.
 
 ### 13.8 EN-01 Engraver
 - **Library.** The picture compiler (§6.2), run as a build step: SVG files into compact shape data, colors mapped to semantic inks.
-- **Face.** `engraver` compiles a folder of SVGs and shows what it made.
+- **Face.** `engraver FOLDER` compiles a folder of SVGs and says what it made of each file (name, label, size, layers and their inks) or why it refused it. It is a report rather than a window because the kernel compiles its own icons with Engraver at build time, so Engraver can't be built on the kernel; the pictures themselves are seen wherever an app draws them, the built-in icons on Specimen's Picture page.
 - **Laws.** A picture without a label is refused; every color lands on a semantic ink.
 
 ### 13.9 BD-01 Bindery
@@ -411,7 +411,7 @@ Tooling comes before the apps, by the owner's decision, so every later piece is 
 5. **Done.** SC-01 Scope, small (§13.6): the ring buffer, its own window, why it redrew, time. Every app records each frame's cause and stage times into a fixed ring (39 ns a frame in release) and serves them on this machine only; `cargo run -p scope` attaches to a running app and shows Time and Why it redrew (`docs/internals/scope.md`). Its own-cost laws compare frame times with Scope on and off, so they wait for the reference machine (an M1), like the measurement in S3.
 6. **Done.** AS-01 Assay, small (§13.7): the universal laws over generated command sequences, the grid and contrast laws, the frame, allocation and idle budgets, the `assay` report. `--assay` on any app drives it through seeded command sequences from its named states (never crashes, undo and redo return, available means it runs, nothing internal reachable, every command reached, saved facts load), shrinks a failure to its shortest steps, checks the grid and contrast in every state at both sizes, and judges the slowest 1% of frames and of `available` calls in release builds; allocation is counted with the feature `count-allocations` (`docs/internals/assay.md`). Its first run found and fixed four kernel and Ledger bugs. Scope's own-cost laws need the reference machine and wait for it, with the M1 measurement in S3.
 7. **Done, but for one pass in the real window.** BD-01 Bindery's development loop moved in: `bindery new` and `bindery dev` with the in-place reload. `bindery new` writes an app with facts, commands, one screen and one named state that passes Assay; `bindery dev` builds, runs a copy of the program, and on a successful build has the app hand over its window frame and state and starts the new build with them, the same way on every system (`docs/internals/bindery.md`). The reload keeping the window's frame needs the owner's pass on screen.
-8. **Open.** EN-01 Engraver moved in; the built-in icon set.
+8. **Done.** EN-01 Engraver moved in; the built-in icon set. `crates/engraver` compiles SVG files into pictures from a build script, maps each color to the ink it stands for and refuses a file without a title or with a color, gradient, transparency or text that is no ink; strokes become outlines at compile time, so the kernel only fills shapes. The kernel compiles 42 icons (`kernel::icons`) and draws a picture with `ui.picture(&icons::WARNING)`, one row tall unless `.height(rows)` says otherwise, from the atlas at each size; Specimen has its page with every icon (`docs/internals/engraver.md`). The picture component that item 16 names is therefore done for vector pictures; raster images remain there.
 
 ### 17.4 Components and the kernel under them
 The components are done properly before any demo app. Each is built with its page in `docs/components/`, its Specimen entry and its laws, and the kernel pieces it needs are built with it.
@@ -423,7 +423,7 @@ The components are done properly before any demo app. Each is built with its pag
 13. **Open.** Jobs and live values in full, with versions and derived values; undoing a bulk change in slices; the main thread freed of shaping and waiting; late reading (§3.5, §12.1).
 14. **Open.** Anchored overlays, drag and drop, motion (§4.4, §4.5, §8.2).
 15. **Open.** The components, wave by wave, including the fields in full (§7.2), filtering by typing, the picker, find and typed filter fields (§7.4), the virtual table, trees, split panes and docking, the time axis, charts, node graphs, the diff view, the date picker.
-16. **Open.** Pictures and the canvas (§6.2, §6.3); the escape hatch ladder: the paint hook, Rust shaders, GPU compute (§6.4).
+16. **Open.** Raster images (vector pictures are done with item 8) and the canvas (§6.2, §6.3); the escape hatch ladder: the paint hook, Rust shaders, GPU compute (§6.4).
 17. **Open.** Language (§7.5): labels and messages as Fluent data, the extraction tool, formatting per language, mixed directions, right-to-left mirroring.
 18. **Open.** The rest of macOS (§8.1, §10): the menu bar and menu bar items, many windows and monitors, window restoration, full screen, file types and Quick Look, background helpers and login items, appearance, reduced motion, increased contrast, Low Power Mode and thermal state, pen, pinch and haptics, any input bound to any command; the web view (§6.5).
 19. **Open.** SC-01 Scope complete: rewind, code, facts, why it's this size, commands, taste, effects and jobs.

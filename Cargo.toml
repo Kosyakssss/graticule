@@ -21,6 +21,7 @@ graticule-macros = { path = "crates/macros" }
 kernel = { path = "crates/kernel" }
 specimen = { path = "crates/specimen" }
 assay = { path = "crates/assay" }
+engraver = { path = "crates/engraver" }
 graticule = { path = "crates/graticule" }
 proptest = "1.12.0"
 

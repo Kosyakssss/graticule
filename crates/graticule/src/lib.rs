@@ -2,12 +2,14 @@
 
 pub use kernel;
 pub use ledger;
+/// The types Engraver's output names, so a build script can compile an app's own pictures with the prefix `graticule`.
+pub use kernel::{Ink, Layer, Picture};
 
 /// Everything an app's code uses, in one import.
 pub mod prelude {
     pub use graticule_macros::{Commands, Facts, t};
     pub use kernel::Available::{self, No, Yes};
-    pub use kernel::{App, Cx, Failure, Fill, Ink, Message, Moment, Path, States, Ui, cols, no_if};
+    pub use kernel::{App, Cx, Failure, Fill, Ink, Message, Moment, Path, Picture, States, Ui, cols, icons, no_if};
     pub use ledger::{Edit, Key, List, Outcome, Selection, Text};
 }
 

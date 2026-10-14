@@ -206,6 +206,16 @@ An overlay (spec §4.4) is a node of kind `Overlay` whose anchor is the node tha
 
 The runner keeps the keys of rows changed by something other than the user's own command: each slice of an undo or redo, and the commands that come back from jobs. A key is taken from an inserted item, or from the first key on the path of a changed field; removals leave nothing to mark. The look of a list row whose key is kept says `marked`, and the row is drawn with a bar at its right edge in the link ink. The next key, click, scroll or input method event forgets them all before it is handled, so an undo pressed with a key marks what it changed and the following input clears it. The mark's look is a maintainer's choice.
 
+### 7.5 Dragging
+
+Two kinds of drag come into the runner, and both say in the status line what letting go would do, as the command's label and, when it can't run, why.
+
+Files dragged from the system arrive from winit as one hover event per file, then a drop per file, or a cancel. The tree keeps the nodes that take files with the command a file makes (`ui.on_files`); the target is the innermost of them that holds the node under the pointer, or the only one there is. Over the window the system owns the drag, so on Windows and macOS the pointer isn't reported while files hover and the target is decided where the pointer last was; an app with one target never notices. Each file runs its own command, through `available` like any other.
+
+A row is dragged within its list when the list has a mover (`on_move`). A press on the row lifts it; nothing moves until the pointer reaches another row of the same list, so a click is still a click. The place it would land is counted in the list before the move: past a row below it, or at a row above it. That row's look says `landing`, above or below, and is drawn with a line in the ink across its edge. Letting go runs the mover's command through `available`, Escape puts the row back, and `List::move_to` makes the move one change that undo takes back whole. Only the pressed row moves, not the whole selection; carrying several chosen rows together is left until an app needs it. The tree keeps the mover as a boxed closure, which costs nothing when the app passes the command itself, as it should.
+
+Dragging out of the window is not possible with winit, which can receive a drag but not start one.
+
 A law (§19) checks that patching the quad list gives the same pixels as building it from scratch. It compares the quads themselves, layer by layer, which is enough because boxes on the grid never overlap.
 
 ## 8. Hit testing

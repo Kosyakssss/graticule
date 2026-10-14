@@ -114,6 +114,8 @@ An app can also run work of its own in the background, such as a feed that keeps
 Doing something to thousands of chosen items at once, or undoing a big change, happens a little at a time, between pictures, with how far it has got in the status line, so the window never stops answering; it is still one step to undo.
 After an undo, or when something finishes in the background and changes the list, the rows that changed carry a small blue bar at their right edge until you next press a key or click, so you can see what moved without watching for it.
 
+Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
+
 ## How speed is measured
 
 A screen refreshes 60 to 1000 times a second; at 1000, there is one millisecond per picture. Graticule's goal is to finish its work for an ordinary interaction in a tenth of that, and to do nothing at all when nothing is happening, which is what saves battery. Times are measured automatically and judged by the slowest frames, not the average, because the slow ones are the ones you notice.

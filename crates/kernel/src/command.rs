@@ -50,6 +50,18 @@ impl Argument for String {
     }
 }
 
+impl Argument for crate::app::Path {
+    const KIND: &'static str = "a file";
+
+    fn read(text: &str) -> Result<Self, Message> {
+        let text = text.trim().trim_matches('"');
+        if text.is_empty() {
+            return Err(Message::from("A file needs a path"));
+        }
+        Ok(crate::app::Path(std::path::PathBuf::from(text)))
+    }
+}
+
 impl Argument for bool {
     const KIND: &'static str = "yes or no";
 

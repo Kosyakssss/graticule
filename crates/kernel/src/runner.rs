@@ -10,7 +10,7 @@ use winit::event::{Ime, KeyEvent};
 use crate::app::{App, Cx, Effect, Failure, Jobs, Moment, Path, Reply, Said};
 use crate::builtin::Builtin;
 use crate::command::{Available, Commands, Form};
-use crate::components::Look;
+use crate::components::{Landing, Look};
 use crate::field::{self, Action, Caret};
 use crate::hit::Hits;
 use crate::kept::Kept;
@@ -30,6 +30,15 @@ const CHOICES: usize = 12;
 const PALETTE: Id = Id(0x9a1e_77e5_0000_0001);
 const COPY: Id = Id(0x9a1e_77e5_0000_0002);
 const MENU: Id = Id(0x9a1e_77e5_0000_0003);
+
+/// A row being dragged to a new place in its list: where it was and, once the pointer has reached another row, where it would land.
+#[derive(Clone, Copy)]
+struct Carry {
+    list: Id,
+    key: u128,
+    from: usize,
+    to: Option<usize>,
+}
 
 /// A context menu drawn by Graticule as an anchored overlay, where the system has none: the cell it opened on, its entries and where focus was before.
 struct Menu {
@@ -230,6 +239,8 @@ pub struct Runner<A: App> {
     reading: Option<Reading>,
     reading_drag: bool,
     drag: Option<Id>,
+    carry: Option<Carry>,
+    dropping: Vec<std::path::PathBuf>,
     pending: Vec<Chord>,
     count: u32,
     keymap: Keymap,
@@ -307,6 +318,8 @@ impl<A: App> Runner<A> {
             reading: None,
             reading_drag: false,
             drag: None,
+            carry: None,
+            dropping: Vec::new(),
             pending: Vec::new(),
             count: 0,
             keymap,
@@ -892,7 +905,9 @@ impl<A: App> Runner<A> {
             None if self.palette.is_some() => chosen(),
             None => self.focus.and_then(|id| self.tree.find(id)),
         };
-        let range = if !self.pending.is_empty() {
+        let range = if let Some(said) = self.dragged() {
+            self.tree.put(&said)
+        } else if !self.pending.is_empty() {
             let typed = keys::label(&self.pending);
             self.tree.put(&format!("{typed} …"))
         } else {
@@ -919,6 +934,120 @@ impl<A: App> Runner<A> {
         };
         self.tree.nodes[self.status as usize].text = range;
         self.tree.hash_node(self.status as usize);
+    }
+
+    fn dragged(&self) -> Option<String> {
+        let (cmd, more) = match (self.carry, self.dropping.first()) {
+            (Some(Carry { list, key, to: Some(to), .. }), _) => (self.mover(list)?(key, to), 0),
+            (_, Some(path)) => match self.file_target() {
+                Some(target) => (target(Path(path.clone())), self.dropping.len() - 1),
+                None => return Some("Nothing here takes files".to_string()),
+            },
+            _ => return None,
+        };
+        let mut said = cmd.label_string(&self.facts, Form::Long);
+        if more > 0 {
+            let _ = write!(said, ", for each of {} files", more + 1);
+        }
+        if let Available::No(why) = self.facts.available(&cmd) {
+            let _ = write!(said, ": {}", why.as_str());
+        }
+        Some(said)
+    }
+
+    fn mover(&self, list: Id) -> Option<&dyn Fn(u128, usize) -> A::Cmd> {
+        let node = self.tree.find(list)?;
+        self.tree.moves.iter().rev().find(|(n, _)| *n == node).map(|(_, m)| m.as_ref())
+    }
+
+    fn file_target(&self) -> Option<crate::tree::Takes<A::Cmd>> {
+        let files = &self.tree.files;
+        let mut at = self.hover.and_then(|id| self.tree.find(id));
+        while let Some(i) = at {
+            if let Some((_, cmd)) = files.iter().rev().find(|(n, _)| *n == i) {
+                return Some(*cmd);
+            }
+            let parent = self.tree.nodes[i as usize].parent;
+            at = (parent != NONE && parent != i).then_some(parent);
+        }
+        match files.as_slice() {
+            [(_, cmd)] => Some(*cmd),
+            _ => None,
+        }
+    }
+
+    fn dropped(&mut self, path: std::path::PathBuf) -> bool {
+        self.dropping.retain(|p| *p != path);
+        let ran = match self.file_target() {
+            Some(target) => self.run(target(Path(path))),
+            None => self.say(Message::plain("Nothing here takes files")),
+        };
+        self.status();
+        ran
+    }
+
+    fn lift(&self, i: u32, clicks: u32, mods: Mods) -> Option<Carry> {
+        let n = self.tree.nodes[i as usize];
+        let Kind::ListRow { key, index, .. } = n.kind else { return None };
+        let movable = clicks == 1 && mods == Mods::default() && self.tree.moves.iter().any(|(m, _)| *m == n.parent);
+        movable.then(|| Carry { list: self.tree.nodes[n.parent as usize].id, key, from: index as usize, to: None })
+    }
+
+    fn carried(&mut self, frame: &Frame) -> bool {
+        let Some(carry) = self.carry else { return false };
+        let Some(list) = self.tree.find(carry.list) else { return false };
+        let mut at = frame.pointer.and_then(|(x, y)| {
+            let (col, row) = frame.metrics.cell_at(x, y);
+            self.hit(col, row)
+        });
+        let row = loop {
+            let Some(i) = at else { break None };
+            let n = self.tree.nodes[i as usize];
+            if n.parent == list {
+                break match n.kind {
+                    Kind::ListRow { index, .. } => Some(index as usize),
+                    _ => None,
+                };
+            }
+            at = (n.parent != NONE && n.parent != i).then_some(n.parent);
+        };
+        let Some(r) = row else { return carry.to.is_some() };
+        if carry.to.is_none() && r == carry.from {
+            return false;
+        }
+        let to = Some(if r > carry.from { r + 1 } else { r });
+        if carry.to == to {
+            return true;
+        }
+        self.carry = Some(Carry { to, ..carry });
+        self.status();
+        true
+    }
+
+    fn landing(&self) -> Option<(Id, Landing)> {
+        let carry = self.carry?;
+        let to = carry.to?;
+        let list = self.tree.find(carry.list)?;
+        let mut last = None;
+        for c in self.tree.children(list) {
+            let n = &self.tree.nodes[c as usize];
+            let Kind::ListRow { index, .. } = n.kind else { continue };
+            if index as usize == to {
+                return Some((n.id, Landing::Above));
+            }
+            last = Some((n.id, index as usize));
+        }
+        last.filter(|&(_, i)| i + 1 == to).map(|(id, _)| (id, Landing::Below))
+    }
+
+    fn put_down(&mut self) -> bool {
+        let Some(Carry { list, key, to: Some(to), .. }) = self.carry.take() else { return false };
+        self.pressed = None;
+        self.stale = true;
+        if let Some(cmd) = self.mover(list).map(|m| m(key, to)) {
+            self.run(cmd);
+        }
+        true
     }
 
     fn layout(&mut self, p: &mut Painter) {
@@ -980,6 +1109,7 @@ impl<A: App> Runner<A> {
         let (hover, pressed) = (self.hover, self.pressed);
         let focus = if self.palette.is_some() { Some(PALETTE) } else { self.focus };
         let composed = self.composed;
+        let landing = self.landing();
         let marked: std::collections::HashSet<Id> = if self.marked.is_empty() {
             Default::default()
         } else {
@@ -1001,6 +1131,7 @@ impl<A: App> Runner<A> {
                 composing: if focus == Some(id) { composed } else { Range32::default() },
                 chosen: chosen.get(&id).copied().unwrap_or_default(),
                 marked: marked.contains(&id),
+                landing: landing.filter(|(l, _)| *l == id).map_or(Landing::Not, |(_, l)| l),
             }
         }
     }
@@ -2288,6 +2419,12 @@ impl<A: App> Runner<A> {
         {
             return done;
         }
+        if chord.key == Key::Escape && self.carry.is_some_and(|c| c.to.is_some()) {
+            self.carry = None;
+            self.pressed = None;
+            self.stale = true;
+            return true;
+        }
         if self.sheet.is_some() && self.pending.is_empty() && chord.mods == Mods::default() {
             let page = self.metrics.map_or(30, |m| m.screen().rows - HELP_CHROME).max(1);
             let by = match chord.key {
@@ -3004,6 +3141,9 @@ impl<A: App> Face for Runner<A> {
         }
         match input {
             Input::Moved { x, .. } => {
+                if self.carried(frame) {
+                    return true;
+                }
                 if self.reading_drag
                     && let Some(i) = self.readable(frame)
                 {
@@ -3054,6 +3194,7 @@ impl<A: App> Face for Runner<A> {
                     return self.inspect_at(col, row);
                 }
                 self.pressed = self.hovered(frame);
+                self.carry = self.pressed.and_then(|id| self.tree.find(id)).and_then(|i| self.lift(i, clicks, frame.mods));
                 if self.pressed.is_none() {
                     let had = self.reading.take().is_some();
                     let Some(i) = self.readable(frame) else { return had };
@@ -3085,6 +3226,10 @@ impl<A: App> Face for Runner<A> {
             }
             Input::Release { button: Button::Left } => {
                 self.drag = None;
+                if self.put_down() {
+                    return true;
+                }
+                self.carry = None;
                 if std::mem::take(&mut self.reading_drag) && self.reading.is_some_and(|r| r.anchor == r.head) {
                     self.reading = None;
                 }
@@ -3107,6 +3252,17 @@ impl<A: App> Face for Runner<A> {
                 by != 0 && self.scroll(col, row, by)
             }
             Input::Key(event) => self.key(&event, frame.mods),
+            Input::Hovering(path) => {
+                self.dropping.push(path);
+                self.status();
+                true
+            }
+            Input::Unhovered => {
+                self.dropping.clear();
+                self.status();
+                true
+            }
+            Input::Dropped(path) => self.dropped(path),
             Input::Ime(Ime::Preedit(text, _)) => {
                 if text == self.composing {
                     return false;
@@ -3229,3 +3385,4 @@ fn shortened(type_name: &str) -> String {
     }
     out.trim_end().to_string()
 }
+

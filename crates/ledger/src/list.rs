@@ -207,6 +207,19 @@ impl<T: Record> List<T> {
         Outcome::Changed
     }
 
+    /// Moves a record to `index`, counted in the list as it is before the move: it lands just before the record now at `index`, or last when `index` is past the end. One change that undo takes back whole.
+    pub fn move_to(&mut self, key: Key<T>, index: usize) -> Outcome {
+        let Some(from) = self.position(key) else { return Outcome::Nothing };
+        let to = index.min(self.len);
+        if to == from || to == from + 1 {
+            return Outcome::Nothing;
+        }
+        let after = to.checked_sub(1).and_then(|p| self.get(p)).map(|r| r.key());
+        let Some(record) = self.find(key).cloned() else { return Outcome::Nothing };
+        let removed = self.remove(key);
+        removed.or(self.insert_after(after, record))
+    }
+
     /// Changes one record in place. The record's key can't change; a list never hands out a record that could escape its record of changes.
     pub fn change(&mut self, key: Key<T>, f: impl FnOnce(&mut T)) -> Outcome {
         let Some((p, i)) = self.locate(key) else { return Outcome::Nothing };

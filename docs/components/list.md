@@ -17,6 +17,21 @@ ui.list(&self.items, Todo::selection, |ui, item| {
 
 A command with a `#[subject]` inside a row acts on that row's item; from the bar, the palette or a key, it acts on the chosen items.
 
+To let the user put the rows in their own order, give the list the command that moves one, taking the row's key and the place it goes, counted from the top before the move:
+
+```rust
+ui.list(&self.items, Todo::selection, |ui, item| {
+    ui.text(&item.title);
+})
+.on_move(Cmd::Move);
+```
+
+`update` can do it with `self.items.move_to(item, to)`.
+
+## Mouse
+
+A click chooses a row. With `on_move`, dragging a row shows a line where it would land and says the move in the status line; letting go moves it, and Escape puts it back.
+
 ## Keys
 
 Up and Down move through it, Home and End go to the top and the bottom, Shift with the arrows chooses several, select all chooses everything, and Escape lets go of all but the focused one. The scroll wheel scrolls.

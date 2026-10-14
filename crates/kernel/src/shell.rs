@@ -61,6 +61,9 @@ pub enum Input {
     Press { button: Button, clicks: u32 },
     Release { button: Button },
     Wheel { dx: f32, dy: f32 },
+    Hovering(std::path::PathBuf),
+    Unhovered,
+    Dropped(std::path::PathBuf),
     Key(winit::event::KeyEvent),
     Ime(winit::event::Ime),
     Appearance(Appearance),
@@ -145,8 +148,8 @@ pub trait Face: 'static {
 
 fn cause(input: &Input) -> Cause {
     match input {
-        Input::Moved { .. } | Input::Left => Cause::Pointer,
-        Input::Press { .. } | Input::Release { .. } => Cause::Click,
+        Input::Moved { .. } | Input::Left | Input::Hovering(_) | Input::Unhovered => Cause::Pointer,
+        Input::Press { .. } | Input::Release { .. } | Input::Dropped(_) => Cause::Click,
         Input::Wheel { .. } => Cause::Wheel,
         Input::Key(_) => Cause::Key,
         Input::Ime(_) => Cause::Typing,
@@ -604,6 +607,9 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
                 r.pointer = Some((x, y));
                 r.input(Input::Moved { x, y });
             }
+            WindowEvent::HoveredFile(path) => r.input(Input::Hovering(path)),
+            WindowEvent::HoveredFileCancelled => r.input(Input::Unhovered),
+            WindowEvent::DroppedFile(path) => r.input(Input::Dropped(path)),
             WindowEvent::CursorLeft { .. } => {
                 r.pointer = None;
                 r.input(Input::Left);

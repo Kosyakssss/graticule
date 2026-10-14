@@ -155,7 +155,9 @@ mod tree {
                     ui.column(span, |ui| place(ui, c, board));
                 }
             }),
-            Shape::List(row) => ui.list(&board.items, Board::chosen, |ui, _| row.iter().for_each(|c| place(ui, c, board))),
+            Shape::List(row) => {
+                ui.list(&board.items, Board::chosen, |ui, _| row.iter().for_each(|c| place(ui, c, board)));
+            }
         }
     }
 

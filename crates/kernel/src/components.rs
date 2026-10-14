@@ -25,6 +25,17 @@ pub struct Look {
     pub chosen: (u32, u32),
     /// Whether the node changed in a way the user didn't watch happen, such as an undo or something arriving, and is marked until their next input.
     pub marked: bool,
+    /// Whether a row being dragged would land at this node's top or bottom edge.
+    pub landing: Landing,
+}
+
+/// Where a dragged row would land against the row under it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Landing {
+    #[default]
+    Not,
+    Above,
+    Below,
 }
 
 /// The two lists a frame is drawn from: what lies under, then what lies on top. Boxes on the grid never overlap, so this is the only ordering painting needs.
@@ -374,6 +385,12 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
                 let r = p.rect(n.area);
                 let t = p.style.line(p.m);
                 p.fill(Rect::new(r.right() - t * 3.0, r.y, t * 3.0, r.h), theme.link);
+            }
+            if look.landing != Landing::Not {
+                let r = p.rect(n.area);
+                let t = p.style.line(p.m) * 2.0;
+                let y = if look.landing == Landing::Above { r.y } else { r.bottom() - t };
+                p.fill(Rect::new(r.x, y, r.w, t), theme.ink);
             }
         }
         (Layer::Over, Kind::List { count, first, shown }) => {

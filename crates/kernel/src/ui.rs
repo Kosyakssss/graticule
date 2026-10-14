@@ -5,7 +5,7 @@ use std::panic::Location;
 
 use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
-use crate::app::Moment;
+use crate::app::{Moment, Path};
 use crate::form::{Control, Item, Settings};
 use crate::ink::Ink;
 use crate::message::Message;
@@ -95,6 +95,21 @@ impl<C, S> Placed<'_, '_, C, S> {
     /// How wide it is, in columns: `.width(28.min(20))`, `.width(Fill)`.
     pub fn width(self, span: impl Into<Span>) -> Self {
         self.ui.tree.nodes[self.node as usize].span = span.into();
+        self
+    }
+}
+
+/// A list just placed, to finish describing: `ui.list(…).on_move(Cmd::Move)`.
+pub struct Listed<'u, 'a, C, S, T> {
+    ui: &'u mut Ui<'a, C, S>,
+    node: u32,
+    items: PhantomData<fn() -> T>,
+}
+
+impl<C: 'static, S, T: 'static> Listed<'_, '_, C, S, T> {
+    /// Rows can be dragged to a new place, which runs `cmd` with the row's key and the place, counted from the top of the list before the move: `Cmd::Move(#[subject] Key<Item>, usize)`. Give it the command itself, so it costs nothing to keep.
+    pub fn on_move(self, cmd: impl Fn(Key<T>, usize) -> C + 'static) -> Self {
+        self.ui.tree.moves.push((self.node, Box::new(move |key, to| cmd(Key::from_raw(key), to))));
         self
     }
 }
@@ -408,9 +423,14 @@ impl<'a, C, S> Ui<'a, C, S> {
         Placed { ui: self, node: i }
     }
 
+    /// Files dropped from the system onto what is being described here run `cmd`, one command per file: `ui.on_files(Cmd::Import)`. While files are dragged over the window, the status line says what dropping them would do.
+    pub fn on_files(&mut self, cmd: fn(Path) -> C) {
+        self.tree.files.push((self.parent, cmd));
+    }
+
     /// A list of `items`, scrolled by whole rows, whose selection lives at `selection`. `row` describes one item; it is called only for the rows that show, so a list of fifty million costs what a screenful does.
     #[track_caller]
-    pub fn list<T: Record, F: Field>(&mut self, items: &List<T>, selection: FactPath<F, Selection<T>>, mut row: impl FnMut(&mut Ui<'_, C, Key<T>>, &T)) {
+    pub fn list<T: Record, F: Field>(&mut self, items: &List<T>, selection: FactPath<F, Selection<T>>, mut row: impl FnMut(&mut Ui<'_, C, Key<T>>, &T)) -> Listed<'_, 'a, C, S, T> {
         let at = Location::caller();
         let i = self.add(Kind::List { count: items.len() as u32, first: 0, shown: 0 }, at);
         let erased = selection.erased();
@@ -456,6 +476,7 @@ impl<'a, C, S> Ui<'a, C, S> {
             keys: keys::<F, T>,
             nth: nth::<F, T>,
         });
+        Listed { ui: self, node: i, items: PhantomData }
     }
 
     /// What the page shows when there is nothing yet: a sentence, and the command that makes something.

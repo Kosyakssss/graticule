@@ -260,6 +260,12 @@ pub struct ListInfo {
     pub nth: Nth,
 }
 
+/// The command a file dropped from the system makes.
+pub type Takes<C> = fn(crate::app::Path) -> C;
+
+/// The command a row dragged to a new place makes, from its key and the place.
+pub type Mover<C> = Box<dyn Fn(u128, usize) -> C>;
+
 /// The flat tree a view builds: every component on screen, in building order, with stable ids. Its vectors keep their capacity, so building it again allocates nothing in steady state.
 pub struct Tree<C> {
     pub nodes: Vec<Node>,
@@ -276,11 +282,15 @@ pub struct Tree<C> {
     pub sets: Vec<(ledger::Value, String)>,
     /// Whether forms show only the settings that differ from their defaults.
     pub only_changed: bool,
+    /// The containers that take files dropped from the system, each with the command a file makes.
+    pub files: Vec<(u32, Takes<C>)>,
+    /// The lists whose rows can be dragged to a new place, each with the command a move makes from the row's key and the place it goes.
+    pub moves: Vec<(u32, Mover<C>)>,
 }
 
 impl<C> Default for Tree<C> {
     fn default() -> Self {
-        Self { nodes: Vec::new(), text: String::new(), commands: Vec::new(), counts: HashMap::new(), index: HashMap::new(), lists: Vec::new(), calendar: Calendar::default(), changes: None, sets: Vec::new(), only_changed: false }
+        Self { nodes: Vec::new(), text: String::new(), commands: Vec::new(), counts: HashMap::new(), index: HashMap::new(), lists: Vec::new(), calendar: Calendar::default(), changes: None, sets: Vec::new(), only_changed: false, files: Vec::new(), moves: Vec::new() }
     }
 }
 
@@ -291,6 +301,8 @@ impl<C> Tree<C> {
         self.text.clear();
         self.commands.clear();
         self.sets.clear();
+        self.files.clear();
+        self.moves.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;

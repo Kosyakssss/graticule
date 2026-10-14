@@ -36,18 +36,82 @@ impl Theme {
         }
     }
 
-    pub fn texts(&self) -> [(&'static str, Color); 9] {
-        [
-            ("ink", self.ink),
-            ("muted", self.muted),
-            ("link", self.link),
-            ("visited", self.visited),
-            ("danger", self.danger),
-            ("warn", self.warn),
-            ("ok", self.ok),
-            ("faint", self.faint),
-            ("rule", self.rule),
-        ]
+    /// The color of a named ink.
+    pub fn get(&self, ink: Ink) -> Color {
+        match ink {
+            Ink::Background => self.bg,
+            Ink::Ink => self.ink,
+            Ink::Muted => self.muted,
+            Ink::Faint => self.faint,
+            Ink::Rule => self.rule,
+            Ink::Cursor => self.cursor,
+            Ink::Hover => self.hover,
+            Ink::Selection => self.selection,
+            Ink::Field => self.field,
+            Ink::Link => self.link,
+            Ink::Visited => self.visited,
+            Ink::Danger => self.danger,
+            Ink::Warn => self.warn,
+            Ink::Ok => self.ok,
+        }
+    }
+}
+
+/// One of the theme's semantic inks, by name, for code that draws in a chosen ink rather than a fixed color.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Ink {
+    Background,
+    Ink,
+    Muted,
+    Faint,
+    Rule,
+    Cursor,
+    Hover,
+    Selection,
+    Field,
+    Link,
+    Visited,
+    Danger,
+    Warn,
+    Ok,
+}
+
+impl Ink {
+    /// Every ink, surfaces first, then the inks for text and lines.
+    pub const ALL: [Ink; 14] = [Ink::Background, Ink::Field, Ink::Hover, Ink::Cursor, Ink::Selection, Ink::Ink, Ink::Muted, Ink::Faint, Ink::Rule, Ink::Link, Ink::Visited, Ink::Danger, Ink::Warn, Ink::Ok];
+
+    /// The ink's name, as theme files and Specimen call it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Ink::Background => "background",
+            Ink::Ink => "ink",
+            Ink::Muted => "muted",
+            Ink::Faint => "faint",
+            Ink::Rule => "rule",
+            Ink::Cursor => "cursor",
+            Ink::Hover => "hover",
+            Ink::Selection => "selection",
+            Ink::Field => "field",
+            Ink::Link => "link",
+            Ink::Visited => "visited",
+            Ink::Danger => "danger",
+            Ink::Warn => "warn",
+            Ink::Ok => "ok",
+        }
+    }
+
+    /// Whether the ink is a surface that things are drawn on, rather than one that text and lines are drawn in.
+    pub fn surface(self) -> bool {
+        matches!(self, Ink::Background | Ink::Field | Ink::Hover | Ink::Cursor | Ink::Selection)
+    }
+
+    /// The contrast an ink for text must reach on the background, by the theme's law: 4.5, or 3 for faint text. Surfaces and rules have none.
+    pub fn needs(self) -> Option<f32> {
+        match self {
+            Ink::Rule | Ink::Background | Ink::Field | Ink::Hover | Ink::Cursor | Ink::Selection => None,
+            Ink::Faint => Some(3.0),
+            _ => Some(4.5),
+        }
     }
 }
 
@@ -129,3 +193,22 @@ pub fn contrast(a: Color, b: Color) -> f32 {
     let (x, y) = (lum(a), lum(b));
     (x.max(y) + 0.05) / (x.min(y) + 0.05)
 }
+
+impl ledger::Field for Ink {
+    ledger::register!(Ink);
+
+    fn same(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn value(&self) -> ledger::Value {
+        ledger::Value::Variant(format!("{self:?}"), Box::new(ledger::Value::Unit))
+    }
+
+    fn from_value(value: &ledger::Value) -> Option<Self> {
+        let ledger::Value::Variant(name, _) = value else { return None };
+        Ink::ALL.into_iter().find(|ink| format!("{ink:?}") == *name)
+    }
+}
+
+impl ledger::Document for Ink {}

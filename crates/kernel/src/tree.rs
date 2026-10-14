@@ -6,6 +6,7 @@ use ledger::ErasedPath;
 
 use crate::builtin::Builtin;
 use crate::grid::Area;
+use crate::ink::Ink;
 
 pub const NONE: u32 = u32::MAX;
 
@@ -103,6 +104,7 @@ pub enum Kind {
     Note,
     Palette,
     Choice { chosen: bool },
+    Swatch { ink: Ink },
 }
 
 impl Kind {
@@ -134,6 +136,7 @@ impl Kind {
             Kind::Note => "alert",
             Kind::Palette => "dialog",
             Kind::Choice { .. } => "option",
+            Kind::Swatch { .. } => "swatch",
         }
     }
 }

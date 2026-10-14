@@ -5,6 +5,7 @@ use std::panic::Location;
 
 use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
+use crate::ink::Ink;
 use crate::message::Message;
 use crate::tree::{Id, Kind, ListInfo, NONE, Span, Tone, Tree};
 
@@ -132,6 +133,7 @@ impl<'a, C, S> Ui<'a, C, S> {
     #[track_caller]
     pub fn columns(&mut self, f: impl FnOnce(&mut Ui<'_, C, S>)) {
         let i = self.add(Kind::Columns, Location::caller());
+        self.tree.nodes[i as usize].span = crate::tree::Fill;
         let subject = self.subject;
         f(&mut self.child(i, subject));
     }
@@ -168,6 +170,14 @@ impl<'a, C, S> Ui<'a, C, S> {
     pub fn strong(&mut self, text: impl AsRef<str>) {
         let i = self.add(Kind::Text { mono: false, tone: Tone::Ink, strong: true }, Location::caller());
         let r = self.tree.put(text.as_ref());
+        self.tree.nodes[i as usize].text = r;
+    }
+
+    /// A small box filled with one of the theme's inks, which follows the theme and the appearance. A screen reader reads the ink's name.
+    #[track_caller]
+    pub fn swatch(&mut self, ink: Ink) {
+        let i = self.add(Kind::Swatch { ink }, Location::caller());
+        let r = self.tree.put(ink.name());
         self.tree.nodes[i as usize].text = r;
     }
 

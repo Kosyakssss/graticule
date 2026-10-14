@@ -320,6 +320,13 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             scrollbar(p, track, first, shown, count);
         }
         (Layer::Over, Kind::Empty) => {}
+        (Layer::Under, Kind::Swatch { ink }) => {
+            let r = p.rect(n.area);
+            let (color, rule) = (p.theme.get(ink), p.theme.rule);
+            p.fill(r, color);
+            let t = p.m.hair();
+            border(p, r, t, rule);
+        }
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);

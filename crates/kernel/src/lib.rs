@@ -30,6 +30,7 @@ pub mod ui;
 pub use accesskit;
 pub use app::{App, Cx, Effect, Failure, Moment, Path, Said, States};
 pub use command::{Available, Commands, Entry, Form, Subject, no_if};
+pub use ink::Ink;
 pub use message::Message;
 pub use tree::{Fill, Span, cols};
 pub use ui::{Bind, Ui};

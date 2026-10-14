@@ -7,7 +7,7 @@ pub use ledger;
 pub mod prelude {
     pub use graticule_macros::{Commands, Facts, t};
     pub use kernel::Available::{self, No, Yes};
-    pub use kernel::{App, Cx, Failure, Fill, Message, Moment, Path, States, Ui, cols, no_if};
+    pub use kernel::{App, Cx, Failure, Fill, Ink, Message, Moment, Path, States, Ui, cols, no_if};
     pub use ledger::{Edit, Key, List, Outcome, Selection, Text};
 }
 

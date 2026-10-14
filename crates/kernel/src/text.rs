@@ -463,7 +463,7 @@ impl Text {
         let key = Self::key_of(spans, size, line, wrap);
         let layout = self.layout_at(key, spans, size, line, wrap);
         let (width, height) = (layout.width(), layout.height());
-        let cut = p.limit.filter(|l| width > *l).map(|l| l - ellipsis);
+        let cut = p.limit.filter(|l| width > *l + 0.5).map(|l| l - ellipsis);
         let mut truncated = false;
         let mut end = 0.0f32;
         'lines: for l in layout.lines() {

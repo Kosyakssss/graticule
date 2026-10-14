@@ -7,6 +7,7 @@ pub const GAP: i32 = 2;
 pub const MARGIN: i32 = 2;
 pub const CHECK: i32 = 3;
 pub const BUTTON: i32 = 3;
+pub const SWATCH: i32 = 4;
 const BUTTON_MIN: i32 = 16;
 
 /// Lays a tree out in whole cells: each node's `Area` from its parent's, top down, measuring text in columns as it goes.
@@ -123,6 +124,7 @@ impl<'t> Layout<'t> {
                 (CHECK + 1 + label.min(8), CHECK + 1 + label)
             }
             Kind::Field => (16, 32),
+            Kind::Swatch { .. } => (SWATCH, SWATCH),
             Kind::Row | Kind::ListRow { .. } | Kind::Columns => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref, mut count) = (0, 0, 0);
@@ -199,19 +201,42 @@ impl<'t> Layout<'t> {
                 over -= cut;
             }
         } else if weight > 0 {
-            let spare = room - used;
-            let mut given = 0;
-            let mut seen = 0u32;
+            let fill = |k: usize| match tree.nodes[self.stack[k] as usize].span.width {
+                Width::Fill(n) => Some(n as u32),
+                _ => None,
+            };
+            let mut pool = room;
             for k in start..end {
-                let c = self.stack[k];
-                let span = tree.nodes[c as usize].span;
-                if let Width::Fill(n) = span.width {
-                    seen += n as u32;
-                    let share = (spare as i64 * seen as i64 / weight as i64) as i32 - given;
-                    given += share;
-                    let w = &mut self.widths[at + k - start];
-                    *w = (*w + share).min(span.max);
+                let w = &mut self.widths[at + k - start];
+                if fill(k).is_some() {
+                    *w = -(*w + 1);
+                } else {
+                    pool -= *w;
                 }
+            }
+            let mut changed = true;
+            while changed {
+                changed = false;
+                for k in start..end {
+                    let w = self.widths[at + k - start];
+                    let Some(n) = fill(k).filter(|_| w < 0) else { continue };
+                    let min = -w - 1;
+                    if (pool as i64 * n as i64) < (min as i64 * weight as i64) {
+                        self.widths[at + k - start] = min;
+                        pool -= min;
+                        weight -= n;
+                        changed = true;
+                    }
+                }
+            }
+            let (mut given, mut seen) = (0, 0u32);
+            for k in start..end {
+                let w = &mut self.widths[at + k - start];
+                let Some(n) = fill(k).filter(|_| *w < 0) else { continue };
+                seen += n;
+                let share = (pool as i64 * seen as i64 / weight as i64) as i32 - given;
+                given += share;
+                *w = share.min(tree.nodes[self.stack[k] as usize].span.max);
             }
         }
         at
@@ -226,7 +251,7 @@ impl<'t> Layout<'t> {
                 self.wrapped_as(tree.str(n.text), style, cols)
             }
             Kind::Check { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
-            Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Link | Kind::Field | Kind::Status | Kind::Note => 1,
+            Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Link | Kind::Field | Kind::Status | Kind::Note | Kind::Swatch { .. } => 1,
             Kind::List { .. } => 3,
             Kind::Bar => {
                 let (start, end) = self.children(tree, i);
@@ -373,7 +398,8 @@ impl<'t> Layout<'t> {
                 self.rows(tree, c, area.cols)
             };
             let rows = rows.min(area.bottom() - row).max(0);
-            let a = if rows > 0 { Area::new(area.col, row, area.cols, rows) } else { Area::default() };
+            let cols = if matches!(tree.nodes[c as usize].kind, Kind::Button | Kind::Link | Kind::Swatch { .. }) { self.size(tree, c).1.min(area.cols) } else { area.cols };
+            let a = if rows > 0 { Area::new(area.col, row, cols, rows) } else { Area::default() };
             self.place(tree, c, a);
             row += rows + gap;
         }

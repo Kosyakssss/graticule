@@ -30,6 +30,18 @@ Between the view and the pixels sits a tree: a list of every box on screen, what
 
 Everything reads that one tree: drawing, clicking, screen readers, Specimen, Scope, the taste checks, printing.
 
+## From a click to the screen
+
+Say you tick an item in a to-do list.
+
+1. Graticule looks up which box is under the mouse in the last tree. Every square of the grid already knows its box, so this is instant.
+2. The box knows its command: "mark ‘buy milk’ done". Graticule checks the command is still allowed, then runs it, and the facts change.
+3. Ledger writes down exactly what changed (this item, done is now yes), which is what undo, saving and sync use later.
+4. The view builds a fresh tree from the new facts. In a list of ten thousand items only the rows on screen are built.
+5. Graticule compares the new tree with the last one, finds that one row changed, and redraws only that row.
+
+Typing works the same way: each keystroke is a small command that changes the field's text, so it can be undone like anything else. When nothing happens, none of this runs.
+
 ## Commands are everywhere at once
 
 Every command has a name and a label. From that single list Graticule makes the action bar, the help page, the palette, the menus, the right-click menus and the keys. Keys live in a separate file you can edit while the app runs. Press the first key of a sequence and the bar shows what can come next, like Helix.

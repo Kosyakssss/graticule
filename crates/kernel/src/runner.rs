@@ -22,13 +22,21 @@ use crate::metrics::Metrics;
 use crate::paint::Painter;
 use crate::shell::{Button, Face, Frame, Input, Mods, Seen, Waker};
 use crate::text::Text;
-use crate::tree::{Id, Kind, ListInfo, NONE, Range32, Tree};
+use crate::tree::{Anchor, Id, Kind, ListInfo, NONE, Range32, Tree};
 use crate::ui::{Scroll, Scrolls, Ui};
 use crate::value::{Calendar, Dates};
 
 const CHOICES: usize = 12;
 const PALETTE: Id = Id(0x9a1e_77e5_0000_0001);
 const COPY: Id = Id(0x9a1e_77e5_0000_0002);
+const MENU: Id = Id(0x9a1e_77e5_0000_0003);
+
+/// A context menu drawn by Graticule as an anchored overlay, where the system has none: the cell it opened on, its entries and where focus was before.
+struct Menu {
+    at: (i32, i32),
+    items: Vec<crate::menu::MenuItem>,
+    back: Option<Id>,
+}
 
 /// Where the user was: the focused component and its caret. Each undo step keeps it, so undo puts the user back.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -232,6 +240,7 @@ pub struct Runner<A: App> {
     naming: Option<String>,
     only_changed: bool,
     palette: Option<Palette>,
+    menu: Option<Menu>,
     clipboard: Option<arboard::Clipboard>,
     reveal: bool,
     ime: bool,
@@ -306,6 +315,7 @@ impl<A: App> Runner<A> {
             naming: None,
             only_changed: false,
             palette: None,
+            menu: None,
             clipboard: None,
             reveal: false,
             ime: false,
@@ -388,6 +398,7 @@ impl<A: App> Runner<A> {
         if self.palette.is_some() {
             self.build_palette(root, &here);
         }
+        self.build_menu(root);
         let note = self.tree.add(root, Kind::Note, Some(Id::ROOT.mix(1)), std::panic::Location::caller());
         match &self.said {
             Some(Said::Note(m)) => self.tree.nodes[note as usize].text = self.tree.put(m.as_str()),
@@ -414,6 +425,75 @@ impl<A: App> Runner<A> {
         self.composed = if self.composing.is_empty() { Range32::default() } else { self.tree.put(&self.composing) };
         self.stale = false;
         self.laid = false;
+    }
+
+    fn build_menu(&mut self, root: u32) {
+        let Some(menu) = &self.menu else { return };
+        let ((col, row), items) = (menu.at, menu.items.clone());
+        let at = std::panic::Location::caller();
+        let overlay = self.tree.add(root, Kind::Overlay { anchor: Anchor::Cell { col, row } }, Some(MENU), at);
+        for (k, item) in items.into_iter().enumerate() {
+            let e = self.tree.add(overlay, Kind::Entry, Some(MENU.mix(k as u64)), at);
+            let (text, keys) = (self.tree.put(&item.label), self.tree.put(&item.keys.map(|c| c.to_string()).unwrap_or_default()));
+            let n = &mut self.tree.nodes[e as usize];
+            (n.text, n.name, n.keys, n.enabled, n.subject) = (text, text, keys, item.enabled, Some(item.id as u128));
+        }
+    }
+
+    /// Opens the context menu drawn as an overlay at a cell, with its first entry that can run focused.
+    pub fn open_menu(&mut self, col: i32, row: i32) -> bool {
+        let items = self.menu_at(col, row);
+        if items.is_empty() {
+            return false;
+        }
+        let back = self.menu.take().map_or(self.focus, |m| m.back);
+        self.focus = items.iter().position(|i| i.enabled).map(|k| MENU.mix(k as u64));
+        self.menu = Some(Menu { at: (col, row), items, back });
+        self.stale = true;
+        true
+    }
+
+    fn close_menu(&mut self) -> bool {
+        let Some(menu) = self.menu.take() else { return false };
+        self.focus = menu.back;
+        self.stale = true;
+        true
+    }
+
+    fn menu_key(&mut self, chord: Chord) -> Option<bool> {
+        if chord.mods != Mods::default() {
+            self.close_menu();
+            return None;
+        }
+        match chord.key {
+            Key::Escape => Some(self.close_menu()),
+            Key::Up | Key::Down => {
+                let entries: Vec<Id> = self.tree.nodes.iter().filter(|n| n.kind == Kind::Entry && n.enabled).map(|n| n.id).collect();
+                let at = self.focus.and_then(|f| entries.iter().position(|&e| e == f));
+                let len = entries.len().max(1);
+                let next = match (at, chord.key) {
+                    (Some(at), Key::Up) => (at + len - 1) % len,
+                    (Some(at), _) => (at + 1) % len,
+                    (None, Key::Up) => len - 1,
+                    (None, _) => 0,
+                };
+                self.focus = entries.get(next).copied();
+                self.stale = true;
+                Some(true)
+            }
+            Key::Enter | Key::Char(' ') => {
+                let i = self.focus.and_then(|f| self.tree.find(f)).filter(|&i| self.tree.nodes[i as usize].kind == Kind::Entry)?;
+                Some(self.activate(i, Mods::default()))
+            }
+            _ => {
+                self.close_menu();
+                None
+            }
+        }
+    }
+
+    fn on_entry(&self, col: i32, row: i32) -> bool {
+        self.hit(col, row).is_some_and(|i| self.tree.nodes[i as usize].kind == Kind::Entry)
     }
 
     fn build_bar(&mut self, bar: u32, here: &Here) {
@@ -2170,6 +2250,11 @@ impl<A: App> Runner<A> {
         if self.palette.is_some() {
             return self.palette_key(chord, text);
         }
+        if self.menu.is_some()
+            && let Some(done) = self.menu_key(chord)
+        {
+            return done;
+        }
         if self.sheet.is_some() && self.pending.is_empty() && chord.mods == Mods::default() {
             let page = self.metrics.map_or(30, |m| m.screen().rows - HELP_CHROME).max(1);
             let by = match chord.key {
@@ -2502,6 +2587,15 @@ impl<A: App> Runner<A> {
                 self.stale = true;
                 self.fire(i)
             }
+            Kind::Entry => {
+                let Some(target) = n.subject else { return false };
+                self.close_menu();
+                if self.stale {
+                    self.build();
+                }
+                self.choose_from_menu(target as u64);
+                true
+            }
             Kind::ListRow { key, .. } => {
                 let Some(list) = self.tree.ancestor(n.parent, |p| matches!(p.kind, Kind::List { .. })).map(|l| self.tree.nodes[l as usize].list).and_then(|l| self.tree.lists.get(l as usize).copied())
                 else {
@@ -2527,6 +2621,9 @@ impl<A: App> Runner<A> {
     pub fn click(&mut self, col: i32, row: i32) -> bool {
         if self.inspecting {
             return self.inspect_at(col, row);
+        }
+        if self.menu.is_some() && !self.on_entry(col, row) {
+            return self.close_menu();
         }
         match self.hit(col, row) {
             Some(i) => self.activate(i, Mods::default()),
@@ -2835,7 +2932,11 @@ impl<A: App> Face for Runner<A> {
     fn menu(&mut self, frame: &mut Frame) -> Vec<crate::menu::MenuItem> {
         let Some((x, y)) = frame.pointer else { return Vec::new() };
         let (col, row) = frame.metrics.cell_at(x, y);
-        self.menu_at(col, row)
+        if cfg!(target_os = "macos") {
+            return self.menu_at(col, row);
+        }
+        self.open_menu(col, row);
+        Vec::new()
     }
 
     fn choose(&mut self, id: u64) -> bool {
@@ -2898,6 +2999,15 @@ impl<A: App> Face for Runner<A> {
                 self.hover = None;
                 self.status();
                 true
+            }
+            Input::Press { .. }
+                if self.menu.is_some()
+                    && !frame.pointer.is_some_and(|(x, y)| {
+                        let (col, row) = frame.metrics.cell_at(x, y);
+                        self.on_entry(col, row)
+                    }) =>
+            {
+                self.close_menu()
             }
             Input::Press { button: Button::Left, clicks } => {
                 if self.inspecting

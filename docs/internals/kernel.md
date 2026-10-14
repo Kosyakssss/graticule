@@ -198,6 +198,10 @@ A further step, which the owner asked to have measured: most of a Graticule scre
 
 The quads are kept in two layers, under and over: a list row's selection and hover fills go under, everything a component draws of itself goes over, because a row's fill must lie beneath its children's text even when the children's ranges come first in the buffer. Each node owns a range in each layer; a node that changed rewrites its range, or moves to a bigger free one, and blanks what it no longer uses; a node that is gone frees its ranges. Only the span between the first and last changed quad is sent to the GPU. When the glyph atlas fills up and starts over, every kept glyph quad points at the wrong pixels, so the kept list starts over with it.
 
+### 7.3 Anchored overlays
+
+An overlay (spec §4.4) is a node of kind `Overlay` whose anchor is the node that opened it or the cell the pointer was on. It and everything inside it are marked `over` when the tree is built. Layout leaves overlays out of their parent's flow, so they take no room, and places each one after the rest of the tree: as wide as its content wants plus a column each side, under its anchor if it fits, else above, else wherever the window has room, and never past the window's edges. Kept quads have two more layers for them, under and over again, drawn after the page's two, so an overlay covers whatever it lies on however the buffer ranges fall. The hit cells are filled twice, page first, then overlays; an overlay's own box marks its cells as covered, so a click on its background reaches nothing beneath. It is painted as a box on the grid with the style's hard shadow, like a button.
+
 A law (§19) checks that patching the quad list gives the same pixels as building it from scratch. It compares the quads themselves, layer by layer, which is enough because boxes on the grid never overlap.
 
 ## 8. Hit testing

@@ -101,7 +101,7 @@ pub struct Gpu {
     blank: wgpu::BindGroup,
     pictures: std::collections::HashMap<u32, (wgpu::Texture, wgpu::BindGroup)>,
     runs: Vec<(u32, std::ops::Range<u32>)>,
-    kept: [(wgpu::Buffer, usize, usize); 2],
+    kept: [(wgpu::Buffer, usize, usize); 4],
     next: Next,
     clear: [f32; 4],
 }
@@ -250,7 +250,7 @@ impl Gpu {
 
         let capacity = 4096;
         let instances = Self::instance_buffer(&device, capacity);
-        let kept = [(Self::instance_buffer(&device, capacity), capacity, 0), (Self::instance_buffer(&device, capacity), capacity, 0)];
+        let kept = std::array::from_fn(|_| (Self::instance_buffer(&device, capacity), capacity, 0));
 
         Self {
             surface,
@@ -400,7 +400,7 @@ impl Gpu {
 
     /// Sends the kept layers' changed quads to the GPU: only the dirty range of each, unless a layer outgrew its buffer.
     #[profiling::function]
-    pub fn keep(&mut self, layers: [&[Quad]; 2], dirty: [Option<std::ops::Range<usize>>; 2]) -> usize {
+    pub fn keep(&mut self, layers: [&[Quad]; 4], dirty: [Option<std::ops::Range<usize>>; 4]) -> usize {
         let mut sent = 0;
         for (k, quads) in layers.into_iter().enumerate() {
             let (buffer, cap, len) = &mut self.kept[k];

@@ -302,8 +302,8 @@ impl<F: Face> Running<F> {
             }
             match kept {
                 Some(kept) => {
-                    let [under, over] = &mut kept.layers;
-                    gpu.keep([&under.quads, &over.quads], [under.dirty.take(), over.dirty.take()]);
+                    let [a, b, c, d] = &mut kept.layers;
+                    gpu.keep([&a.quads, &b.quads, &c.quads, &d.quads], [a.dirty.take(), b.dirty.take(), c.dirty.take(), d.dirty.take()]);
                     gpu.show_kept(theme.bg);
                 }
                 None => gpu.show(quads, theme.bg),

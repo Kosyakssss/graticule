@@ -19,6 +19,8 @@ fn role(kind: Kind) -> Role {
         Kind::Status => Role::Status,
         Kind::Note => Role::Alert,
         Kind::Palette => Role::Dialog,
+        Kind::Overlay { .. } => Role::Menu,
+        Kind::Entry => Role::MenuItem,
         Kind::Choice { .. } => Role::ListBoxOption,
         Kind::Swatch { .. } | Kind::Picture { .. } => Role::Image,
     }

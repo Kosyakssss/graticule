@@ -17,6 +17,7 @@ struct Slot {
 #[derive(Clone, Copy, Debug)]
 struct Entry {
     slots: [Slot; 2],
+    base: usize,
     area: Area,
     hash: u64,
     look: Look,
@@ -97,10 +98,10 @@ fn blank() -> Quad {
     Quad { pos: [0.0; 2], size: [0.0; 2], uv: [0.0; 4], color: [0.0; 4], clip: [0.0; 4], kind: 0, image: 0, pad: [0; 2] }
 }
 
-/// The frame as two kept lists of quads, under and over, patched from one frame to the next by comparing nodes by id.
+/// The frame as four kept lists of quads, patched from one frame to the next by comparing nodes by id: under and over for the page, then under and over for anchored overlays, which are drawn above everything else.
 #[derive(Default)]
 pub struct Kept {
-    pub layers: [Quads; 2],
+    pub layers: [Quads; 4],
     entries: HashMap<Id, Entry>,
     scratch: [Vec<Quad>; 2],
     frame: u64,
@@ -128,7 +129,9 @@ impl Kept {
         let frame = self.frame;
         for (i, n) in tree.nodes.iter().enumerate() {
             let l = look(n.id);
+            let base = if n.over { 2 } else { 0 };
             if let Some(e) = self.entries.get_mut(&n.id)
+                && e.base == base
                 && e.area == n.area
                 && e.hash == n.hash
                 && e.look == l
@@ -138,7 +141,16 @@ impl Kept {
                 continue;
             }
             self.repainted += 1;
-            let old = self.entries.get(&n.id).map(|e| e.slots).unwrap_or_default();
+            let old = match self.entries.get(&n.id) {
+                Some(e) if e.base == base => e.slots,
+                Some(e) => {
+                    for (k, slot) in e.slots.into_iter().enumerate() {
+                        self.layers[e.base + k].release(slot);
+                    }
+                    [Slot::default(); 2]
+                }
+                None => [Slot::default(); 2],
+            };
             let mut slots = [Slot::default(); 2];
             for (k, layer) in [Layer::Under, Layer::Over].into_iter().enumerate() {
                 let mut out = std::mem::take(&mut self.scratch[k]);
@@ -146,27 +158,28 @@ impl Kept {
                 let saved = std::mem::replace(p.quads, out);
                 components::paint(p, tree, i as u32, l, layer);
                 let out = std::mem::replace(p.quads, saved);
-                slots[k] = self.layers[k].write(old[k], &out);
+                slots[k] = self.layers[base + k].write(old[k], &out);
                 self.scratch[k] = out;
             }
-            self.entries.insert(n.id, Entry { slots, area: n.area, hash: n.hash, look: l, frame });
+            self.entries.insert(n.id, Entry { slots, base, area: n.area, hash: n.hash, look: l, frame });
         }
         let layers = &mut self.layers;
         self.entries.retain(|_, e| {
             if e.frame == frame {
                 return true;
             }
-            for (k, l) in layers.iter_mut().enumerate() {
-                l.release(e.slots[k]);
+            for (k, slot) in e.slots.into_iter().enumerate() {
+                layers[e.base + k].release(slot);
             }
             false
         });
     }
 
-    /// Every quad, under then over, for drawing in one go.
+    /// Every quad, in drawing order, for drawing in one go.
     pub fn all(&self, out: &mut Vec<Quad>) {
         out.clear();
-        out.extend_from_slice(&self.layers[0].quads);
-        out.extend_from_slice(&self.layers[1].quads);
+        for layer in &self.layers {
+            out.extend_from_slice(&layer.quads);
+        }
     }
 }

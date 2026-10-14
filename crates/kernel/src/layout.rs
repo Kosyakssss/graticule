@@ -2,7 +2,7 @@ use crate::grid::Area;
 use crate::metrics::Metrics;
 use crate::picture::Picture;
 use crate::text::{SpanStyle, Text, TextStyle};
-use crate::tree::{Kind, NONE, Tree, Width};
+use crate::tree::{Anchor, Kind, NONE, Tree, Width};
 use crate::value::Value;
 
 pub const GAP: i32 = 2;
@@ -93,7 +93,9 @@ impl<'t> Layout<'t> {
         let start = self.stack.len();
         let mut c = tree.nodes[i as usize].first;
         while c != NONE {
-            self.stack.push(c);
+            if !matches!(tree.nodes[c as usize].kind, Kind::Overlay { .. }) {
+                self.stack.push(c);
+            }
             c = tree.nodes[c as usize].next;
         }
         (start, self.stack.len())
@@ -116,7 +118,7 @@ impl<'t> Layout<'t> {
                 let c = self.cols(tree.str(n.text), true) + BUTTON;
                 (c.min(BUTTON_MIN + BUTTON), c)
             }
-            Kind::Action | Kind::Choice { .. } => {
+            Kind::Action | Kind::Choice { .. } | Kind::Entry => {
                 let keys = tree.str(n.keys);
                 let keys = if keys.is_empty() { 0 } else { self.cols(keys, true) + 1 };
                 let c = self.cols(tree.str(n.text), false) + 2 + keys;
@@ -157,7 +159,7 @@ impl<'t> Layout<'t> {
                 let gaps = GAP * (count - 1).max(0);
                 (min + gaps, pref + gaps)
             }
-            Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Bar | Kind::Palette | Kind::List { .. } => {
+            Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Bar | Kind::Palette | Kind::List { .. } | Kind::Overlay { .. } => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref) = (0, 0);
                 for k in start..end {
@@ -168,7 +170,7 @@ impl<'t> Layout<'t> {
                 self.release(start);
                 match n.kind {
                     Kind::Page => (min + MARGIN * 2, pref + MARGIN * 2),
-                    Kind::List { .. } => (min + 2, pref + 2),
+                    Kind::List { .. } | Kind::Overlay { .. } => (min + 2, pref + 2),
                     _ => (min, pref),
                 }
             }
@@ -272,7 +274,7 @@ impl<'t> Layout<'t> {
             Kind::Check { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
             Kind::Value { value: Value::Error } => self.wrapped(tree.str(n.text), false, cols),
             Kind::Value { .. } => 1,
-            Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Link | Kind::Field | Kind::Status | Kind::Note | Kind::Swatch { .. } => 1,
+            Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Entry | Kind::Link | Kind::Field | Kind::Status | Kind::Note | Kind::Swatch { .. } => 1,
             Kind::Picture { rows, .. } => rows,
             Kind::List { .. } => 3,
             Kind::Bar => {
@@ -312,9 +314,13 @@ impl<'t> Layout<'t> {
                 self.release(start);
                 rows
             }
-            Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Palette => {
+            Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Palette | Kind::Overlay { .. } => {
                 let (start, end) = self.children(tree, i);
-                let inner = if n.kind == Kind::Page { cols - MARGIN * 2 } else { cols };
+                let inner = match n.kind {
+                    Kind::Page => cols - MARGIN * 2,
+                    Kind::Overlay { .. } => cols - 2,
+                    _ => cols,
+                };
                 let gap = i32::from(matches!(n.kind, Kind::Page | Kind::Empty));
                 let mut rows = 0;
                 for k in start..end {
@@ -357,6 +363,31 @@ impl<'t> Layout<'t> {
             self.place(tree, page, rest);
         }
         self.release(start);
+        for i in 0..tree.nodes.len() as u32 {
+            if let Kind::Overlay { anchor } = tree.nodes[i as usize].kind {
+                let at = match anchor {
+                    Anchor::Node(n) => tree.nodes.get(n as usize).map_or(Area::default(), |n| n.area),
+                    Anchor::Cell { col, row } => Area::new(col, row, 1, 1),
+                };
+                let area = self.anchored(tree, i, at, screen);
+                self.place(tree, i, area);
+            }
+        }
+    }
+
+    /// Where an overlay goes: under what it hangs from if it fits there, else above, else wherever it fits best, never past the window's edges.
+    fn anchored<C>(&mut self, tree: &Tree<C>, i: u32, at: Area, screen: Area) -> Area {
+        let cols = self.size(tree, i).1.min(screen.cols);
+        let rows = self.rows(tree, i, cols).min(screen.rows);
+        let row = if at.bottom() + rows <= screen.bottom() {
+            at.bottom()
+        } else if at.row - rows >= screen.row {
+            at.row - rows
+        } else {
+            (screen.bottom() - rows).max(screen.row)
+        };
+        let col = at.col.min(screen.right() - cols).max(screen.col);
+        Area::new(col, row, cols, rows)
     }
 
     pub fn place<C>(&mut self, tree: &mut Tree<C>, i: u32, area: Area) {
@@ -369,6 +400,7 @@ impl<'t> Layout<'t> {
                 self.stack_down(tree, i, inner, 1);
             }
             Kind::Root | Kind::Column | Kind::Palette => self.stack_down(tree, i, area, 0),
+            Kind::Overlay { .. } => self.stack_down(tree, i, Area::new(area.col + 1, area.row, area.cols - 2, area.rows), 0),
             Kind::Empty => self.stack_down(tree, i, area, 1),
             Kind::Row | Kind::ListRow { .. } | Kind::Columns => self.side_by_side(tree, i, area),
             Kind::List { .. } => self.list(tree, i, area),

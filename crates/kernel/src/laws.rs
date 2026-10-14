@@ -306,7 +306,7 @@ mod tree {
             let mut fresh = Kept::default();
             let mut p = Painter::new(&mut quads, &mut text, m, crate::look::Look::of(crate::ink::Appearance::Light));
             fresh.update(&mut p, &tree, look);
-            for k in 0..2 {
+            for k in 0..kept.layers.len() {
                 prop_assert_eq!(drawn(&kept.layers[k].quads), drawn(&fresh.layers[k].quads));
             }
         }

@@ -161,6 +161,21 @@ fn action(p: &mut Painter, n: &Node, label: &str, keys: &str, look: Look) {
     p.text(label, style, (x, r.y), Some(r.right() - x), ink);
 }
 
+fn entry(p: &mut Painter, n: &Node, label: &str, keys: &str) {
+    let r = p.rect(n.area);
+    let theme = p.theme;
+    let mut right = r.right();
+    if !keys.is_empty() {
+        let w = p.measure(keys, p.m.mono());
+        right -= (w / p.m.cell_w).ceil() * p.m.cell_w + p.m.cell_w * 0.5;
+        keycap(p, (right, r.y), keys, n.enabled);
+        right -= p.m.cell_w;
+    }
+    let ink = if n.enabled { theme.ink } else { theme.faint };
+    let style = p.m.sans(400.0);
+    p.text(label, style, (r.x, r.y), Some((right - r.x).max(0.0)), ink);
+}
+
 fn choice(p: &mut Painter, n: &Node, chosen: bool, label: &str, keys: &str, reason: &str, look: Look) {
     let r = p.rect(n.area);
     let theme = p.theme;
@@ -304,6 +319,22 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let width = p.m.width;
             p.fill(Rect::new(0.0, r.y, width, t), rule);
         }
+        (Layer::Under, Kind::Overlay { .. }) => {
+            let outer = p.rect(n.area);
+            let d = shadow(p);
+            let body = Rect::new(outer.x, outer.y, outer.w - d, outer.h - d);
+            let (theme, t) = (p.theme, p.style.line(p.m));
+            if d > 0.0 {
+                p.fill(Rect::new(body.x + d, body.y + d, body.w, body.h), theme.ink);
+            }
+            p.fill(body, theme.bg);
+            border(p, body, t, theme.ink);
+        }
+        (Layer::Under, Kind::Entry) if n.enabled && (look.hovered || look.focused) => {
+            let fill = if look.focused { p.theme.selection } else { p.theme.hover };
+            p.fill_area(n.area, fill);
+        }
+        (Layer::Over, Kind::Entry) => entry(p, &n, text, tree.str(n.keys)),
         (Layer::Over, Kind::Link) => {
             let ink = p.theme.link;
             link(p, &n, text, look, ink);

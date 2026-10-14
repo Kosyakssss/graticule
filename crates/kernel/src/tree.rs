@@ -109,15 +109,24 @@ pub enum Kind {
     Swatch { ink: Ink },
     Picture { picture: &'static Picture, rows: i32 },
     Value { value: Value },
+    Overlay { anchor: Anchor },
+    Entry,
+}
+
+/// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Anchor {
+    Node(u32),
+    Cell { col: i32, row: i32 },
 }
 
 impl Kind {
     pub fn acts(&self) -> bool {
-        matches!(self, Kind::Field | Kind::Check { .. } | Kind::Link | Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::ListRow { .. })
+        matches!(self, Kind::Field | Kind::Check { .. } | Kind::Link | Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::ListRow { .. } | Kind::Entry)
     }
 
     pub fn container(&self) -> bool {
-        matches!(self, Kind::Root | Kind::Page | Kind::Row | Kind::Column | Kind::Columns | Kind::List { .. } | Kind::ListRow { .. })
+        matches!(self, Kind::Root | Kind::Page | Kind::Row | Kind::Column | Kind::Columns | Kind::List { .. } | Kind::ListRow { .. } | Kind::Overlay { .. })
     }
 
     pub fn role(&self) -> &'static str {
@@ -143,6 +152,8 @@ impl Kind {
             Kind::Swatch { .. } => "swatch",
             Kind::Picture { .. } => "image",
             Kind::Value { .. } => "value",
+            Kind::Overlay { .. } => "menu",
+            Kind::Entry => "menu item",
         }
     }
 }
@@ -185,6 +196,8 @@ pub struct Node {
     pub many: u32,
     pub asks: u32,
     pub set: u32,
+    /// Whether the node is inside an anchored overlay, drawn and hit above everything else.
+    pub over: bool,
     pub at: &'static Location<'static>,
 }
 
@@ -215,6 +228,7 @@ impl Node {
             many: 0,
             asks: NONE,
             set: NONE,
+            over: false,
             at,
         }
     }
@@ -314,7 +328,10 @@ impl<C> Tree<C> {
             parent_id.at(at, n)
         });
         let index = self.nodes.len() as u32;
-        self.nodes.push(Node::new(id, parent, kind, at));
+        let mut node = Node::new(id, parent, kind, at);
+        let p = &self.nodes[parent as usize];
+        node.over = p.over || matches!(p.kind, Kind::Overlay { .. }) || matches!(kind, Kind::Overlay { .. });
+        self.nodes.push(node);
         let p = &mut self.nodes[parent as usize];
         if p.first == NONE {
             p.first = index;

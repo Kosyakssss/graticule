@@ -97,7 +97,7 @@ These need anchored overlays (build-plan item 14) or the grounded forms of overl
 | Combo box | ComboBox, Autocomplete | Suggest | anchored: completions under the field |
 | Multi-select | Select (multiple) | MultiSelect | |
 | Menu | Dropdown, Menu, MenuItem, MenuSection | Menu, MenuItem | built from the registry (§3.3) |
-| Context menu | | ContextMenu | the native menu on macOS, from the registry |
+| Context menu | | ContextMenu | from the registry: the native menu on macOS, an anchored overlay elsewhere |
 | Popover | Popover | Popover | anchored |
 | Confirm row | AlertDialog, Modal | Alert, Dialog | grounded: an inline row that asks |
 | Side panel | Drawer | Drawer | grounded: a pane that docks, not a sheet over the page |

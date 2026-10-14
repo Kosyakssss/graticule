@@ -20,6 +20,7 @@ ledger = { path = "crates/ledger" }
 graticule-macros = { path = "crates/macros" }
 kernel = { path = "crates/kernel" }
 specimen = { path = "crates/specimen" }
+assay = { path = "crates/assay" }
 graticule = { path = "crates/graticule" }
 proptest = "1.12.0"
 

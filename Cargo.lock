@@ -251,6 +251,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "assay"
+version = "0.1.0"
+dependencies = [
+ "allocation-counter",
+ "graticule-macros",
+ "kernel",
+ "ledger",
+ "proptest",
+]
+
+[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1150,6 +1161,7 @@ dependencies = [
 name = "graticule"
 version = "0.1.0"
 dependencies = [
+ "assay",
  "graticule-macros",
  "kernel",
  "ledger",
@@ -2902,6 +2914,7 @@ dependencies = [
 name = "specimen"
 version = "0.1.0"
 dependencies = [
+ "assay",
  "graticule-macros",
  "kernel",
  "ledger",

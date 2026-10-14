@@ -313,7 +313,7 @@ pub fn approve<A: App>() -> Result<(), String> {
     Ok(())
 }
 
-/// Runs one of Specimen's modes without a window, when the command line asks for one: `--render <folder> [--references <folder>]`, `--changes` or `--approve`. Returns `None` for anything else, so the caller opens its window.
+/// Runs one of Specimen's modes without a window, when the command line asks for one: `--render <folder> [--references <folder>]`, `--changes`, `--approve`, or `--assay` for Assay's report. Returns `None` for anything else, so the caller opens its window.
 pub fn offscreen<A: App>(mut args: impl Iterator<Item = String>) -> Option<Result<(), String>> {
     Some(match args.next()?.as_str() {
         "--render" => {
@@ -323,6 +323,7 @@ pub fn offscreen<A: App>(mut args: impl Iterator<Item = String>) -> Option<Resul
         }
         "--changes" => changes::<A>(),
         "--approve" => approve::<A>(),
+        "--assay" => assay::report::<A>(),
         _ => return None,
     })
 }

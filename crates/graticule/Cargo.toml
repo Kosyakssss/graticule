@@ -13,3 +13,7 @@ graticule-macros.workspace = true
 kernel.workspace = true
 ledger.workspace = true
 specimen.workspace = true
+assay.workspace = true
+
+[features]
+count-allocations = ["assay/count-allocations"]

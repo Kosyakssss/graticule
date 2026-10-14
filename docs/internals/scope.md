@@ -22,4 +22,4 @@ Scope is an ordinary Graticule app (`Scope`) with a thin face around its runner 
 
 ## Not yet
 
-The laws of §13.6 (with Scope off the frame time is the same; with Scope on the app stays within budget; Scope shows and subtracts its own cost) need the reference machine and release builds, and come with Assay's budgets (item 6). History and source locations, recorded only in development builds, come with item 19.
+The laws of §13.6 (with Scope off the frame time is the same; with Scope on the app stays within budget; Scope shows and subtracts its own cost) compare frame times with and without Scope, which only means something on the reference machine in release builds; they wait for it. Assay's budgets (`assay.md`) already judge the frames of every app. History and source locations, recorded only in development builds, come with item 19.

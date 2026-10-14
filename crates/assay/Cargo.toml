@@ -1,0 +1,21 @@
+[package]
+name = "assay"
+description = "AS-01, Assay: the universal laws, the taste laws and the budgets every Graticule app is held to."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kernel.workspace = true
+ledger.workspace = true
+allocation-counter = { version = "0.8.1", optional = true }
+
+[features]
+count-allocations = ["dep:allocation-counter"]
+
+[dev-dependencies]
+graticule-macros.workspace = true
+proptest.workspace = true

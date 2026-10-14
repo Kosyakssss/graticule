@@ -11,7 +11,7 @@ pub mod prelude {
     pub use ledger::{Edit, Key, List, Outcome, Selection, Text};
 }
 
-/// Opens the app's window with the facts it kept last time (fresh ones on the first launch) and runs it until the window closes, saving every change. With `--specimen`, it opens Specimen over the app instead: every named state, live on a copy, with nothing saved. With `--render <folder> [--references <folder>]`, it renders every named state in both appearances into that folder as pictures, with a page for review (`index.html`) that pins any reference images named after a state beside it, and prints how long each took to paint. With `--changes`, it prints what renders differently from the proofs last approved, in words; `--approve` approves them all as they are.
+/// Opens the app's window with the facts it kept last time (fresh ones on the first launch) and runs it until the window closes, saving every change. With `--specimen`, it opens Specimen over the app instead: every named state, live on a copy, with nothing saved. With `--render <folder> [--references <folder>]`, it renders every named state in both appearances into that folder as pictures, with a page for review (`index.html`) that pins any reference images named after a state beside it, and prints how long each took to paint. With `--changes`, it prints what renders differently from the proofs last approved, in words; `--approve` approves them all as they are. With `--assay`, it runs Assay over the app and prints what it found.
 pub fn run<A: kernel::App + Default>(title: kernel::Message) {
     let ran = specimen::offscreen::<A>(std::env::args().skip(1)).unwrap_or_else(|| match std::env::args().nth(1).as_deref() {
         Some("--specimen") => {

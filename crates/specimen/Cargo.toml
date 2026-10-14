@@ -10,5 +10,6 @@ workspace = true
 
 [dependencies]
 kernel.workspace = true
+assay.workspace = true
 ledger.workspace = true
 graticule-macros.workspace = true

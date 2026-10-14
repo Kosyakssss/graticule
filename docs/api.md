@@ -40,7 +40,7 @@ enum Cmd {
     Add,
     #[label(done: "Mark “{title}” not done", else: "Mark “{title}” done")]
     Toggle(#[subject] Key<Item>),
-    #[label("Remove “{title}”")]
+    #[label("Remove “{title}”", short: "Remove")]
     Remove(#[subject] Key<Item>),
     #[label("Clear finished")]
     ClearDone,
@@ -145,7 +145,7 @@ Reading it:
 - **`available` names every command.** There's no catch-all, so a new command can't become available by accident. Each "no" carries the reason the status line shows.
 - **`update` handles every case.** `change` and `remove` return `Nothing` if the item is gone by then. New keys come from `cx`, so replaying the history gives the same list.
 - **`#[subject]`**: inside a list row, `Cmd::Toggle` and `Cmd::Remove` get the row's key without being told. The same `Remove` works from a keymap sequence, the palette and the context menu, on the item with focus, or on every selected item at once.
-- **Labels speak about their subject**: a screen reader hears "Remove 'buy milk'", not ten thousand identical "Remove"s. `Toggle`'s label follows the item's state.
+- **Labels speak about their subject**: a screen reader hears "Remove 'buy milk'", not ten thousand identical "Remove"s. Inside the row, where the title is already shown, the link shows the `short` label, "Remove". `Toggle`'s label follows the item's state.
 - **Effects are asked for, not done.** `Export` asks for a save dialog and a file write; the result comes back as `Exported`, which is `#[internal]`: never in the palette, the menus, the keys or undo. In Specimen the effect is shown instead of run.
 - **Typing is a command.** The kernel sends `Edit` for the field bound to `Todo::draft`; `edit.apply(self)` is the usual handling, and this is the one place to validate a value or keep an invariant.
 - **Undo is one history.** Type "milk", add it, press Cmd-Z: the item goes and "milk" is back in the field. Press it again and the typing goes.

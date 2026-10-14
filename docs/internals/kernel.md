@@ -205,7 +205,7 @@ A hit gives a node; the kernel walks up to the nearest node that acts (a check's
 For `enum Cmd`, an `impl<F> Commands<F> for Cmd where F: Find<Item>` (one bound per subject type) with:
 
 - a name per variant, from the variant (`Remove` → `remove`), used by keymap files, the command line and the log;
-- a label function: `#[label("Remove “{title}”")]` reads `title` from the subject, found through `Find<Item>`; `#[label(done: "…", else: "…")]` chooses by the subject's `done` field. A name in braces is looked up first among the variant's arguments, then among the subject's fields; a name that is neither is a compile error;
+- a label function: `#[label("Remove “{title}”")]` reads `title` from the subject, found through `Find<Item>`; `#[label(done: "…", else: "…")]` chooses by the subject's `done` field; `short: "Remove"` is what a control shows inside a row, where the row already shows its item, while its accessible name stays the full label (the owner's decision). A name in braces is looked up first among the variant's arguments, then among the subject's fields; a name that is neither is a compile error;
 - which argument is the subject, and its type;
 - which variants are `#[internal]`, and which one carries `Edit` (the variant whose only field is `Edit`), so the kernel can wrap edits;
 - encoding and decoding for the command log.
@@ -449,9 +449,7 @@ New laws need the owner's approval (`AGENTS.md`). These are the ones the design 
 
 ## 21. Questions for the owner
 
-These are in the spec's §15. None blocks S2.
-
-- **Labels inside a row** (before S3). A link in a row is labelled "Remove “buy milk”" for the screen reader and the palette. On screen, does it show that whole label, or a short "Remove" because the row already shows the title? A short form would need a second text in `#[label]`.
+These are in the spec's §15. None blocks S2. The owner has answered one: inside a row, a control shows a short label ("Remove") and the screen reader hears the full one.
 - **Commands on several items** (before S4). With three items selected, what does `Remove` say ("Remove 3 items"? the titles?), and if one of them can't be removed, does it remove the other two or refuse?
 - **The to-do app's keys** (before S4). The first slice needs `Remove` from a keymap sequence, and Graticule assigns no keys, so the to-do's default keymap is the owner's to approve. The same goes for the palette: it is in the menu bar either way; does it have a default key?
 - **Work that grows with the list in the example** (before S4). Should `api.md`'s to-do keep `none`, `retain` and building Markdown on the main thread, as the clearest code for a learner, or teach a pattern that stays fast at any size?

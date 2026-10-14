@@ -48,8 +48,9 @@ Prefer the smallest model that makes the correct behavior unsurprising. Do not k
 - **effect** means work the app asks for as data: a request, a file write, a URL to open. **job** means background work, always visible while it runs. **live value** means a value written by another thread and read once per frame.
 - **component** means a reusable piece of the tree: Graticule's or the app's own. **canvas** means a box with its own coordinate space for shapes drawn at runtime. **picture** means vector art compiled ahead of time.
 - **style** means how things are drawn (lines, shadows, glyphs, density), never where. **theme** means colors. **ink** means a semantic color: ink, muted, faint, rule, link, danger, warn, ok and the surfaces.
-- **service** means a battery that ships as its own crate (search, persistence, sync, networking); apps plug in what they need.
-- **Specimen** (SP-01), **Engraver** (EN-01), **Scope** (SC-01) and **Bindery** (BD-01) are the tools (spec §13). **the apps** means the demo apps in `apps/` (spec §14).
+- **unit** means a named part of Graticule with a model code: a library that apps build in and a face of its own that you can run (spec §13). The units are the **Kernel** (DK-01), **Ledger** (LD-01, the command log: saving, undo, history, replays, sync), **Galley** (GA-01, the text engine), **Plotter** (PL-01, the canvas engine), **Specimen** (SP-01), **Scope** (SC-01), **Assay** (AS-01, the laws, taste checks and budgets), **Engraver** (EN-01) and **Bindery** (BD-01). A new unit is warranted only when it is ours, has its own model and has its own laws.
+- **service** means a battery that ships as its own crate and mostly wraps others' libraries (search, media, networking, secrets); apps plug in what they need.
+- **the apps** means the demo apps in `apps/` (spec §14).
 
 ## Working together
 
@@ -65,7 +66,7 @@ Many people and many agent threads work on this, and none of them remember each 
 
 The most common defect is a change that works on the path you tried and is missing everywhere else. Before calling work done, check which of these apply and say so:
 
-- **Apps.** Every demo app still builds and its states still render. Specimen's Changes page shows only what you meant to change.
+- **Apps and faces.** Every demo app and every unit's face still builds and its states still render. Specimen's Changes page shows only what you meant to change. A unit's core that needs no screen still builds without the kernel.
 - **Sizes and looks.** The smallest and largest window, both appearances, every style that ships.
 - **Entry points.** An action belongs in the registry, so it shows in the bar, which-key, help, the palette, menus and context menus, works by mouse and keyboard, and is reachable through automation. Bulk versions work on the selection.
 - **Reverse states.** A way in needs a way out and a way to see it. Every user-visible change is undoable.

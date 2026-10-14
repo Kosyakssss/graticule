@@ -1,12 +1,13 @@
 # Graticule: spec
 
-The source of truth for what to build: Graticule (model DK-01), a framework for native desktop apps in Rust, its tools and the demo apps that prove it. Working rules are in [`AGENTS.md`](../AGENTS.md); the same ideas in plain words are in [`guide/`](guide/README.md). The build plan and its status are in §17.
+The source of truth for what to build: Graticule (model DK-01), a framework for native desktop apps in Rust, its units and the demo apps that prove it. Working rules are in [`AGENTS.md`](../AGENTS.md); the same ideas in plain words are in [`guide/`](guide/README.md). The build plan and its status are in §17.
 
 Every decision below is the owner's unless marked **Proposed** (engineering choice, unconfirmed) or **Open** (§15). Visual details (exact spacing, weights, colors, glyphs) are designed with the owner component by component in Specimen; this document records principles and decisions.
 
 ## 0. Ground rules
 
-- One Rust codebase: the kernel, the services, the tools and the demo apps, in one cargo workspace. Changing the kernel rebuilds every app in the same step, and a breaking change fixes every app in the same change.
+- One Rust codebase: the units, the services and the demo apps, in one cargo workspace. Changing the kernel rebuilds every app in the same step, and a breaking change fixes every app in the same change.
+- Graticule is made of **units** (§13), each with a model code. Every unit is a library that apps build in and a face of its own that you can run, an app or a command-line tool, so every unit also proves Graticule. Where a unit's core doesn't need a screen, it doesn't depend on the kernel.
 - A clean start. Graticule began inside Feedreader; its architecture is rewritten here, and the parts that meet the operating system are moved in one at a time with their laws and the traps they avoid (`docs/internals/`), not rewritten. Feedreader is paused and later depends on Graticule like any other app.
 - Desktop first: macOS, then Linux. Mobile and Windows come later (§15).
 - No `unsafe` in our code; the workspace denies it, with one approved exception (`docs/internals/unsafe.md`): the native context menu on macOS. Every exception is justified to the owner before it lands.
@@ -59,17 +60,16 @@ The seven in `AGENTS.md`, in order: the grid is law and inside a box is freedom;
 - The registry is generated from the commands and feeds the action bar, which-key, the help page, the palette, the menu bar, context menus, automation and the OS adapters (§9).
 - Keys live in **keymap files**, not in code: chords, sequences (`g g`), counts (`3w`), operator and motion (`d w`) and modes (normal, insert, select), enough to build a modal editor. Edits to a keymap file apply live. Graticule ships no keys of its own.
 - At runtime the registry builds the tree of what is reachable from here by key; after a prefix, the action bar shows the next branch (which-key).
-- Every command is undoable by default. Undo is a tree, not a line: after undoing and making a new change, the old branch is still there and history can be browsed.
+- Every command is undoable by default. Undo is a tree, kept by Ledger (§13.2).
 
 ### 3.4 Effects, jobs and the main thread
 - The main thread only turns input into commands, updates the facts, builds the tree, paints and submits. It never does work that grows with the data.
 - Anything that grows with the data (filtering, shaping long text, placing labels, decoding images, network, disk) runs as a **job** in the background. While it runs the screen shows what it has and says that more is coming; every running job is visible.
 - **Live values**: a value written by another thread (an audio callback, a market feed, a download) without locks and read once per frame, coalesced to at most one frame per display refresh.
 
-### 3.5 Persistence and states
-- **Proposed.** Facts save themselves, safe against crashes, and the app reopens where it was; the first frame after launch is drawn from that snapshot before anything else answers.
-- Facts saved by an older version always load in a newer one, through declared migrations, checked as a law against every named state.
-- A named state is a set of facts. Specimen shows every app's states (§13); "send this view" saves the current facts to a file that opens in the same state on another machine.
+### 3.5 States
+- A named state is a set of facts. Specimen shows every app's states (§13.5); "send this view" saves the current facts to a file that opens in the same state on another machine.
+- Saving, migrations, history and sync belong to Ledger (§13.2).
 
 ## 4. The grid and its freedoms
 
@@ -104,7 +104,7 @@ The seven in `AGENTS.md`, in order: the grid is law and inside a box is freedom;
 ### 5.1 Styles and themes
 - A **style** is how things are drawn: line treatments, shadows, corners, the glyphs of checkboxes and tabs, density. It never changes where things are: the grid, the spacing rules and the ink roles are the same in every style. Graticule ships a default style; developers make their own, and the taste laws judge every style the same way.
 - A **theme** is colors, defined in OKLCH, with contrast checked as a law: text inks reach 4.5:1 on their backgrounds, faint 3:1. Styles and themes are independent and switch at runtime.
-- Styles and themes are data files, edited live in Specimen (§13.2).
+- Styles and themes are data files, edited live in Specimen (§13.5).
 - Everything drawn uses semantic ink (ink, muted, faint, rule, link, visited, danger, warn, ok; cursor, hover, selection, field; thin, regular or heavy weight), so a style or theme change restyles components, pictures, canvases and GPU paint alike.
 
 ### 5.2 Typed values
@@ -120,18 +120,14 @@ Each kind of value has one look, used everywhere: text, count, date, version, st
 ### 6.1 Components
 - The inventory combines **HeroUI** (the current version, whose behavior rests on React Aria) and **Blueprint** (Palantir's toolkit for dense desktop interfaces). We take what each component is and how it behaves (states, keyboard, focus, what a screen reader says), never how it looks; React Aria's documentation is the behavior reference. Each component is mapped as kept, grounded (§4.4) or skipped, with the owner.
 - Beyond both, the components professional apps need and web kits lack: split panes and docking, with layouts saved as files; a virtual table for millions of rows (sort, group, resize, background filtering); tree; picker and find (§7.4); the code and text view (§7.3); forms and tables derived from the app's data types; the time axis (rulers, playhead, zoom, snapping, tracks as rows); charts on the canvas (lines, bars, candles, sparklines in table cells); node graphs with automatic layout; a diff view; a date picker.
-- Every component has a page in `docs/components/` and lives in Specimen (§13.2).
+- Every component has a page in `docs/components/` and lives in Specimen (§13.5).
 - A component that panics draws an error box in its place; the rest of the app keeps working.
 
 ### 6.2 Pictures
-Vector art made ahead of time: icons, ornaments, logos. Drawn as SVG and compiled by Engraver (§13.3) into shape data in the binary; drawn once per size into the GPU atlas, then one quad. Every picture has a required text label for screen readers. Graticule ships a built-in icon set.
+Vector art made ahead of time: icons, ornaments, logos. Drawn as SVG and compiled by Engraver (§13.8) into shape data in the binary; drawn once per size into the GPU atlas, then one quad. Every picture has a required text label for screen readers. Graticule ships a built-in icon set.
 
 ### 6.3 Canvas
-- A box on the grid with its own coordinate space, holding shapes drawn at runtime: lines, curves, filled and stroked paths, text and images, in semantic ink and weights. Shapes have ids and are hit-tested against their outlines.
-- The canvas is a second kernel built from the same parts as the first: its document is facts, its edits are commands and transactions, its history is the undo tree.
-- Its model is **tldraw**, the best canvas there is, learned from its documentation, its source code and the running app, and written our own way in Rust (tldraw's SDK is source-available under its own license, so nothing is copied). What we take: a store of typed records with migrations; bindings between shapes (an arrow that follows the box it points at); tools as state machines; transactions; the camera and the conversion between screen and page; geometry for hit testing; snapping to edges, centers, gaps and handles; culling of shapes off screen; fractional indexes for order; groups, frames and pages; locking and read-only; shared styles where the next shape takes the last one's; paste anything and drop files; export to SVG and PNG; side effects on record changes. Pressure-sensitive drawing ports perfect-freehand, which is MIT-licensed, with its notice.
-- Infinite canvases add a spatial index for millions of shapes, rubber-band selection, transform handles, snapping guides and a minimap. Map projections and tile streaming come with Atlas (§14) and work for anything with coordinates.
-- A canvas may ask for frames at display rate only while it is live; idle still costs nothing.
+A box on the grid with its own coordinate space, holding shapes drawn at runtime: lines, curves, filled and stroked paths, text and images, in semantic ink and weights. Shapes have ids and are hit-tested against their outlines. The kernel's canvas is enough for charts and readouts; editable documents of shapes, infinite boards and maps belong to Plotter (§13.4). A canvas may ask for frames at display rate only while it is live; idle still costs nothing.
 
 ### 6.4 The escape hatch ladder
 1. Components.
@@ -159,8 +155,8 @@ Every rung renders off the main thread into its own texture, which the main thre
 - **Typing is a command.** The kernel sends field edits as commands, so they are undoable and visible like any other.
 - Number fields evaluate expressions (`12*4+3`, `3 h 20 min`); date fields accept natural input (`next tue 3pm`).
 
-### 7.3 The text engine
-Enough to build an editor like Helix or Neovim on Graticule: rope storage for very large files, multiple selections, the undo tree, a hook for tree-sitter syntax trees, folding, the keymap grammar of §3.3, a command line in the status line with completion from the picker, splits and buffers, macros recorded from the registry. Language servers are the app's, run as jobs. Spelling is a hook: the text engine asks it about words and ranges and gets back mistakes and suggestions; the default answers through the macOS spellchecker, and an app can plug in anything else. Typesetting is good by default: proper quotes and dashes, hyphenation, and paragraph breaking that avoids ugly gaps. Long paths are shortened in the middle.
+### 7.3 Documents
+Fields cover single lines and short text. Documents (large files, multiple selections, syntax, spelling, typesetting, modal editing) belong to Galley (§13.3). Long paths are shortened in the middle everywhere.
 
 ### 7.4 Search
 - Every list, table and tree can be filtered by typing: fuzzy, with matched letters marked, filtered in the background at any size, results streaming in. **Proposed:** nucleo, Helix's fuzzy matcher.
@@ -192,15 +188,12 @@ Dragging within an app with a payload and drop targets, files dropped from the s
 Batteries ship as separate crates; an app plugs in what it needs, and every app's binary size is budgeted. A capability becomes a service when most apps need it, apps usually do it badly, and doing it once lets Graticule guarantee something (speed, undo, privacy, visibility or correctness). If it falls out of the architecture, it is not built; it is kept possible.
 
 - **Search** (§7.4).
-- **Persistence** (§3.5).
 - **Documents**: open, save, save as, autosave, versions, recent files, the unsaved mark, "changed on disk" with reload, projects as folders, huge files read on demand. Deleting moves to the Trash.
 - **Data**: tables backed by background queries; charts from any column; exact decimal arithmetic for money; a rich clipboard that copies a table as a table, markdown or CSV depending on where it is pasted.
 - **Time**: time zones and calendars (**Proposed:** jiff); relative times that cost nothing (each label wakes the app once, when its text would change, and labels on screen share one wakeup); background jobs grouped together and postponed in Low Power Mode.
 - **Media**: images decoded off the main thread with cached thumbnails, color management and HDR where the display supports it; audio playback and recording on a real-time thread with waveform overviews and meters as live values; video through the platform's hardware decoder with frame-accurate seeking; QR codes.
 - **Networking**: an HTTP client that is safe and polite by default, from Feedreader's fetcher: zones (a request reaches no deeper than whatever asked for it), retries with backoff, caching and conditional requests, a queue for offline, rate limits, every request visible in Scope.
-- **Sync**: local-first sync of commands between the user's own devices, transport-agnostic: plain IP with TLS, pairing once, every address that ever worked tried in turn, devices on the local network found by Bonjour. Same network, Tailscale, Headscale, NetBird, ZeroTier, Nebula and the like are all just addresses. Encrypted between devices. Live collaboration through CRDTs (**Open**: Loro or Automerge).
 - **Secrets** in the platform keychain; no token in a plain file.
-- **Crashes stay local and become replays**: the next launch shows what happened as a replay of commands. Nothing is sent anywhere.
 - **Automation**: the registry as a command line (`app do export --pdf`), a URL scheme, Shortcuts actions, the Services menu, the share sheet and an MCP server for AI tools, local only. Thin adapters; nothing new is invented.
 - **Print and PDF**: any screen or document as vector PDF at real size; physical units (mm, pt) exist only inside page boxes. Any component or screen copies as an image.
 
@@ -213,9 +206,9 @@ Batteries ship as separate crates; an app plugs in what it needs, and every app'
 ## 11. Verification
 - **Types** make mistakes impossible to write: layout code that can't leave the grid, state that can't contradict itself.
 - **Laws** check behavior over generated inputs and command sequences (proptest): undo returns to where you were, field edits undo to the start and redo to the end, scroll positions follow their item, nothing moves under the reader, saved facts always load, every frame stays within budget.
-- **Proofs** for the few cores where a mistake would be worst. **Proposed:** Kani, on grid arithmetic, field edit operations and sync merging.
-- **Every app is tested for free**: given any app, Graticule generates command sequences and checks the universal laws: it never crashes, undo returns, every screen passes the taste laws, every frame stays within budget, every command is reachable.
-- **Taste laws**, run over every state of every app at every size and in every style: every edge on the grid; contrast; at most a set number of type sizes and inks per screen; nothing clipped; no text overflowing; hit targets at least one cell; every screen also judged as it looks with each kind of color blindness. Results are drawn on the screen in Specimen and Scope.
+- **Proofs** for the few cores where a mistake would be worst. **Proposed:** Kani, on grid arithmetic, field edit operations and Ledger's merging.
+- **Every app is tested for free** against the universal laws, and every screen against the taste laws, by Assay (§13.7).
+- Each unit carries its own laws, listed with it in §13.
 
 ## 12. Performance
 Performance is design. Always faster, by reasonable means: nothing is broken or restricted only for speed.
@@ -248,62 +241,103 @@ Budgets apply to the slowest 1% of frames, on the reference machine (an M1), in 
 The M1's clock ticks about every 42 ns, so stages faster than that are measured over many repetitions.
 
 ### 12.3 Energy and size
-**Open:** budgets for energy (an hour of reading in Notes, measured with `powermetrics`) and for each app's binary size and memory, tracked next to frame time.
+**Open:** budgets for energy (an hour of reading in Galley, measured with `powermetrics`) and for each app's binary size and memory, tracked next to frame time.
 
-## 13. Tools
-Numbered like the kernel. Each one is built on Graticule.
+## 13. The units
+Each unit has a model code, a library that apps build in, a face of its own that you can run, and its own laws. The faces are Graticule apps or command-line tools, so every unit also proves Graticule. Where a unit's core doesn't need a screen (Ledger, Galley's editing core, Plotter's document and geometry), it is a crate that doesn't depend on the kernel, and the parts that draw sit on top of it.
 
-### 13.1 DK-01, the kernel
-`crates/kernel`: the tree, layout, painting, input, the shell around the operating system.
+| Unit | Library | Face |
+|---|---|---|
+| DK-01 Kernel | the framework | `bindery new` gives a running empty app |
+| LD-01 Ledger | the command log: saving, undo, history, replays, sync | `ledger`: show, replay, verify, compare and export an app's history |
+| GA-01 Galley | the text engine | `galley`, a text editor |
+| PL-01 Plotter | the canvas engine | `plotter`, a whiteboard |
+| SP-01 Specimen | the Specimen mode in every app | the catalog of Graticule's components |
+| SC-01 Scope | the recorder in every app | a window that attaches to any running Graticule app |
+| AS-01 Assay | the universal laws, the taste laws, the budgets | `assay`: every check over an app, as a report |
+| EN-01 Engraver | the picture compiler | `engraver`: a folder of SVGs into shape data |
+| BD-01 Bindery | packaging and the development loop | `bindery new`, `dev`, `install`, `update` |
 
-### 13.2 SP-01 Specimen
-- A mode of every Graticule app, not a separate gallery: on its own it shows Graticule's components; run from an app (`notes --specimen`) it shows Graticule's components plus the app's own components and screens.
-- Four places, always visible:
-  - **Components.** A live overview page with every component in its default form, clickable and typeable. Each component's page: its documentation (`docs/components/`), live examples and the code for each, controls for its inputs, keyboard behavior, what a screen reader says, what it costs to draw, and the matrix of every state, style, appearance and width with nasty content (empty, very long, right-to-left, Chinese, emoji, huge numbers), generated from the component's inputs, with the taste laws' results on each.
+### 13.1 DK-01 Kernel
+- **Library.** `crates/kernel`: the tree, layout, painting, input, the registry and keymaps, jobs and live values, the shell around the operating system. Everything in §3–§8.
+- **Face.** The empty app `bindery new` makes: facts, commands, one screen, one named state, Specimen wired in.
+- **Laws.** The frame is on the grid; frames stay within budget; no allocation per frame; idle is zero; the view never writes into the facts.
+
+### 13.2 LD-01 Ledger
+One log of commands underlies saving, undo, rewind, crash replays and sync; Ledger is that log.
+- **Library.** Facts save themselves, safe against crashes, and an app reopens where it was; the first frame after launch is drawn from the last snapshot before anything else answers. Undo is a tree, not a line: after undoing and making a new change the old branch is still there, and history can be browsed. Facts saved by an older version load in a newer one through declared migrations. A crash becomes a replay that the next launch can show; nothing is sent anywhere. Sync sends commands between the user's own devices, local-first and transport-agnostic: plain IP with TLS, pairing once, every address that ever worked tried in turn, devices on the local network found by Bonjour; the same network, Tailscale, Headscale, NetBird, ZeroTier, Nebula and the like are all just addresses. Encrypted between devices. Live collaboration through CRDTs (**Open**: Loro or Automerge). The core needs no screen; any Rust program can keep a ledger.
+- **Face.** `ledger` on the command line: show an app's history, replay it to any point, verify it, compare two devices, export it.
+- **Laws.** Replaying the log gives the same facts; undo returns to where you were and redo to where you left; devices that have seen the same commands agree, in any order of arrival; every named state of every older version loads.
+
+### 13.3 GA-01 Galley
+Named for the tray where typesetters set lines of type.
+- **Library.** Enough to build an editor like Helix or Neovim: rope storage for very large files, multiple selections, history through Ledger, a hook for tree-sitter syntax trees, folding, the keymap grammar of §3.3, a command line in the status line with completion from the picker, splits and buffers, macros recorded from the registry, find and replace. Language servers are the app's, run as jobs. Spelling is a hook: Galley asks it about words and ranges and gets back mistakes and suggestions; the default answers through the macOS spellchecker, and an app can plug in anything else. Typesetting is good by default: proper quotes and dashes, hyphenation, paragraph breaking that avoids ugly gaps, any font a document asks for. Print and PDF at real size. The editing core (storage, edits, the keymap grammar) needs no screen.
+- **Face.** `galley`, a TextEdit-class editor with an optional modal mode. It is also the text demo (§14).
+- **Laws.** Any sequence of edits undoes to the start and redoes to the end; selections stay valid through every edit; a keymap sequence means the same thing however it is typed; large files open and scroll within budget.
+
+### 13.4 PL-01 Plotter
+Named for pen plotters, which draw vectors.
+- **Library.** A second kernel built from the same parts as the first: its document is facts, its edits are commands and transactions, its history is Ledger's. Its model is **tldraw**, the best canvas there is, learned from its documentation, its source code and the running app, and written our own way in Rust (tldraw's SDK is source-available under its own license, so nothing is copied). What we take: a store of typed records with migrations; bindings between shapes (an arrow that follows the box it points at); tools as state machines; transactions; the camera and the conversion between screen and page; geometry for hit testing; snapping to edges, centers, gaps and handles; culling of shapes off screen; fractional indexes for order; groups, frames and pages; locking and read-only; shared styles where the next shape takes the last one's; paste anything and drop files; export to SVG and PNG; side effects on record changes. Pressure-sensitive drawing ports perfect-freehand, which is MIT-licensed, with its notice. Infinite boards add a spatial index for millions of shapes, rubber-band selection, transform handles, snapping guides and a minimap. Map projections and tile streaming arrive with Atlas (§14) and work for anything with coordinates. The document and geometry need no screen; a board can render to SVG anywhere.
+- **Face.** `plotter`, a whiteboard: open a board file, draw, export.
+- **Laws.** A bound arrow stays bound through any move, resize or undo; order is stable under any insertion; export and reopen give the same board; hit testing agrees with what is drawn; panning and zooming stay within budget at a million shapes.
+
+### 13.5 SP-01 Specimen
+- **Library.** A mode of every Graticule app: on its own it shows Graticule's components; run from an app (`ticker --specimen`) it shows Graticule's components plus the app's own components and screens. Four places, always visible:
+  - **Components.** A live overview page with every component in its default form, clickable and typeable. Each component's page: its documentation (`docs/components/`), live examples and the code for each, controls for its inputs, keyboard behavior, what a screen reader says, what it costs to draw, and the matrix of every state, style, appearance and width with nasty content (empty, very long, right-to-left, Chinese, emoji, huge numbers), generated from the component's inputs, with Assay's results on each.
   - **Screens.** Every app screen in each of its named states, live: clicks run the app's real code on a copy of the facts. Overlays for Tab order and what a screen reader would read.
   - **Style.** The live style and theme editor: every value of the style file, every component and screen updating as it moves, and the blast radius ("this affects 214 screens"). Saving writes the file.
   - **Changes.** Everything that renders differently since it was last approved: before and after, blink, a heatmap of differences, and the change described in words ("the Export button moved 2 columns right"), possible because everything is a known component on the grid. Each change is approved or rejected.
-- Reference images from a folder outside the repository can be pinned beside any sheet.
-- Every sheet renders offscreen into a page, for review without a window.
-- **Later:** placing components on the grid by hand and getting the view code out, one way only.
+  - Reference images from a folder outside the repository can be pinned beside any sheet. Every sheet renders offscreen into a page, for review without a window.
+- **Face.** The catalog of Graticule's components.
+- **Laws.** Every named state of every app renders; an approved sheet that renders the same reports no change.
 
-### 13.3 EN-01 Engraver
-The picture compiler (§6.2). It turns SVG files into compact shape data at build time, maps colors to semantic inks and refuses a picture without a label.
-
-### 13.4 SC-01 Scope
-- The inspector inside every Graticule app. It overlays the grid and the outline and id of each component, and shows:
+### 13.6 SC-01 Scope
+- **Library.** The recorder in every Graticule app. The app only records cheap facts (timestamps, causes, ids) into a fixed ring buffer, always on, allocation-free and tens of nanoseconds a frame, and streams them over a local connection. History and source locations are recorded only in development builds.
+- **Face.** A window of its own that attaches to any running Graticule app and does all the drawing, history and searching, plus overlays in the app for the grid and the outline and id of each component. It shows:
   - **Rewind**: a scrubber over the app's history; any moment saves as a replay file.
   - **Code**: Cmd-click a box and the editor opens at the line that created it.
   - **Facts**: the app's state as a tree, editable live.
   - **Why it redrew**: the cause of every frame (a key, data arriving, a live value).
   - **Why it's this size**: the layout's reasoning for a box, in cells.
   - **Commands**: every command, available or not and why, with its keys.
-  - **Taste**: the taste laws' findings drawn on the screen.
+  - **Taste**: Assay's findings drawn on the screen.
   - **Effects and jobs**: every request, file write and URL opened, every running job, with timings.
   - **Time**: every stage of the last frames against the budget, and launch stage by stage.
-- Scope never costs the app its budget. The app only records cheap facts (timestamps, causes, ids) into a fixed ring buffer, always on, allocation-free and tens of nanoseconds a frame, and streams them over a local connection; **Proposed:** Scope's window is a process of its own, which does all the drawing, history and searching. History and source locations are recorded only in development builds. Scope shows its own cost and subtracts it.
-- Laws: with Scope off, the frame time is the same as without Scope; with Scope on, the app stays within budget.
-- Tracy remains for deep profiling (`--features profile`).
+- **Laws.** With Scope off, the frame time is the same as without Scope; with Scope on, the app stays within budget; Scope shows its own cost and subtracts it. Tracy remains for deep profiling (`--features profile`).
 
-### 13.5 BD-01 Bindery
-- `bindery new` starts an app: facts, commands, one screen, one named state, Specimen wired in.
-- `bindery dev` rebuilds an app on every saved change, and the running app replaces itself with the new build in the same window frame and state.
-- Builds a Graticule app into a native app (on macOS a signed `.app` with its command linked), installs it, and installs and updates apps from source, checking for new versions in the background and showing them without notifications. Fetches the fonts too large for the repository. macOS first, Linux and Windows later.
+### 13.7 AS-01 Assay
+Named for the test of what something is made of.
+- **Library.** The checks every Graticule app is held to, callable from an app's own laws:
+  - **Universal laws**: given any app, Assay generates command sequences and checks that it never crashes, undo returns, every command is reachable, saved facts load, and every frame stays within budget.
+  - **Taste laws**, over every state of every app at every size and in every style: every edge on the grid; contrast; at most a set number of type sizes and inks per screen; nothing clipped; no text overflowing; hit targets at least one cell; every screen also judged as it looks with each kind of color blindness.
+  - **Budgets**: frame time, allocation, idle, energy, binary size.
+- **Face.** `assay` runs every check over an app and prints a report, like Clippy for Graticule apps; Specimen and Scope draw its findings on the screen.
+- **Laws.** Assay's own: a check that passes on an app keeps passing when nothing that check reads has changed.
+
+### 13.8 EN-01 Engraver
+- **Library.** The picture compiler (§6.2), run as a build step: SVG files into compact shape data, colors mapped to semantic inks.
+- **Face.** `engraver` compiles a folder of SVGs and shows what it made.
+- **Laws.** A picture without a label is refused; every color lands on a semantic ink.
+
+### 13.9 BD-01 Bindery
+- **Library.** Packaging and the development loop.
+- **Face.** `bindery new` starts an app. `bindery dev` rebuilds an app on every saved change, and the running app replaces itself with the new build in the same window frame and state. `bindery install` builds a native app (on macOS a signed `.app` with its command linked) and installs it; Bindery installs and updates apps from source, checking for new versions in the background and showing them without notifications, and fetches the fonts too large for the repository. macOS first, Linux and Windows later.
+- **Laws.** A failed build never reaches the running app; a reload keeps the window frame and the state.
 
 ## 14. The demo apps
-Seven apps in `apps/`, each pushing a different axis to its hard end. They are built on Graticule like any outside app would be, and any change to Graticule shows in them at once.
+The faces of Galley, Plotter, Specimen and Scope are apps too. Beside them, six demo apps in `apps/` each push a different axis to its hard end. They are built on Graticule like any outside app would be, and any change to Graticule shows in them at once.
 
 | App | Axes | What it proves |
 |---|---|---|
-| **Notes**, a TextEdit-class editor with an optional modal mode | text, output, windows | large documents, find and replace, any font inside the page, the keymap grammar, print and PDF |
+| **Galley's editor** | text, output, windows | large documents, find and replace, any font inside the page, the keymap grammar, print and PDF |
 | **Twin**, a two-pane file manager | OS presence, data size | Quick Look, dragging out to the system, file types, background work, huge folders |
 | **Ticker**, a market board | data size, time | live values, million-row tables, candles on the canvas, the glow on change |
-| **Atlas**, maps from OpenStreetMap | space | projections, zoom across twenty levels, streaming tiles, label placement, offline from a single file of vector tiles (Protomaps), with OpenStreetMap's attribution |
-| **Patchbay**, a node editor | space, authoring | the infinite canvas, wires, dragging, layouts as files |
+| **Atlas**, maps from OpenStreetMap | space | Plotter at its hardest: projections, zoom across twenty levels, streaming tiles, label placement, offline from a single file of vector tiles (Protomaps), with OpenStreetMap's attribution |
+| **Patchbay**, a node editor | space, authoring | Plotter used by another app: nodes, wires, dragging, layouts as files |
 | **Lightbox**, a photo and scan viewer | precision, GPU | the paint hook and Rust shaders, 16-bit levels, zoom and pan, measuring overlays |
 | **Four-track**, a recorder and sequencer | real-time, time, authoring | the audio thread, waveform lanes, dragging clips, snapping, the time axis |
 
-Order, by difficulty, because each forces new pieces into the kernel: Notes and Twin; Ticker; Atlas and Patchbay; Lightbox; Four-track.
+Order, by difficulty, because each forces new pieces into the kernel: Galley's editor and Twin; Ticker; Plotter's whiteboard, Atlas and Patchbay; Lightbox; Four-track.
 
 ## 15. Open questions
 1. License: AGPL-3.0 or MIT.
@@ -311,14 +345,13 @@ Order, by difficulty, because each forces new pieces into the kernel: Notes and 
 3. The Linux story (§10), after testing on a real machine.
 4. Whether the macOS spellchecker can be reached without `unsafe` through the AppKit bindings; if not, whether it becomes a second exception.
 5. Proofs kept as images, as text descriptions of the tree, or both.
-6. The CRDT for live collaboration.
+6. The CRDT for live collaboration (§13.2).
 7. Budgets for energy, binary size and memory (§12.3).
-8. The public remote and when the repository goes public.
 
 ## 16. Later
 - Every Graticule app also running in a terminal or a browser tab, from the same tree. Parked until the framework stands on its own.
 - Plugins: code written by others running inside an app in a sealed box (WebAssembly components using the same view API, with only the capabilities they are given).
-- Specimen's sketch mode (§13.2).
+- Specimen's sketch mode: placing components on the grid by hand and getting the view code out, one way only.
 - Mobile.
 
 ## 17. Build plan
@@ -326,37 +359,37 @@ Status: done, partial, open, paused or later. Each step is committed when it wor
 
 ### 17.1 Foundations
 1. **Partial.** The documents: `AGENTS.md`, this spec, the guide's first page and `docs/api.md`. Open: the owner's reading and adjustment.
-2. **Open.** The code we want to write (`docs/api.md`) approved by the owner: a to-do app, Notes' main screen and Ticker's main screen, readable top to bottom.
-3. **Open.** The workspace: `crates/kernel`, `crates/specimen`, `crates/engraver`, `crates/scope`, `crates/bindery`, `apps/`, the lints (no `unsafe`), and the recipes for recurring jobs.
+2. **Open.** The code we want to write (`docs/api.md`) approved by the owner: a to-do app, Galley's editor screen and Ticker's main screen, readable top to bottom.
+3. **Open.** The workspace: a crate per unit (a core crate without the kernel where the unit has one), `apps/`, the lints (no `unsafe`), and the recipes for recurring jobs.
 
-### 17.2 The kernel
+### 17.2 DK-01 Kernel
 4. **Open.** The tree: automatic ids, comparison with the last tree, layout in cells only, painting of changed regions, hit testing, source locations. Laws from the first commit: the grid, the frame budget, no allocation per frame, idle is zero.
 5. **Open.** Moved in from Feedreader, each with its laws and its traps in `docs/internals/`: the window and event loop, fonts and the text system, the GPU renderer and atlas, character graphics, fields with input methods and the macOS key bindings, selection, clipboard, menus and context menus (the `unsafe` exception), file dialogs, scroll anchoring, accessibility through AccessKit, the in-place reload, launch measurement.
-6. **Open.** Commands: typed arguments, availability with reasons, keymap files applied live, sequences, counts, operators and modes, the which-key tree, the undo tree, typing as commands.
+6. **Open.** Commands: typed arguments, availability with reasons, keymap files applied live, sequences, counts, operators and modes, the which-key tree, typing as commands.
 7. **Open.** Jobs and live values; the main thread freed of shaping and waiting; late reading.
 8. **Open.** Anchored overlays; drag and drop.
+9. **Open.** The component inventory from HeroUI and Blueprint, mapped with the owner, then built one at a time with its page and its Specimen entry.
+10. **Open.** The escape hatch ladder: the paint hook, Rust shaders, GPU compute.
 
-### 17.3 Tools
-9. **Open.** SP-01 Specimen: Components (the live overview and component pages), Screens, Style, Changes.
-10. **Open.** SC-01 Scope: the ring buffer and its own process, rewind, code, facts, causes, layout reasons, commands, taste, effects, time.
-11. **Open.** EN-01 Engraver moved in; the built-in icon set.
-12. **Open.** BD-01 Bindery moved in; `bindery new`.
-13. **Open.** The taste laws and the free testing of every app.
+### 17.3 Units
+11. **Open.** LD-01 Ledger: the log, saving and snapshots, the undo tree, migrations, crash replays, then sync. The `ledger` command.
+12. **Open.** SP-01 Specimen: Components (the live overview and component pages), Screens, Style, Changes.
+13. **Open.** SC-01 Scope: the ring buffer, its own window, rewind, code, facts, causes, layout reasons, commands, taste, effects, time.
+14. **Open.** AS-01 Assay: the universal laws, the taste laws, the budgets, the `assay` report.
+15. **Open.** EN-01 Engraver moved in; the built-in icon set.
+16. **Open.** BD-01 Bindery moved in; `bindery new`.
+17. **Open.** GA-01 Galley: the editing core, then the editor.
+18. **Open.** PL-01 Plotter: the tldraw study written up in `docs/internals/`, then records, bindings, tools as state machines, camera, geometry, snapping, perfect-freehand, then the whiteboard.
 
-### 17.4 Components and graphics
-14. **Open.** The component inventory from HeroUI and Blueprint, mapped with the owner, then built one at a time with its page and its Specimen entry.
-15. **Open.** The canvas kernel: the tldraw study written up in `docs/internals/`, then records, bindings, tools as state machines, camera, geometry, snapping, perfect-freehand.
-16. **Open.** The escape hatch ladder: the paint hook, Rust shaders, GPU compute.
+### 17.4 Services
+19. **Open.** Search, documents, data, time, media, networking, secrets, automation, one at a time as the apps need them.
 
-### 17.5 Services
-17. **Open.** Search, persistence, documents, data, time, media, networking, sync, secrets, crash replays, automation, print, one at a time as the apps need them.
-
-### 17.6 The apps
-18. **Open.** Notes and Twin.
-19. **Open.** Ticker.
-20. **Open.** Atlas and Patchbay.
-21. **Open.** Lightbox.
-22. **Open.** Four-track.
+### 17.5 The apps
+20. **Open.** Twin.
+21. **Open.** Ticker.
+22. **Open.** Atlas and Patchbay.
+23. **Open.** Lightbox.
+24. **Open.** Four-track.
 
 ## 18. References
 - [HeroUI](https://heroui.com) · [React Aria](https://react-spectrum.adobe.com/react-aria/) · [Blueprint](https://blueprintjs.com) · [U.S. Graphics Company](https://usgraphics.com)

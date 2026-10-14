@@ -36,17 +36,23 @@ Every command has a name and a label. From that single list Graticule makes the 
 
 The same list lets scripts and AI tools drive any Graticule app completely, which is why things like voice control don't need to be built in.
 
-## The tools
+## The units
 
-- **DK-01, the kernel.** Graticule itself.
+Graticule is made of named parts, each with a model code. Every one is two things: a piece that apps build in, and something of its own you can open or run. So every unit also shows Graticule working.
+
+- **DK-01 Kernel.** Graticule itself: the grid, drawing, keys and mouse, the window. On its own: a new empty app.
+- **LD-01 Ledger.** The app's memory. Every command is written down in order, and from that one record come saving, undo, rewind, crash replays and syncing between your devices. On its own: a command that shows any app's history.
+- **GA-01 Galley.** Text: huge files, many cursors, spelling, good typesetting, Helix-style keys. On its own: a text editor. Named for the tray typesetters set lines of type in.
+- **PL-01 Plotter.** The canvas, modelled on tldraw: shapes, arrows that stay attached, snapping, endless boards, maps. On its own: a whiteboard. Named for the pen plotters that draw lines on paper.
 - **SP-01 Specimen.** The catalog. Every component, live; every screen of every app in every state; the style editor; and the Changes page, where you see what looks different since you last approved it and say yes or no. This is where you review work without reading code.
-- **EN-01 Engraver.** Turns drawings (SVG files) into icons inside the app.
 - **SC-01 Scope.** The microscope over a running app: why it redrew, how long it took, where the code for any box is, and a rewind slider. It costs the app nothing measurable.
+- **AS-01 Assay.** The inspector of quality. It checks any app against the rules every Graticule app must follow: never crashes, undo always works, everything on the grid, readable contrast, fast enough. On its own: a report for any app. Named for the test of what a metal is made of.
+- **EN-01 Engraver.** Turns drawings (SVG files) into icons inside the app.
 - **BD-01 Bindery.** Makes a real Mac app out of the code, installs and updates it, and reloads the app the moment code is saved while someone is working on it.
 
 ## The demo apps
 
-Seven small apps, each pushing Graticule somewhere hard: Notes (writing), Twin (files), Ticker (fast live data), Atlas (maps), Patchbay (wires and boxes on an endless canvas), Lightbox (photos and scans) and Four-track (recording music). They live next to Graticule, so any change to it shows in all of them at once.
+Galley's editor and Plotter's whiteboard are already apps. Beside them, six small apps each push Graticule somewhere hard: Twin (files), Ticker (fast live data), Atlas (maps), Patchbay (wires and boxes, built on Plotter), Lightbox (photos and scans) and Four-track (recording music). They live next to Graticule, so any change to it shows in all of them at once.
 
 ## How speed is measured
 

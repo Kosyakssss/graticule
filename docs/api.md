@@ -138,31 +138,31 @@ fn view(&self, ui: &mut Ui<Cmd>) {
 
 A slider for the volume, a choice for the speed, a switch for looping, undo for each, and a search field when the form is long.
 
-## Notes, the main screen
+## Galley's editor, the main screen
 
-Two columns: the library on the left, the open note on the right.
+Two columns: the open files on the left, the current one on the right.
 
 ```rust
 #[derive(Facts)]
-struct Notes {
-    library: Vec<Note>,
-    open: Option<Id>,
+struct Editor {
+    files: Vec<File>,
+    current: Option<Id>,
     filter: Text,
     find: Find,
 }
 
 #[derive(Facts)]
-struct Note {
+struct File {
     #[key]
     id: Id,
-    title: String,
+    name: String,
     body: Document,
     edited: Moment,
 }
 
 #[derive(Commands)]
 enum Cmd {
-    #[label("New note")]
+    #[label("New file")]
     New,
     #[label("Open")]
     Open(Id),
@@ -175,22 +175,22 @@ enum Cmd {
 fn view(&self, ui: &mut Ui<Cmd>) {
     ui.columns(|ui| {
         ui.column(28, |ui| {
-            ui.picker(&self.library, &self.filter, |ui, note| {
-                ui.text(&note.title);
-                ui.date(note.edited);
+            ui.picker(&self.files, &self.filter, |ui, file| {
+                ui.text(&file.name);
+                ui.date(file.edited);
             })
-            .on_choose(|note| Cmd::Open(note.id));
+            .on_choose(|file| Cmd::Open(file.id));
         });
-        ui.column(Fill, |ui| match self.open_note() {
-            Some(note) => ui.document(&note.body).find(&self.find),
-            None => ui.empty("No note open", Cmd::New),
+        ui.column(Fill, |ui| match self.current_file() {
+            Some(file) => ui.document(&file.body).find(&self.find),
+            None => ui.empty("No file open", Cmd::New),
         });
     });
 }
 ```
 
-- `picker` filters the library as you type, fuzzy, in the background, with the matched letters marked.
-- `document` is the text engine: huge files, multiple selections, find and replace, spelling, printing.
+- `picker` filters the files as you type, fuzzy, in the background, with the matched letters marked.
+- `document` is Galley: huge files, multiple selections, find and replace, spelling, printing.
 - `28` is a width in columns, `Fill` takes the rest.
 
 ## Ticker, the main screen

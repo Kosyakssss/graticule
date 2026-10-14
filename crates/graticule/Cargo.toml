@@ -1,0 +1,15 @@
+[package]
+name = "graticule"
+description = "The one crate a Graticule app imports."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+graticule-macros.workspace = true
+kernel.workspace = true
+ledger.workspace = true
+specimen.workspace = true

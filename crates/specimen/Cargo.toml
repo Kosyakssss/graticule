@@ -1,0 +1,12 @@
+[package]
+name = "specimen"
+description = "SP-01, Specimen: every component and every screen of every app, in every state."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kernel.workspace = true

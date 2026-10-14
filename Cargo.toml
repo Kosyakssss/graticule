@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/Kosyakssss/graticule"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+
+[workspace.dependencies]
+ledger = { path = "crates/ledger" }
+graticule-macros = { path = "crates/macros" }
+kernel = { path = "crates/kernel" }
+specimen = { path = "crates/specimen" }
+graticule = { path = "crates/graticule" }
+proptest = "1.12.0"
+
+[profile.release]
+debug = "line-tables-only"

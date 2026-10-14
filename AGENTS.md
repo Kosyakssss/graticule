@@ -60,7 +60,7 @@ Many people and many agent threads work on this, and none of them remember each 
 - Work comes from the build plan in small items, each with a visible finish line, marked as taken while someone is on it. Asked to build Graticule, or simply to carry on, work through the plan from the top as its first paragraph says, item after item, until it is done. Two workers never take the same item. Parallel threads work in their own checkout.
 - Product and taste questions go to the owner. A thread that hits one adds it to the spec's open questions and asks; it does not decide.
 - The owner reviews pictures, numbers and sentences: Specimen's Changes page, the budgets, the guide. Code is reviewed by maintainers, and by a second agent on a different model before it lands.
-- Recurring jobs (a new component, moving a piece in from elsewhere, reviewing a change) follow written recipes, so the result does not depend on who did it.
+- Recurring jobs (a new component, moving a piece in from elsewhere, reviewing a change) follow the written recipes in `docs/recipes.md`, so the result does not depend on who did it.
 
 ## Hit every surface
 

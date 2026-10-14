@@ -151,6 +151,16 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
         let vi = &v.ident;
         let command_name = kebab(&vi.to_string());
         let internal = v.attrs.iter().any(|a| a.path().is_ident("internal"));
+        let doc = v
+            .attrs
+            .iter()
+            .filter(|a| a.path().is_ident("doc"))
+            .filter_map(|a| match &a.meta {
+                syn::Meta::NameValue(syn::MetaNameValue { value: syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(s), .. }), .. }) => Some(s.value().trim().to_string()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
         let label: Option<Label> = v.attrs.iter().find(|a| a.path().is_ident("label")).map(|a| a.parse_args()).transpose()?;
         if label.is_none() && !internal {
             return Err(syn::Error::new_spanned(vi, "every command the user can reach has a #[label(\"…\")]; mark the others #[internal]"));
@@ -270,7 +280,7 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
             Some(item) => quote!(::std::option::Option::Some(::std::any::TypeId::of::<#item> as fn() -> ::std::any::TypeId)),
             None => quote!(::std::option::Option::None),
         };
-        entries.push(quote!(#kernel::Entry { name: #command_name, internal: #internal, subject: #takes_subject, subject_type: #subject_type, many: #has_many, args: &[#(#asked),*] }));
+        entries.push(quote!(#kernel::Entry { name: #command_name, internal: #internal, subject: #takes_subject, subject_type: #subject_type, many: #has_many, args: &[#(#asked),*], doc: #doc }));
 
         let types: Vec<&Type> = args.iter().map(|a| &a.ty).collect();
         let cloned: Vec<TokenStream> = args

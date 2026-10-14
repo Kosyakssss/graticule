@@ -53,6 +53,13 @@ struct Asking {
     got: Vec<Value>,
 }
 
+/// One line of the help page.
+enum Help {
+    Heading(String),
+    Item { label: String, keys: String, state: String },
+    Doc(String),
+}
+
 /// A command named by a key, the palette or the bar, once its subjects are filled in.
 enum Target<C> {
     Builtin(Builtin),
@@ -178,6 +185,8 @@ pub struct Runner<A: App> {
     count: u32,
     keymap: Keymap,
     mode: Mode,
+    help: Option<i32>,
+    inspecting: bool,
     palette: Option<Palette>,
     clipboard: Option<arboard::Clipboard>,
     reveal: bool,
@@ -240,6 +249,8 @@ impl<A: App> Runner<A> {
             count: 0,
             keymap,
             mode: Mode::Normal,
+            help: None,
+            inspecting: false,
             palette: None,
             clipboard: None,
             reveal: false,
@@ -301,6 +312,15 @@ impl<A: App> Runner<A> {
         self.tree.reindex();
         self.follow();
         let here = self.glance();
+        let root = match self.help {
+            Some(top) => {
+                let lines = self.help_lines(&here);
+                let root = self.tree.root();
+                self.build_help(root, lines, top);
+                root
+            }
+            None => root,
+        };
         if self.palette.is_some() {
             self.build_palette(root, &here);
         }
@@ -381,6 +401,166 @@ impl<A: App> Runner<A> {
                 }
             }
         }
+    }
+
+    fn target_label(&self, target: &Target<A::Cmd>, name: &str) -> String {
+        match target {
+            Target::One(c) | Target::Refused(Some(c), _) => c.label_string(&self.facts, Form::Long),
+            Target::Many(cs, count) => cs.first().map(|c| c.label_string(&self.facts, Form::Many(*count))).unwrap_or_default(),
+            Target::Ask(_) => format!("{}…", title(name)),
+            Target::Builtin(b) => b.label().to_string(),
+            Target::Host(e) => self.extras[*e].label.clone(),
+            Target::Refused(None, _) => title(name),
+        }
+    }
+
+    fn target_state(&self, target: &Target<A::Cmd>) -> String {
+        let available = match target {
+            Target::One(c) => self.facts.available(c),
+            Target::Many(cs, _) => cs.first().map_or(Available::Yes, |c| self.facts.available(c)),
+            Target::Builtin(b) => self.builtin_available(*b),
+            Target::Host(e) => self.extras[*e].available.clone(),
+            Target::Refused(_, why) => Available::No(why.clone()),
+            Target::Ask(_) => Available::Yes,
+        };
+        available.reason().map(|why| why.as_str().to_string()).unwrap_or_default()
+    }
+
+    fn help_lines(&self, here: &Here) -> Vec<Help> {
+        let mut lines = vec![Help::Heading("Commands".into())];
+        for (e, entry) in A::Cmd::entries().iter().enumerate() {
+            if entry.internal {
+                continue;
+            }
+            let target = self.target(e, here);
+            let keys = self.keymap.keys_for(self.mode, entry.name).unwrap_or_default();
+            lines.push(Help::Item { label: self.target_label(&target, entry.name), keys, state: self.target_state(&target) });
+            if !entry.doc.is_empty() {
+                lines.push(Help::Doc(entry.doc.to_string()));
+            }
+        }
+        for e in 0..self.extras.len() {
+            let target = Target::Host(e);
+            lines.push(Help::Item { label: self.target_label(&target, ""), keys: String::new(), state: self.target_state(&target) });
+        }
+        if !self.keymap.bindings.is_empty() {
+            lines.push(Help::Heading(if self.keymap.modal { format!("Keys, in {} mode", self.mode.name()) } else { "Keys".into() }));
+            let mut bindings: Vec<_> = self.keymap.bindings.iter().filter(|b| b.mode.is_none_or(|m| m == self.mode)).collect();
+            bindings.sort_by_key(|b| keys::label(&b.keys));
+            let mut shown: Vec<Vec<Chord>> = Vec::new();
+            for b in bindings {
+                for depth in 1..b.keys.len() {
+                    let prefix = b.keys[..depth].to_vec();
+                    if !shown.contains(&prefix) {
+                        lines.push(Help::Item { label: "More…".into(), keys: format!("{}{}", "  ".repeat(depth - 1), keys::label(&prefix)), state: String::new() });
+                        shown.push(prefix);
+                    }
+                }
+                let depth = b.keys.len() - 1;
+                let keys = format!("{}{}{}", "  ".repeat(depth), keys::label(&b.keys), if b.motion { " motion" } else { "" });
+                let target = self.named(&b.command, here);
+                lines.push(Help::Item { label: self.target_label(&target, &b.command), keys, state: self.target_state(&target) });
+            }
+        }
+        lines.push(Help::Heading("Graticule\u{2019}s own".into()));
+        for b in Builtin::ALL {
+            let target = Target::Builtin(b);
+            lines.push(Help::Item { label: self.target_label(&target, ""), keys: self.builtin_keys(b), state: self.target_state(&target) });
+        }
+        lines
+    }
+
+    fn build_help(&mut self, root: u32, lines: Vec<Help>, top: i32) {
+        let screen = self.metrics.map_or(crate::grid::Area::new(0, 0, 100, 40), |m| m.screen());
+        let budget = (screen.rows - HELP_CHROME).max(1);
+        let full = (screen.cols - 4).max(1) as usize;
+        let wide = ((screen.cols - 4 - HELP_KEYS) / 2).max(0) as usize;
+        let stacked = wide < HELP_LABEL as usize;
+        let tall = |line: &Help| -> i32 {
+            let rows = |s: &str, w: usize| s.chars().count().div_ceil(w).max(1) as i32;
+            match line {
+                Help::Heading(_) => 1,
+                Help::Doc(text) => rows(text, full),
+                Help::Item { label, state, .. } if stacked => rows(label, full) + 1 + rows(state, full),
+                Help::Item { label, state, .. } => rows(label, wide).max(rows(state, wide)),
+            }
+        };
+        let mut last = lines.len();
+        let mut used = 0;
+        while last > 0 && used + tall(&lines[last - 1]) <= budget {
+            used += tall(&lines[last - 1]);
+            last -= 1;
+        }
+        let last = last.min(lines.len().saturating_sub(1));
+        let top = top.clamp(0, last as i32);
+        let mut shown = 0;
+        let mut used = 0;
+        while (top + shown) < lines.len() as i32 && used + tall(&lines[(top + shown) as usize]) <= budget {
+            used += tall(&lines[(top + shown) as usize]);
+            shown += 1;
+        }
+        let shown = shown.max(1);
+        self.help = Some(top);
+        let mut ui = Ui::<A::Cmd>::new(&mut self.tree, &self.facts, &self.scrolls, root);
+        ui.page(Message::plain(format!("Help, lines {} to {} of {}", top + 1, (top + shown).min(lines.len() as i32), lines.len())), |ui| {
+            ui.column(crate::tree::Fill, |ui| {
+                for line in lines.into_iter().skip(top as usize).take(shown as usize) {
+                    match line {
+                        Help::Heading(text) => ui.strong(text),
+                        Help::Doc(text) => ui.muted(text),
+                        Help::Item { label, keys, state } => ui.columns(|ui| {
+                            ui.column(crate::tree::Fill.min(HELP_LABEL), |ui| ui.text(label));
+                            ui.column(crate::tree::cols(HELP_KEYS), |ui| ui.mono(keys));
+                            ui.column(crate::tree::Fill.min(HELP_LABEL), |ui| ui.muted(state));
+                        }),
+                    }
+                }
+            });
+        });
+        self.tree.reindex();
+    }
+
+    fn scroll_help(&mut self, by: i32) -> bool {
+        let Some(top) = self.help else { return false };
+        self.help = Some(top.saturating_add(by).max(0));
+        self.stale = true;
+        true
+    }
+
+    fn inspect_at(&mut self, col: i32, row: i32) -> bool {
+        let deepest = self.tree.nodes.iter().rposition(|n| n.kind != Kind::Root && n.area.contains(col, row)).map(|i| i as u32);
+        match self.hit(col, row).or(deepest) {
+            Some(i) => self.describe(i),
+            None => false,
+        }
+    }
+
+    fn describe(&mut self, i: u32) -> bool {
+        self.inspecting = false;
+        let n = self.tree.nodes[i as usize];
+        let name = if n.name.is_empty() { self.tree.str(n.text) } else { self.tree.str(n.name) }.to_string();
+        let command = n.builtin.map(Builtin::name).or_else(|| (n.cmd != NONE).then(|| self.tree.commands[n.cmd as usize].name())).or_else(|| (n.asks != NONE).then(|| A::Cmd::entries()[n.asks as usize].name));
+        let acts = command.is_some() || n.host != NONE;
+        if !acts {
+            let what = n.kind.role();
+            let said = if name.is_empty() { format!("This is a {what}, with no command") } else { format!("This is a {what}, “{name}”, with no command") };
+            return self.say(Message::plain(said));
+        }
+        let mut parts = vec![name];
+        let keys = match (self.tree.str(n.keys), command) {
+            ("", Some(c)) => self.keymap.keys_for(self.mode, c).or_else(|| Builtin::find(c).map(|b| self.builtin_keys(b))).unwrap_or_default(),
+            (keys, _) => keys.to_string(),
+        };
+        parts.push(if keys.is_empty() { "No keys".into() } else { format!("Keys: {keys}") });
+        if let Some(doc) = command.and_then(|c| A::Cmd::entries().iter().find(|e| e.name == c)).map(|e| e.doc).filter(|d| !d.is_empty()) {
+            parts.push(doc.trim_end_matches('.').to_string());
+        }
+        parts.push(match self.tree.str(n.reason) {
+            _ if n.enabled => "It can run now".into(),
+            "" => "It can\u{2019}t run now".into(),
+            why => format!("It can\u{2019}t run now: {why}"),
+        });
+        self.say(Message::plain(parts.join(". ")))
     }
 
     fn build_palette(&mut self, root: u32, here: &Here) {
@@ -1375,6 +1555,9 @@ impl<A: App> Runner<A> {
     }
 
     fn fire(&mut self, i: u32) -> bool {
+        if self.inspecting {
+            return self.describe(i);
+        }
         let fired = self.fire_once(i);
         if self.count > 0 {
             self.count = 0;
@@ -1433,6 +1616,15 @@ impl<A: App> Runner<A> {
             Builtin::Next | Builtin::Previous => self.cycle(b == Builtin::Next),
             Builtin::Cancel => self.cancel(),
             Builtin::EditKeys => self.edit_keys(),
+            Builtin::Help => {
+                self.help = if self.help.is_some() { None } else { Some(0) };
+                self.stale = true;
+                true
+            }
+            Builtin::WhatsThis => {
+                self.inspecting = true;
+                self.say(Message::from("Click anything, or press Return on it, to see what it is and what it does; Escape stops"))
+            }
             Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode => {
                 self.mode = b.mode().unwrap_or_default();
                 self.pending.clear();
@@ -1527,6 +1719,15 @@ impl<A: App> Runner<A> {
     }
 
     fn cancel(&mut self) -> bool {
+        if self.help.take().is_some() {
+            self.stale = true;
+            return true;
+        }
+        if std::mem::take(&mut self.inspecting) {
+            self.said = None;
+            self.stale = true;
+            return true;
+        }
         if self.palette.take().is_some() || !self.pending.is_empty() || self.count > 0 {
             self.pending.clear();
             self.count = 0;
@@ -1591,6 +1792,21 @@ impl<A: App> Runner<A> {
         let text = text.filter(|t| !t.is_empty() && !t.chars().any(char::is_control)).map(str::to_string);
         if self.palette.is_some() {
             return self.palette_key(chord, text);
+        }
+        if self.help.is_some() && self.pending.is_empty() && chord.mods == Mods::default() {
+            let page = self.metrics.map_or(30, |m| m.screen().rows - HELP_CHROME).max(1);
+            let by = match chord.key {
+                Key::Up => -1,
+                Key::Down => 1,
+                Key::PageUp => -page,
+                Key::PageDown => page,
+                Key::Home => i32::MIN,
+                Key::End => i32::MAX,
+                _ => 0,
+            };
+            if by != 0 {
+                return self.scroll_help(by);
+            }
         }
         let typing = !self.keymap.modal || self.mode == Mode::Insert;
         if self.pending.is_empty()
@@ -1932,6 +2148,9 @@ impl<A: App> Runner<A> {
 
     /// Clicks whatever acts at this cell, as the mouse would.
     pub fn click(&mut self, col: i32, row: i32) -> bool {
+        if self.inspecting {
+            return self.inspect_at(col, row);
+        }
         match self.hit(col, row) {
             Some(i) => self.activate(i, Mods::default()),
             None => false,
@@ -2302,6 +2521,12 @@ impl<A: App> Face for Runner<A> {
                 true
             }
             Input::Press { button: Button::Left, clicks } => {
+                if self.inspecting
+                    && let Some((x, y)) = frame.pointer
+                {
+                    let (col, row) = frame.metrics.cell_at(x, y);
+                    return self.inspect_at(col, row);
+                }
                 self.pressed = self.hovered(frame);
                 if self.pressed.is_none() {
                     let had = self.reading.take().is_some();
@@ -2350,6 +2575,9 @@ impl<A: App> Face for Runner<A> {
                 let Some((x, y)) = frame.pointer else { return false };
                 let (col, row) = frame.metrics.cell_at(x, y);
                 let by = -(dy / frame.metrics.cell_h).round() as i32;
+                if self.help.is_some() {
+                    return by != 0 && self.scroll_help(by);
+                }
                 by != 0 && self.scroll(col, row, by)
             }
             Input::Key(event) => self.key(&event, frame.mods),
@@ -2379,7 +2607,12 @@ impl<A: App> Face for Runner<A> {
                 self.stale = true;
                 true
             }
-            Input::Resized => true,
+            Input::Resized => {
+                if self.help.is_some() {
+                    self.stale = true;
+                }
+                true
+            }
             _ => false,
         }
     }
@@ -2392,6 +2625,10 @@ fn read_keymap<A: App>(source: &str, file: &str) -> Result<(Keymap, Option<Said>
     let said = unknown.map(|c| Said::Failure(format!("{file} names “{c}”, which is not a command")));
     Ok((keymap, said))
 }
+
+const HELP_CHROME: i32 = 9;
+const HELP_KEYS: i32 = 20;
+const HELP_LABEL: i32 = 16;
 
 const MOST_TIMES: u32 = 9999;
 

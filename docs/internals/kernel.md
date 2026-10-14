@@ -243,6 +243,12 @@ An **operator** is a binding that ends in `motion`: `d motion: remove`. After it
 
 A key goes, in order, to the palette when it is open; to the focused field, which takes typed text and every key its editing model knows, even one that changes nothing, so Delete at the end of a field never removes an item; to a focused button, link or checkbox for Return and Space; to the keymap, where the first chord of a longer sequence waits and the action bar shows what can follow (which-key) until the sequence ends or Escape; and last to the conventions.
 
+### 9.6 The help page and what's this
+
+`derive(Commands)` keeps each command's `///` comment as its documentation (`Entry::doc`). The built-in "Show the help" (`help`) draws the registry in place of the app's page: every command the user can reach with its label as it reads here, its keys in the current mode and, when it can't run, why, followed by its documentation; then the keymap as a tree, one line per binding sorted by its keys, with a "More…" line for each shared prefix and the bindings under it indented; then Graticule's own commands. It is built by the kernel through the same `Ui` as any app, after the app's view has run, so labels and reasons are the ones the bar would show, and then the app's nodes are cleared. Pages don't scroll yet, so the help shows a window of lines: the arrows, Page Up and Down, Home and End move it while it is open, and so does the wheel; its title says which lines show. Which lines fit is reckoned from the window's rows and each line's length, so a reason that wraps, or columns stacked in a narrow window, take their room, and the last line always shows at End. Escape or the same command closes it.
+
+The built-in "What's this?" (`whats-this`) makes the next click, or the next Return or Space on a focused control, describe instead of act: for a command, its label, its keys, its documentation and whether it can run now or why not; for anything else, what it is and that it has no command. The description goes to the message line, which the screen reader reads. Escape stops without describing.
+
 ### 9.5 Bindable everywhere
 
 A component takes a command in one of two forms, chosen by type:

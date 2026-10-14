@@ -22,6 +22,8 @@ pub struct Entry {
     pub many: bool,
     /// The arguments the user gives it, in order, besides its subject.
     pub args: &'static [Arg],
+    /// What it does, from the `///` comment on its variant, for the help page and what's this.
+    pub doc: &'static str,
 }
 
 /// One argument a command asks the user for: what it is called, what kind of value it takes, and how to read one from what they typed.

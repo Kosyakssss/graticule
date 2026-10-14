@@ -183,6 +183,7 @@ pub struct Node {
     pub host: u32,
     pub list: u32,
     pub many: u32,
+    pub asks: u32,
     pub at: &'static Location<'static>,
 }
 
@@ -211,6 +212,7 @@ impl Node {
             host: NONE,
             list: NONE,
             many: 0,
+            asks: NONE,
             at,
         }
     }

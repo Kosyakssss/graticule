@@ -36,7 +36,7 @@ pub mod value;
 
 pub use accesskit;
 pub use app::{App, Cx, Effect, Failure, Moment, Path, Said, States};
-pub use command::{Available, Commands, Entry, Form, Subject, no_if};
+pub use command::{Arg, Argument, Available, Commands, Entry, Form, Subject, no_if, read_arg};
 pub use ink::Ink;
 pub use message::Message;
 pub use picture::{Layer, Picture, icons};

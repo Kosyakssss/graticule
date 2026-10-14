@@ -219,28 +219,58 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
                     .collect();
                 let built = if named { quote!(Self::#vi { #(#rebuilt),* }) } else { quote!(Self::#vi(#(#rebuilt),*)) };
                 with_subjects.push(quote!(#pattern => #built));
-                if args.len() == 1 {
-                    makes.push(quote!(#index => subject.map(|subject| #built)));
-                }
             }
             None => {
                 subjects.push(quote!(#ignore => ::std::option::Option::None));
                 with_subjects.push(quote!(#ignore => ::std::clone::Clone::clone(self)));
-                if args.is_empty() {
-                    makes.push(quote!(#index => ::std::option::Option::Some(Self::#vi)));
-                }
             }
         }
 
         let has_many = label.as_ref().is_some_and(|l| l.many.is_some());
         manys.push(quote!(#ignore => #has_many));
         let takes_subject = subject.is_some();
-        let takes_args = args.len() > usize::from(takes_subject);
+        let mut given = 0usize;
+        let made: Vec<TokenStream> = args
+            .iter()
+            .map(|a| {
+                let ty = &a.ty;
+                let value = if a.subject {
+                    if subject_item.is_some() { quote!(#ledger::Key::from_raw(subject?)) } else { quote!(#kernel::Subject::from_raw(subject?)) }
+                } else {
+                    given += 1;
+                    let i = given - 1;
+                    quote!(<#ty as #ledger::Field>::from_value(args.get(#i)?)?)
+                };
+                match &a.name {
+                    Some(n) => quote!(#n: #value),
+                    None => value,
+                }
+            })
+            .collect();
+        if !internal {
+            makes.push(match &v.fields {
+                Fields::Unit => quote!(#index => ::std::option::Option::Some(Self::#vi)),
+                Fields::Unnamed(_) => quote!(#index => ::std::option::Option::Some(Self::#vi(#(#made),*))),
+                Fields::Named(_) => quote!(#index => ::std::option::Option::Some(Self::#vi { #(#made),* })),
+            });
+        }
+        let asked: Vec<TokenStream> = if internal {
+            Vec::new()
+        } else {
+            args.iter()
+                .filter(|a| !a.subject)
+                .map(|a| {
+                    let ty = &a.ty;
+                    let name = a.name.as_ref().map(|n| n.to_string().replace('_', " ")).unwrap_or_default();
+                    quote!(#kernel::Arg { name: #name, kind: <#ty as #kernel::Argument>::KIND, read: #kernel::read_arg::<#ty> })
+                })
+                .collect()
+        };
         let subject_type = match subject_item {
             Some(item) => quote!(::std::option::Option::Some(::std::any::TypeId::of::<#item> as fn() -> ::std::any::TypeId)),
             None => quote!(::std::option::Option::None),
         };
-        entries.push(quote!(#kernel::Entry { name: #command_name, internal: #internal, subject: #takes_subject, subject_type: #subject_type, many: #has_many, args: #takes_args }));
+        entries.push(quote!(#kernel::Entry { name: #command_name, internal: #internal, subject: #takes_subject, subject_type: #subject_type, many: #has_many, args: &[#(#asked),*] }));
 
         let types: Vec<&Type> = args.iter().map(|a| &a.ty).collect();
         let cloned: Vec<TokenStream> = args
@@ -476,8 +506,8 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
                 &[#(#entries),*]
             }
 
-            fn make(entry: usize, subject: ::std::option::Option<u128>) -> ::std::option::Option<Self> {
-                let _ = subject;
+            fn make(entry: usize, subject: ::std::option::Option<u128>, args: &[#ledger::Value]) -> ::std::option::Option<Self> {
+                let _ = (subject, args);
                 match entry {
                     #(#makes,)*
                     _ => ::std::option::Option::None,

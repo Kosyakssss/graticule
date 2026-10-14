@@ -20,7 +20,72 @@ pub struct Entry {
     pub subject: bool,
     pub subject_type: Option<fn() -> TypeId>,
     pub many: bool,
-    pub args: bool,
+    /// The arguments the user gives it, in order, besides its subject.
+    pub args: &'static [Arg],
+}
+
+/// One argument a command asks the user for: what it is called, what kind of value it takes, and how to read one from what they typed.
+#[derive(Clone, Copy, Debug)]
+pub struct Arg {
+    pub name: &'static str,
+    pub kind: &'static str,
+    pub read: fn(&str) -> Result<ledger::Value, Message>,
+}
+
+/// A value a command can take as an argument, read from what the user typed in the palette.
+pub trait Argument: Field {
+    /// What kind of value it is, as the palette says when it asks: "text", "a whole number".
+    const KIND: &'static str;
+
+    fn read(text: &str) -> Result<Self, Message>;
+}
+
+impl Argument for String {
+    const KIND: &'static str = "text";
+
+    fn read(text: &str) -> Result<Self, Message> {
+        Ok(text.to_string())
+    }
+}
+
+impl Argument for bool {
+    const KIND: &'static str = "yes or no";
+
+    fn read(text: &str) -> Result<Self, Message> {
+        match text.trim().to_lowercase().as_str() {
+            "yes" | "y" | "true" | "on" => Ok(true),
+            "no" | "n" | "false" | "off" => Ok(false),
+            _ => Err(Message::plain(format!("“{text}” isn't yes or no"))),
+        }
+    }
+}
+
+macro_rules! whole {
+    ($($t:ty),*) => {$(
+        impl Argument for $t {
+            const KIND: &'static str = "a whole number";
+
+            fn read(text: &str) -> Result<Self, Message> {
+                let digits: String = text.trim().chars().filter(|c| *c != ',' && *c != '_').map(|c| if c == '−' { '-' } else { c }).collect();
+                digits.parse().map_err(|_| Message::plain(format!("“{text}” isn't a whole number from {} to {}", crate::value::grouped(<$t>::MIN), crate::value::grouped(<$t>::MAX))))
+            }
+        }
+    )*};
+}
+
+whole!(i32, i64, u32, u64, usize);
+
+impl Argument for f64 {
+    const KIND: &'static str = "a number";
+
+    fn read(text: &str) -> Result<Self, Message> {
+        text.trim().replace(',', "").parse().ok().filter(|n: &f64| n.is_finite()).ok_or_else(|| Message::plain(format!("“{text}” isn't a number")))
+    }
+}
+
+/// Reads one argument of type `T` into the value a command is rebuilt from. `derive(Commands)` points each `Arg` here.
+pub fn read_arg<T: Argument>(text: &str) -> Result<ledger::Value, Message> {
+    T::read(text).map(|v| v.value())
 }
 
 /// Everything that can happen in an app, made by `derive(Commands)`. `F` is the facts the labels read their subjects from.
@@ -43,7 +108,8 @@ pub trait Commands<F>: Field + Sized {
 
     fn entries() -> &'static [Entry];
 
-    fn make(entry: usize, subject: Option<u128>) -> Option<Self>;
+    /// Builds the command an entry names, from its subject and the values of its arguments, or `None` when they don't fit.
+    fn make(entry: usize, subject: Option<u128>, args: &[ledger::Value]) -> Option<Self>;
 
     /// The app's keymap file, `keymap.txt` beside its `Cargo.toml`, built into the app.
     fn keymap() -> &'static str {

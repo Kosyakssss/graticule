@@ -43,6 +43,14 @@ struct Palette {
     caret: Caret,
     chosen: usize,
     shown: usize,
+    asking: Option<Asking>,
+}
+
+/// A command the palette is asking the arguments of: its entry and the values read so far.
+#[derive(Clone, Debug)]
+struct Asking {
+    entry: usize,
+    got: Vec<Value>,
 }
 
 /// A command named by a key, the palette or the bar, once its subjects are filled in.
@@ -51,6 +59,7 @@ enum Target<C> {
     Host(usize),
     One(C),
     Many(Vec<C>, usize),
+    Ask(usize),
     Refused(Option<C>, Message),
 }
 
@@ -379,8 +388,18 @@ impl<A: App> Runner<A> {
         let p = self.tree.add(root, Kind::Palette, Some(Id::ROOT.mix(7)), std::panic::Location::caller());
         let f = self.tree.add(p, Kind::Field, Some(PALETTE), std::panic::Location::caller());
         self.tree.nodes[f as usize].text = self.tree.put(&palette.query);
-        self.tree.nodes[f as usize].name = self.tree.put("Type to find a command");
         self.tree.nodes[f as usize].span = crate::tree::Fill;
+        if let Some(asking) = &palette.asking {
+            let entry = A::Cmd::entries()[asking.entry];
+            let Some(arg) = entry.args.get(asking.got.len()) else { return };
+            let wanted = if arg.name.is_empty() { arg.kind.to_string() } else { format!("{}, {}", arg.name, arg.kind) };
+            let asked = self.tree.put(&format!("{}: {wanted}", title(entry.name)));
+            self.tree.nodes[f as usize].name = asked;
+            let t = self.tree.add(p, Kind::Text { mono: false, tone: crate::tree::Tone::Muted, strong: false }, Some(Id::ROOT.mix(11)), std::panic::Location::caller());
+            self.tree.nodes[t as usize].text = asked;
+            return;
+        }
+        self.tree.nodes[f as usize].name = self.tree.put("Type to find a command");
         let mut found: Vec<(String, Target<A::Cmd>, String)> = Vec::new();
         for (e, entry) in A::Cmd::entries().iter().enumerate() {
             if entry.internal {
@@ -390,6 +409,7 @@ impl<A: App> Runner<A> {
             let label = match &target {
                 Target::One(c) | Target::Refused(Some(c), _) => c.label_string(&self.facts, Form::Long),
                 Target::Many(cs, count) => cs.first().map(|c| c.label_string(&self.facts, Form::Many(*count))).unwrap_or_default(),
+                Target::Ask(_) => format!("{}…", title(entry.name)),
                 Target::Refused(None, _) | Target::Builtin(_) | Target::Host(_) => title(entry.name),
             };
             let keys = self.keymap.keys_for(self.mode, entry.name).unwrap_or_default();
@@ -434,6 +454,11 @@ impl<A: App> Runner<A> {
                 }
             }
             Target::One(cmd) => self.push_command(node, cmd),
+            Target::Ask(e) => {
+                let r = self.tree.put(&format!("{}…", title(A::Cmd::entries()[e].name)));
+                let n = &mut self.tree.nodes[node as usize];
+                (n.asks, n.text, n.name) = (e as u32, r, r);
+            }
             Target::Many(mut cmds, count) => {
                 self.tree.nodes[node as usize].many = count as u32;
                 if !cmds.is_empty() {
@@ -648,30 +673,38 @@ impl<A: App> Runner<A> {
     }
 
     fn target(&self, e: usize, here: &Here) -> Target<A::Cmd> {
+        self.target_with(e, here, &[])
+    }
+
+    fn target_with(&self, e: usize, here: &Here, args: &[Value]) -> Target<A::Cmd> {
         let entry = A::Cmd::entries()[e];
+        let asking = entry.args.len() > args.len();
+        let make = |k| A::Cmd::make(e, k, args);
         if !entry.subject {
-            return match A::Cmd::make(e, None) {
+            return match make(None) {
+                _ if asking => Target::Ask(e),
                 Some(cmd) => Target::One(cmd),
-                None => Target::Refused(None, Message::from("It needs arguments, which only the app can give it")),
+                None => Target::Refused(None, Message::from("Its arguments couldn't be read")),
             };
         }
         let Some((list, subjects)) = here.as_ref().filter(|(l, _)| entry.subject_type.is_none_or(|t| t() == l.item)) else {
             return Target::Refused(None, Message::from("There is nothing here for it to act on"));
         };
-        let focused = || list.focused.and_then(|k| A::Cmd::make(e, Some(k)));
+        let focused = || list.focused.and_then(|k| make(Some(k)));
         match subjects.as_slice() {
             [] => Target::Refused(None, Message::from("Nothing is chosen")),
+            _ if asking => Target::Ask(e),
             _ if self.count > 1 && !entry.many => Target::Refused(focused(), Message::from("It takes one item at a time, so a count can't go with it")),
             _ if self.count > 1 && list.chosen > 1 => Target::Refused(focused(), Message::from("Several items are chosen already, so a count has nothing to add")),
             _ if self.count > 1 => {
                 let Some(from) = list.focus_index else { return Target::Refused(None, Message::from("Nothing is chosen")) };
-                let cmds: Vec<_> = (from..from.saturating_add(self.count)).map_while(|i| (list.nth)(&self.facts as &dyn Any, list.items, i)).filter_map(|k| A::Cmd::make(e, Some(k))).collect();
+                let cmds: Vec<_> = (from..from.saturating_add(self.count)).map_while(|i| (list.nth)(&self.facts as &dyn Any, list.items, i)).filter_map(|k| make(Some(k))).collect();
                 let n = cmds.len();
                 Target::Many(cmds, n)
             }
-            some if entry.many && list.chosen > 1 => Target::Many(some.iter().filter_map(|k| A::Cmd::make(e, Some(*k))).collect(), list.chosen as usize),
-            [one] => A::Cmd::make(e, Some(*one)).map_or(Target::Refused(None, Message::from("Nothing is chosen")), Target::One),
-            _ => list.focused.and_then(|k| A::Cmd::make(e, Some(k))).map_or(Target::Refused(None, Message::from("Nothing is chosen")), Target::One),
+            some if entry.many && list.chosen > 1 => Target::Many(some.iter().filter_map(|k| make(Some(*k))).collect(), list.chosen as usize),
+            [one] => make(Some(*one)).map_or(Target::Refused(None, Message::from("Nothing is chosen")), Target::One),
+            _ => list.focused.and_then(|k| make(Some(k))).map_or(Target::Refused(None, Message::from("Nothing is chosen")), Target::One),
         }
     }
 
@@ -1329,6 +1362,7 @@ impl<A: App> Runner<A> {
         let times = std::mem::take(&mut self.count).max(1);
         match target {
             Target::Builtin(b) => self.builtin_times(b, times),
+            Target::Ask(e) => self.ask_for(e),
             Target::Host(e) => self.ask(e),
             Target::One(cmd) if times > 1 => self.repeat(cmd, times),
             Target::One(cmd) => {
@@ -1360,6 +1394,9 @@ impl<A: App> Runner<A> {
         }
         if n.host != NONE {
             return self.ask(n.host as usize);
+        }
+        if n.asks != NONE {
+            return self.ask_for(n.asks as usize);
         }
         if n.cmd == NONE {
             return false;
@@ -1646,7 +1683,7 @@ impl<A: App> Runner<A> {
             return self.say(Message::plain(format!("No command is called “{name}”")));
         };
         let entry = A::Cmd::entries()[e];
-        if !entry.subject || !entry.many {
+        if !entry.subject || !entry.many || !entry.args.is_empty() {
             return self.say(Message::plain(format!("{} takes one item at a time, so it can't act over a movement", title(name))));
         }
         let Some(list) = self.current_list().filter(|l| entry.subject_type.is_none_or(|t| t() == l.item)) else {
@@ -1660,7 +1697,7 @@ impl<A: App> Runner<A> {
             Builtin::First => 0,
             _ => last,
         };
-        let cmds = (from.min(to)..=from.max(to)).filter_map(|i| (list.nth)(&self.facts as &dyn Any, list.items, i)).filter_map(|k| A::Cmd::make(e, Some(k))).collect();
+        let cmds = (from.min(to)..=from.max(to)).filter_map(|i| (list.nth)(&self.facts as &dyn Any, list.items, i)).filter_map(|k| A::Cmd::make(e, Some(k), &[])).collect();
         self.run_many(cmds)
     }
 
@@ -1737,9 +1774,47 @@ impl<A: App> Runner<A> {
         true
     }
 
+    fn ask_for(&mut self, entry: usize) -> bool {
+        self.palette = Some(Palette { asking: Some(Asking { entry, got: Vec::new() }), ..Palette::default() });
+        self.pending.clear();
+        self.stale = true;
+        true
+    }
+
+    fn answer(&mut self, mut palette: Palette, mut asking: Asking) -> bool {
+        let entry = A::Cmd::entries()[asking.entry];
+        let Some(arg) = entry.args.get(asking.got.len()) else { return true };
+        match (arg.read)(&palette.query) {
+            Ok(value) => asking.got.push(value),
+            Err(why) => {
+                palette.asking = Some(asking);
+                self.palette = Some(palette);
+                return self.say(why);
+            }
+        }
+        if asking.got.len() < entry.args.len() {
+            self.palette = Some(Palette { asking: Some(asking), ..Palette::default() });
+            return true;
+        }
+        let here = self.here();
+        let times = std::mem::take(&mut self.count).max(1);
+        match self.target_with(asking.entry, &here, &asking.got) {
+            Target::One(cmd) if times > 1 => self.repeat(cmd, times),
+            Target::One(cmd) => self.run(cmd),
+            Target::Many(cmds, _) => self.run_many(cmds),
+            Target::Refused(_, reason) => self.say(reason),
+            Target::Ask(_) | Target::Builtin(_) | Target::Host(_) => true,
+        }
+    }
+
     fn palette_key(&mut self, chord: Chord, text: Option<String>) -> bool {
         let Some(mut palette) = self.palette.take() else { return false };
         self.stale = true;
+        if chord.key == Key::Enter
+            && let Some(asking) = palette.asking.take()
+        {
+            return self.answer(palette, asking);
+        }
         match chord.key {
             Key::Escape => return true,
             Key::Up => palette.chosen = palette.chosen.saturating_sub(1),

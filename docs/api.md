@@ -40,7 +40,7 @@ enum Cmd {
     Add,
     #[label(done: "Mark “{title}” not done", else: "Mark “{title}” done")]
     Toggle(#[subject] Key<Item>),
-    #[label("Remove “{title}”", short: "Remove")]
+    #[label("Remove “{title}”", short: "Remove", many: "Remove {count} items")]
     Remove(#[subject] Key<Item>),
     #[label("Clear finished")]
     ClearDone,
@@ -59,7 +59,7 @@ impl App for Todo {
         match cmd {
             Cmd::Add => no_if(self.draft.is_empty(), t!("Type something first")),
             Cmd::Toggle(item) | Cmd::Remove(item) => no_if(!self.items.has(*item), t!("That item is gone")),
-            Cmd::ClearDone => no_if(self.items.none(|item| item.done), t!("Nothing is finished yet")),
+            Cmd::ClearDone => no_if(!self.items.any(Item::done), t!("Nothing is finished yet")),
             Cmd::Export => no_if(self.items.is_empty(), t!("The list is empty")),
             Cmd::Exported(_) | Cmd::Edit(_) => Yes,
         }
@@ -75,7 +75,7 @@ impl App for Todo {
             Cmd::Remove(item) => self.items.remove(item),
             Cmd::ClearDone => self.items.retain(|item| !item.done),
             Cmd::Export => {
-                cx.save_as("To do.md", self.as_markdown(), Cmd::Exported);
+                cx.save_as("To do.md", Todo::as_markdown, Cmd::Exported);
                 Outcome::Nothing
             }
             Cmd::Exported(Ok(path)) => cx.say(t!("Saved to {path}")),
@@ -144,14 +144,16 @@ Reading it:
 - **`#[session]`** marks where the user is rather than what they're making: the half-typed field and the selection are kept on this device and never synced.
 - **`available` names every command.** There's no catch-all, so a new command can't become available by accident. Each "no" carries the reason the status line shows.
 - **`update` handles every case.** `change` and `remove` return `Nothing` if the item is gone by then. New keys come from `cx`, so replaying the history gives the same list.
-- **`#[subject]`**: inside a list row, `Cmd::Toggle` and `Cmd::Remove` get the row's key without being told. The same `Remove` works from a keymap sequence, the palette and the context menu, on the item with focus, or on every selected item at once.
+- **`#[subject]`**: inside a list row, `Cmd::Toggle` and `Cmd::Remove` get the row's key without being told. The same `Remove` works from a keymap sequence, the palette and the context menu, on the item with focus, or on every selected item at once; `many` is what it says then, and items that can't be removed are skipped with a note in the message line. `Toggle` has no `many`, so it takes only the item with focus.
 - **Labels speak about their subject**: a screen reader hears "Remove 'buy milk'", not ten thousand identical "Remove"s. Inside the row, where the title is already shown, the link shows the `short` label, "Remove". `Toggle`'s label follows the item's state.
+- **Fast at any size, without trying.** A list keeps a count of each yes-or-no field, so `self.items.any(Item::done)` is instant with fifty million items. `retain` runs right away on a short list and in the background on a long one, with its progress shown. `save_as` takes the function that makes the file, `Todo::as_markdown`, and runs it in the background.
 - **Effects are asked for, not done.** `Export` asks for a save dialog and a file write; the result comes back as `Exported`, which is `#[internal]`: never in the palette, the menus, the keys or undo. In Specimen the effect is shown instead of run.
 - **Typing is a command.** The kernel sends `Edit` for the field bound to `Todo::draft`; `edit.apply(self)` is the usual handling, and this is the one place to validate a value or keep an invariant.
 - **Undo is one history.** Type "milk", add it, press Cmd-Z: the item goes and "milk" is back in the field. Press it again and the typing goes.
 - **A path where the kernel writes, a reference where it only reads.** The field types into the draft and the list changes the selection, so they get the paths `Todo::draft` and `Todo::selection`; the list only reads the items, so it gets `&self.items`.
 - **`Path` is Graticule's file path**, a value you can keep and show; on screen a long one is shortened in the middle.
 - **Keys without `cx`.** `sample` and `with_titles` build facts for Specimen outside `update`, so their items take `Key::fixed`, which no device ever hands out.
+- **Keys** are in the app's keymap file, not in the code: Delete and `d d` remove, Space ticks, Cmd-Shift-P opens the palette.
 - `t!` marks text for translation. It's written in English; the ids are generated.
 - `states()` puts the app in Specimen in every state that matters.
 - Nothing here says where anything goes in pixels. `page`, `row` and `list` lay out in cells.

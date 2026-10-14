@@ -1,6 +1,6 @@
 # The kernel's design
 
-Status: S1 of the first slice (spec §17), written and awaiting maintainer review. Nothing here is built yet. Decisions marked **Proposed** are engineering choices this page makes; questions only the owner can answer are in the spec's §15 and listed at the end.
+Status: S1 of the first slice (spec §17), written and awaiting maintainer review. Nothing here is built yet. Decisions marked **Proposed** are engineering choices this page makes; questions only the owner could answer went to the spec's §15, and the owner's answers are in §21.
 
 This page says how the kernel turns facts into pixels and input into commands, well enough that S2–S7 can be built from it without guessing. It is held to one test: the to-do app in [`docs/api.md`](../api.md) compiles and runs as written. Where it can't, §16 says so and names the smallest change to `api.md`.
 
@@ -180,17 +180,19 @@ After layout, each node of the new tree is matched with the node of the same id 
 
 Damage is a short list of cell rectangles, merged into bands of whole rows. Toggling one item damages one row; moving the cursor in a list damages two rows.
 
-### 7.2 Painting into a kept texture
+### 7.2 Painting from a kept list of quads
 
-The window's surface textures are not guaranteed to keep their contents from frame to frame, so the kernel keeps its own texture of the whole window. Each frame:
+The window's surface textures are not guaranteed to keep their contents from frame to frame, so every frame must fill the whole surface. **Proposed:** the kernel keeps the frame as a list of quads in a GPU buffer (Feedreader's quad pipeline: glyphs and character graphics from the atlas, fills, lines), with each node owning a range of it. Each frame:
 
-1. Clear the damaged rectangles to the background ink.
-2. Walk the tree, skipping every subtree whose `Area` misses the damage, and turn the nodes that hit it into quads (Feedreader's quad pipeline: glyphs and character graphics from the atlas, fills, lines), clipped to the damage.
-3. Copy the kept texture to the surface and present.
+1. Walk the tree, skipping every subtree whose `Area` misses the damage, and rewrite the quad ranges of the nodes that hit it. A node whose quads no longer fit its range gets a new range; freed ranges are reused.
+2. Upload only the changed ranges.
+3. Let the GPU draw the whole list into the surface and present.
 
-CPU work is proportional to the damage. The copy is a GPU blit of the whole window, about 60 MB at 5K; S3 measures what it costs on the M1. **Proposed fallback** if it doesn't fit the budget: keep every frame's quads in a GPU buffer, update only the changed ranges, and let the GPU redraw the whole quad list, which is still CPU work proportional to the change.
+CPU work is proportional to the damage. The GPU redraws everything, which is what GPUs are for: a full screen of text is tens of thousands of quads. This replaces an earlier draft that painted the damage into a kept texture of the whole window and copied it to the surface each frame. At 5K that texture is about 60 MB, so the copy reads 60 MB and writes 60 MB every frame, while drawing the quads writes the surface once; on Apple's tile-based GPUs, overlapping quads are resolved in on-chip memory, so drawing everything costs about half of copying. Boxes on the grid don't overlap, so drawing order matters only for overlays, which are a second list drawn after the first. S3 measures the GPU time at 5K on the M1.
 
-A law (§19) checks that painting only the damage gives the same pixels as painting everything.
+A further step, worth measuring after S3: most of a Graticule screen is cells, so the grid's frames, rules and mono text could be kept the way terminals keep theirs, as one small record per cell (a character, its inks, its style) that a single shader turns into pixels; a 200 × 60 cell window is about 200 KB, and changing a row rewrites a few hundred bytes. Quads would then be needed only for what isn't cell-shaped.
+
+A law (§19) checks that patching the quad list gives the same pixels as building it from scratch.
 
 ## 8. Hit testing
 
@@ -250,7 +252,10 @@ The kernel has `trait Bind<C, Marker>` with `impl<C> Bind<C, Whole> for C where 
 | A keymap sequence, the palette, the menu bar | the focused list's selection if it has more than the focused row; otherwise the focused row |
 | Nothing focused or selected | none: the command is unavailable, and says "Nothing chosen" |
 
-A command started on several subjects runs `update` once per subject, in list order, inside one transaction, so it is one undo step. Subjects that `available` refuses are skipped. How such a command is labelled, and whether it should run when only some subjects can take it, are owner's questions (§21).
+A command started on several subjects runs `update` once per subject, in list order, inside one transaction, so it is one undo step. The owner decided (§21) how it reads and what happens when some subjects can't take it:
+
+- A command runs on several subjects only if its label says what it is called then: `#[label("Remove “{title}”", short: "Remove", many: "Remove {count} items")]`. Without `many`, the command takes only the focused row, so no command shows a label nobody wrote.
+- Subjects that `available` refuses are skipped, the others run, and the message line says which were skipped and why ("Removed 2. ‘Call mum’ was already gone.").
 
 ### 10.3 Selection
 
@@ -288,9 +293,9 @@ The caret and the field's own text selection are state that only the field needs
 
 ## 12. Effects
 
-`cx.save_as("To do.md", contents, Cmd::Exported)` pushes `Effect::SaveAs { name, contents, reply }` into `Cx`. `reply` is a `fn(Result<Path, Failure>) -> C`, which `Cmd::Exported` is.
+`cx.save_as("To do.md", Todo::as_markdown, Cmd::Exported)` pushes `Effect::SaveAs { name, write, reply }` into `Cx`. `write` is a `fn(&F) -> String` that makes the file's contents, and `reply` is a `fn(Result<Path, Failure>) -> C`, which `Cmd::Exported` is.
 
-After the commit the kernel runs effects in order: the save panel opens as a sheet on the window, without blocking the event loop; the file is written by a job; the result comes back through the event loop as `Cmd::Exported(result)`, which goes through `available` and `update` like any command. `#[internal]` keeps it out of the palette, menus, keymaps and undo.
+After the commit the kernel runs effects in order: the save panel opens as a sheet on the window, without blocking the event loop; a job takes a snapshot of the facts (§14), runs `write` on it and writes the file, shown with its progress in the status line, so exporting fifty million items never touches the main thread; the result comes back through the event loop as `Cmd::Exported(result)`, which goes through `available` and `update` like any command. `#[internal]` keeps it out of the palette, menus, keymaps and undo.
 
 The command log records the result command, not the effect, so a replay never opens dialogs or writes files: it feeds the logged result back in. Specimen runs `update` on a copy and shows the effects it collected instead of running them. Scope lists every effect with its timing.
 
@@ -321,7 +326,7 @@ let (app, interaction_state) = Ledger::open::<Todo>(folder)?;
 - **Steps.** A commit is an undo step if it changed the document, or typed into any field. A step keeps every operation of the transaction, document and session alike, each with its inverse, plus the selection and focus from before. Commits that only move around (selecting, opening a file, switching places) are not steps.
 - **Undo** applies a step's inverse operations to the facts through `Facts::apply`, as new operations, so sync sees an undo like any change. Undo and redo don't go through the app's `update`: the facts they produce are facts the app already had.
 - **The command log** gets the command, its subject, the values `Cx` handed out and the outcome, for replays and Scope. Commands that returned `Nothing` are not recorded.
-- **Off the main thread.** The commit's operations go over a channel to Ledger's own thread, which keeps the CRDT, appends to the saved log and writes snapshots. The main thread's cost is the size of the change.
+- **Off the main thread.** The commit's operations go over a channel to Ledger's own thread, which keeps the CRDT, appends to the saved log and writes snapshots. The main thread's cost is the size of the change. The price is memory: the document is held twice, once as the app's plain values and once inside the CRDT.
 - **Incoming operations** (sync, later) arrive from Ledger's thread already merged, as operations on keys, and `receive` applies them to the facts, so the main thread's cost is again the size of the change.
 
 **Proposed:** the main thread's `List` is an ordered map from keys to records with no CRDT inside it, and operations name neighbours by key (`InsertAfter { list, after, key, value }`). The CRDT library (Loro or Automerge, spec §15) lives only on Ledger's thread, decides the merged order, and sends back what changed. That keeps the kernel independent of the library S5 chooses, and keeps every merge off the main thread.
@@ -332,11 +337,13 @@ The document is saved by Ledger's thread from the operations it receives. The se
 
 ## 14. Derived and live values, jobs
 
-None of these are in the to-do app, so the first slice doesn't build them; build-plan item 7 does. The design is fixed now so the first slice leaves room for it.
+The to-do app needs jobs (for exporting and for bulk changes), tallies and bulk changes, so the first slice builds those in S5. It has no live or derived values; build-plan item 7 builds them, and the design is fixed now so the first slice leaves room for them.
 
 - **Jobs.** `Jobs<C>` runs work on a small pool of background threads. Every running job has a name and is visible in the status line and in Scope. A job's result comes back as a command, a live value or a derived value.
 - **Live values.** `Live<T>` holds a shared slot that another thread publishes `Arc<T>` snapshots into without locks (the `arc-swap` crate's safe API). Publishing sets an atomic flag and wakes the event loop only if the flag was clear, so a feed ticking ten thousand times a second wakes the main thread at most once per frame. At the start of a frame the kernel pins each live value's latest snapshot; `now()` returns the pinned one, so a whole frame sees one value. A new snapshot bumps the field's version.
 - **Derived values.** `#[derived(Candles::of, from = [quotes, chosen])]` registers a function and the fields it reads. After each commit and each live update, the kernel compares the versions of those fields with the ones the current value was computed from; if they differ, it takes snapshots of them and starts a job, dropping the result of any older job for the same value. The view reads the latest finished value and whether a newer one is coming.
+- **Tallies.** Every `List` keeps a count for each yes-or-no field and each choice of each plain enum field of its records, generated by `derive(Facts)` and updated with every change at constant cost. So `self.items.any(Item::done)` and `self.items.count(Item::done)` answer instantly at any size, and `List` offers no query that takes a closure: a question that has to look at every item is a job.
+- **Bulk changes.** A change that has to look at every item (`retain`, a find-and-replace) runs at once when the list is small enough to stay inside the budget; the threshold is measured, not guessed. Above it, Ledger runs the search as a job on a snapshot, then applies the changes on the main thread a slice per frame, checking each item again as it goes (so an item unticked in the meantime stays), with its progress in the status line. It is one undo step, and undo while it runs cancels it. The app's code is the same either way.
 - **Snapshots must be cheap.** A derived job's inputs cross to another thread, and copying a large list on the main thread would break principle 2. So live values and resources are shared by `Arc`, and Ledger's containers share their storage in chunks (copy on write), so a snapshot costs about the number of chunks, not the number of items. S5 builds `List` that way, even though the to-do app doesn't need it yet.
 
 ## 15. Budgets: where the time goes
@@ -348,7 +355,7 @@ None of these are in the to-do app, so the first slice doesn't build them; build
 | Finding what's under the pointer | one array read |
 | Rebuilding and laying out a one-row change | the view is rebuilt (only visible rows), layout reuses every unchanged subtree |
 | Painting the changed region | only nodes that touch the damage |
-| Handing the frame to the GPU | the damaged quads plus one blit; S3 measures the blit |
+| Handing the frame to the GPU | only the changed quad ranges are uploaded; the GPU redraws the list |
 | No allocation per frame | two trees and their arenas swapped and reused; inline strings in edits |
 | Idle | no timers, no blinking caret, live values wake at most once per frame |
 
@@ -367,13 +374,13 @@ Everything else is supported as written, by the parts above:
 
 - `#[derive(Facts, Default)]`: the kernel's and Ledger's containers implement `Default` without requiring it of their items.
 - `List<Item>`, `#[key]`, `Key<Item>`: `Record`, `Find<Item>` (§2).
-- `available`'s `no_if`, `Yes`, `self.items.has`, `none`, `is_empty`: Ledger's `List` and the prelude.
+- `available`'s `no_if`, `Yes`, `self.items.has`, `any`, `is_empty`: Ledger's `List` and the prelude.
 - `update`'s arms as single expressions returning `Outcome` (§9.2), `cx.key()` inferred (§9.3), `cx.save_as(…, Cmd::Exported)` (§12), `cx.say` returning `Outcome::Nothing`, `edit.apply(self)` (§11).
 - `ui.field(Todo::draft, …).on_submit(Cmd::Add)` (§4.6, §5.3), `ui.button(Cmd::Add)` and `ui.link(Cmd::Remove)` (§9.5), `ui.check(&item.title, item.done, Cmd::Toggle)` with the row's key (§10.1).
 - The undo story ("type milk, add it, Cmd-Z: the item goes and milk is back"): the Add step holds both the `Text` splice from `take()` and the list insert (§13.2); the typing is the step before it.
 - `states()` and `graticule::run::<Todo>(t!("To do"))`: `run` requires `App + Default` for the first launch, when there is no snapshot yet.
 
-Two things work but strain principle 2. `available` asks `self.items.none(|item| item.done)` and `ClearDone` runs `retain`, both a pass over every item; `Export` builds the whole Markdown text on the main thread. At 10,000 items that is tens of microseconds, inside the frame budget but not inside "updating facts for one action under 1 µs", and it grows with the list. The `available` answer is cached until the next commit, which helps but doesn't remove the pass. Whether the example should teach a different pattern is a question about what app code should look like, so it is the owner's (§21).
+The first draft of `api.md` also had three lines whose cost grew with the list: `available` asked `self.items.none(|item| item.done)`, `ClearDone` ran `retain` on the main thread, and `Export` built the Markdown there. The owner decided that the fast way is the default way and that potentially heavy work runs off the main thread with its progress shown (§21). So `available` asks `self.items.any(Item::done)`, answered from the list's tallies; `retain` is a bulk change (§14); and `save_as` takes `Todo::as_markdown` itself, which runs in a job. The tallies, bulk changes and the job behind `save_as` are part of S5 and S6, not item 7, because the to-do app needs them.
 
 ## 17. Which step builds what
 
@@ -389,7 +396,7 @@ The first slice's steps each end with something visible. S3 needs facts and labe
 | `derive(Commands)`, read side: names, labels, subjects; `available` and `Available`; `t!` in English with recorded ids | S3 |
 | The tree, ids, `Ui` with typed subjects, `Bind` | S3 |
 | Layout in cells, the narrow form, list virtualization, scroll anchoring | S3 |
-| Comparing trees, damage, the kept texture, painting | S3 |
+| Comparing trees, damage, the kept quad list, painting | S3 |
 | Hit testing; hover, press and focus | S3 |
 | Components: page, row, list, field, check, link, button, action bar, status line, message line | S3 |
 | The accessibility tree from the tree | S3 |
@@ -397,13 +404,13 @@ The first slice's steps each end with something visible. S3 needs facts and labe
 | Subjects resolved from rows, focus and selection; bulk commands; selection changes as edits | S4 |
 | `Edit` and the field's editing model; caret and input method | S4 |
 | Keymap files applied live, sequences, which-key, the palette | S4 |
-| The journal and transactions, register comparison, `Op`, rollback on panic | S5 |
+| The journal and transactions, register comparison, `Op`, rollback on panic; jobs, tallies and bulk changes | S5 |
 | The CRDT on Ledger's thread, chosen by measuring both candidates; chunked `List` storage | S5 |
 | Steps, merging typing by word, the undo tree with selection, focus and caret; versions | S5 |
 | The command log; saving and reopening with the session snapshot | S5 |
-| `Effect`, the save panel, file writing as a job, results as internal commands, `Path`, `Failure`, the message line | S6 |
+| `Effect`, the save panel, making and writing the file as a job, results as internal commands, `Path`, `Failure`, the message line | S6 |
 | Specimen's Screens place, `States`, running `update` on a copy, showing effects, offscreen renders, `--specimen` in `graticule::run` | S7 |
-| Jobs, live and derived values | build-plan item 7 |
+| Live and derived values | build-plan item 7 |
 | Context menus (the `unsafe` exception), drag and drop, canvases, pictures | later items |
 
 ## 18. What moves in from Feedreader and what is rewritten
@@ -436,9 +443,9 @@ Feedreader's Graticule (its `crates/graticule`) is immediate-mode: the app paint
 New laws need the owner's approval (`AGENTS.md`). These are the ones the design leans on, by step:
 
 - **S2:** idle is zero; no allocation per frame (already in the spec).
-- **S3:** every node's `Area` lies within its parent's and on the grid, for generated trees and window sizes; no two nodes in a frame share an id; painting only the damage gives the same pixels as painting everything; the node found under a point is the topmost node painted there; a list's scroll position follows its item through insertions and removals (moved from Feedreader).
+- **S3:** every node's `Area` lies within its parent's and on the grid, for generated trees and window sizes; no two nodes in a frame share an id; patching the quad list gives the same pixels as building it from scratch; the node found under a point is the topmost node painted there; a list's scroll position follows its item through insertions and removals (moved from Feedreader).
 - **S4:** a command is never run when `available` says no; a bulk command is one transaction; field edits through `update` give the same text as the field's model (moved from Feedreader).
-- **S5:** the laws already listed for Ledger in spec §13.2, plus: a transaction rolled back after a panic leaves the facts as they were; the `Outcome` an app returns agrees with the journal.
+- **S5:** the laws already listed for Ledger in spec §13.2, plus: a list's tallies always equal a count over its items; a bulk change applied in slices gives the same facts as one applied at once; a transaction rolled back after a panic leaves the facts as they were; the `Outcome` an app returns agrees with the journal.
 
 ## 20. Things this page leaves for later, on purpose
 
@@ -447,9 +454,11 @@ New laws need the owner's approval (`AGENTS.md`). These are the ones the design 
 - Versions finer than a top-level field.
 - Late reading and frame pacing (build-plan item 7).
 
-## 21. Questions for the owner
+## 21. The owner's answers
 
-These are in the spec's §15. None blocks S2. The owner has answered one: inside a row, a control shows a short label ("Remove") and the screen reader hears the full one.
-- **Commands on several items** (before S4). With three items selected, what does `Remove` say ("Remove 3 items"? the titles?), and if one of them can't be removed, does it remove the other two or refuse?
-- **The to-do app's keys** (before S4). The first slice needs `Remove` from a keymap sequence, and Graticule assigns no keys, so the to-do's default keymap is the owner's to approve. The same goes for the palette: it is in the menu bar either way; does it have a default key?
-- **Work that grows with the list in the example** (before S4). Should `api.md`'s to-do keep `none`, `retain` and building Markdown on the main thread, as the clearest code for a learner, or teach a pattern that stays fast at any size?
+The questions this design raised were answered by the owner and are written into the spec:
+
+- **Labels inside a row.** A control inside a row shows a short label ("Remove"); the screen reader, the palette and the menus say the full one ("Remove “buy milk”"). Written as `short:` in `#[label]` (§9.1).
+- **Commands on several items.** The label says how many ("Remove 3 items"), written as `many:` (§10.2). Items that can't take the command are skipped, the rest run, and the message line says which were skipped and why.
+- **The to-do app's keys.** The owner left demo apps' default keys to the maintainers, for good use. The to-do app's keymap: Delete and the sequence `d d` remove the focused or selected items, Space ticks the focused item, Cmd-Shift-P opens the palette.
+- **Work that grows with the data.** The fast way is the default way; anything potentially heavy runs off the main thread, with its progress shown (§14, §16).

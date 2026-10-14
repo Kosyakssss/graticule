@@ -42,6 +42,8 @@ Say you tick an item in a to-do list.
 
 Typing works the same way: each keystroke is a small command that changes the field's text, so it can be undone like anything else. When nothing happens, none of this runs.
 
+A list of fifty million items behaves the same. Lists keep running counts (how many items are done), so questions like "is anything finished?" are instant. Work that really does have to touch every item, like clearing all the finished ones or exporting the whole list, runs in the background with its progress in the status line, and the app keeps responding while it runs.
+
 ## Commands are everywhere at once
 
 Every command has a name and a label. From that single list Graticule makes the action bar, the help page, the palette, the menus, the right-click menus and the keys. Keys live in a separate file you can edit while the app runs. Press the first key of a sequence and the bar shows what can come next, like Helix.

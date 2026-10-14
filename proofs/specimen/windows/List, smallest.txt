@@ -1,6 +1,6 @@
 window		0 0 30 23	
   page	List	0 0 30 7	
-    list		2 3 26 3	18 items
+    list		2 3 26 3	24 items
       list item		2 3 24 3	
         text	A list of the records in a List field, scrolled by whole rows, with its selection in a Selection field. The view describes one row; the kernel calls it only for the rows that show, so a list of fifty million items costs what a screenful does.	2 3 24 3	
   alert		2 7 26 1	

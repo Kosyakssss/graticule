@@ -659,7 +659,9 @@ fn blocks(component: Component) -> List<Block> {
         if let Some(lines) = &mut code {
             if line.starts_with("```") {
                 pieces.push((Piece::Code, lines.join("\n")));
-                pieces.push((Piece::Live, String::new()));
+                if !pieces.iter().any(|(p, _)| *p == Piece::Live) {
+                    pieces.push((Piece::Live, String::new()));
+                }
                 code = None;
             } else {
                 lines.push(line);

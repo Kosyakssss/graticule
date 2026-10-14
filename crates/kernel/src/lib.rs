@@ -20,6 +20,7 @@ pub mod metrics;
 pub mod offscreen;
 pub mod pace;
 pub mod paint;
+pub mod proof;
 pub mod px;
 pub mod runner;
 pub mod shell;

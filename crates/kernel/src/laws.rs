@@ -242,6 +242,22 @@ mod tree {
         }
 
         #[test]
+        fn an_approved_sheet_that_renders_the_same_reports_no_change(shapes in prop::collection::vec(shape(), 1..5), cols in 10u32..160, rows in 6u32..60, items in 0u64..40) {
+            let mut text = Text::new();
+            let m = metrics(&mut text, cols, rows);
+            let board = board(items);
+            let (mut approved, mut now) = (Tree::default(), Tree::default());
+            for tree in [&mut approved, &mut now] {
+                build(tree, &shapes, &board, &Scrolls::new());
+                lay(tree, &mut text, m);
+            }
+            let kept = crate::proof::write(&crate::proof::describe(&approved));
+            prop_assert_eq!(crate::proof::read(&kept), crate::proof::describe(&approved));
+            let said = crate::proof::changes(&crate::proof::read(&kept), &crate::proof::describe(&now));
+            prop_assert!(said.is_empty(), "{:?}", said);
+        }
+
+        #[test]
         fn no_two_nodes_share_an_id(shapes in prop::collection::vec(shape(), 1..5), items in 0u64..40) {
             let board = board(items);
             let mut tree = Tree::default();

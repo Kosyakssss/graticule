@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use ledger::{Change, Choose, Edit, ErasedPath, History, Op, Store, Transaction, Value};
 use winit::event::{Ime, KeyEvent};
 
-use crate::app::{App, Cx, Effect, Failure, Moment, Path, Said};
+use crate::app::{App, Cx, Effect, Failure, Jobs, Moment, Path, Reply, Said};
 use crate::builtin::Builtin;
 use crate::command::{Available, Commands, Form};
 use crate::components::Look;
@@ -147,11 +147,12 @@ pub enum Slice {
 
 const SLICE: Duration = Duration::from_micros(300);
 
-/// Background work an effect started: its name for the status line, and what turns its result into the app's command. A result of `None` means the user called it off, and nothing comes back.
+/// Background work an effect started: its name for the status line, and what turns its result into the app's command. A result of `None` means it ended with nothing to say, such as when the user called off a save.
 struct Job<C> {
     name: String,
-    receive: mpsc::Receiver<Option<Result<Path, Failure>>>,
-    reply: fn(Result<Path, Failure>) -> C,
+    receive: mpsc::Receiver<Option<Box<dyn Any + Send>>>,
+    reply: Reply<C>,
+    lost: Option<C>,
 }
 
 /// A command the host around the app adds to its window, such as Specimen's "Show “Empty”". It shows in the bar and the palette beside the app's own; the host learns it was chosen through `Runner::asked`.
@@ -234,6 +235,8 @@ impl<A: App> Runner<A> {
     pub fn new(mut facts: A) -> Self {
         ledger::Field::attach(&mut facts, ErasedPath::ROOT);
         let (keymap, said) = read_keymap::<A>(A::Cmd::keymap(), "The keymap").unwrap_or_else(|said| (Keymap::default(), Some(said)));
+        let mut started = Jobs::new();
+        facts.start(&mut started);
         Self {
             facts,
             history: History::new(),
@@ -281,7 +284,7 @@ impl<A: App> Runner<A> {
             background: VecDeque::new(),
             waker: None,
             replaying: false,
-            effects: Vec::new(),
+            effects: started.effects,
             jobs: Vec::new(),
             versions: HashMap::new(),
             deriving: HashMap::new(),
@@ -1565,20 +1568,37 @@ impl<A: App> Runner<A> {
         match effect {
             Effect::SaveAs { name, write, reply } => {
                 let dialog = rfd::AsyncFileDialog::new().set_file_name(&name).set_parent(window).save_file();
-                let file = name.clone();
-                self.job(format!("Saving “{name}”"), reply, move |facts| {
+                let (file, facts) = (name.clone(), self.facts.clone());
+                self.saving(format!("Saving “{name}”"), reply, move || {
                     pollster::block_on(dialog).map(|chosen| {
                         let path = chosen.path().to_path_buf();
-                        std::fs::write(&path, write(facts)).map(|()| Path(path)).map_err(|e| Failure::new(format!("“{file}” couldn't be saved: {e}")))
+                        std::fs::write(&path, write(&facts)).map(|()| Path(path)).map_err(|e| Failure::new(format!("“{file}” couldn't be saved: {e}")))
                     })
                 });
             }
             Effect::Write { path, write, reply } => {
                 let name = path.0.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                self.job(format!("Saving “{name}”"), reply, move |facts| {
-                    let written = path.0.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path.0, write(facts)));
+                let facts = self.facts.clone();
+                self.saving(format!("Saving “{name}”"), reply, move || {
+                    let written = path.0.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path.0, write(&facts)));
                     Some(written.map(|()| path).map_err(|e| Failure::new(format!("“{name}” couldn't be saved: {e}"))))
                 });
+            }
+            Effect::Job { name, work, reply } => self.spawn(name, move || Some(work()), reply, None),
+            Effect::Stream { name, field, run } => {
+                let mut feed = None;
+                self.facts.moving(&mut |at, value| {
+                    if at == field {
+                        feed = value.feed();
+                    }
+                });
+                match feed {
+                    Some(feed) => self.spawn(name, move || {
+                        run(feed);
+                        None
+                    }, Box::new(|_| None), None),
+                    None => self.said = Some(Said::Failure(format!("“{name}” has no live value to write"))),
+                }
             }
             Effect::Open { target } => {
                 let opener = if cfg!(target_os = "macos") {
@@ -1597,21 +1617,24 @@ impl<A: App> Runner<A> {
         self.stale = true;
     }
 
-    fn job(&mut self, name: String, reply: fn(Result<Path, Failure>) -> A::Cmd, work: impl FnOnce(&dyn Any) -> Option<Result<Path, Failure>> + Send + 'static) {
-        let facts = self.facts.clone();
+    fn saving(&mut self, name: String, reply: fn(Result<Path, Failure>) -> A::Cmd, work: impl FnOnce() -> Option<Result<Path, Failure>> + Send + 'static) {
+        let lost = reply(Err(Failure::new(format!("{name} stopped before it finished"))));
+        let back: Reply<A::Cmd> = Box::new(move |done| done.downcast::<Result<Path, Failure>>().ok().map(|done| reply(*done)));
+        self.spawn(name, move || work().map(|done| Box::new(done) as Box<dyn Any + Send>), back, Some(lost));
+    }
+
+    fn spawn(&mut self, name: String, work: impl FnOnce() -> Option<Box<dyn Any + Send>> + Send + 'static, reply: Reply<A::Cmd>, lost: Option<A::Cmd>) {
         let (send, receive) = mpsc::channel();
         let waker = self.waker.clone();
         let started = std::thread::Builder::new().name("graticule job".into()).spawn(move || {
-            let _ = send.send(work(&facts as &dyn Any));
+            let _ = send.send(work());
             if let Some(waker) = waker {
                 waker.wake();
             }
         });
         match started {
-            Ok(_) => self.jobs.push(Job { name, receive, reply }),
-            Err(e) => {
-                self.run(reply(Err(Failure::new(format!("{name} couldn't start: {e}")))));
-            }
+            Ok(_) => self.jobs.push(Job { name, receive, reply, lost }),
+            Err(e) => self.said = Some(Said::Failure(format!("{name} couldn't start: {e}"))),
         }
     }
 
@@ -1621,17 +1644,24 @@ impl<A: App> Runner<A> {
             self.read_keys();
         }
         let mut results = Vec::new();
-        self.jobs.retain(|job| match job.receive.try_recv() {
-            Ok(result) => {
-                results.extend(result.map(job.reply));
-                false
+        let mut at = 0;
+        while at < self.jobs.len() {
+            match self.jobs[at].receive.try_recv() {
+                Err(mpsc::TryRecvError::Empty) => at += 1,
+                Ok(done) => {
+                    let job = self.jobs.remove(at);
+                    results.extend(done.and_then(job.reply));
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    let job = self.jobs.remove(at);
+                    match job.lost {
+                        Some(lost) => results.push(lost),
+                        None => self.said = Some(Said::Failure(format!("“{}” stopped before it finished", job.name))),
+                    }
+                    self.stale = true;
+                }
             }
-            Err(mpsc::TryRecvError::Empty) => true,
-            Err(mpsc::TryRecvError::Disconnected) => {
-                results.push((job.reply)(Err(Failure::new(format!("{} stopped before it finished", job.name)))));
-                false
-            }
-        });
+        }
         for cmd in results {
             self.run(cmd);
         }
@@ -1651,6 +1681,10 @@ impl<A: App> Runner<A> {
     /// Keeps effects instead of running them: Specimen shows what the app asked for, and no panel opens.
     pub fn hold_effects(&mut self) {
         self.hold = true;
+        if !self.effects.is_empty() {
+            let asked: Vec<String> = self.effects.drain(..).map(|e| format!("{e:?}")).collect();
+            self.said = Some(Said::Note(Message::plain(format!("Specimen didn't start what the app runs: {}", asked.join(", then ")))));
+        }
     }
 
     fn ask(&mut self, e: usize) -> bool {

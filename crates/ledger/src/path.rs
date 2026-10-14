@@ -263,6 +263,11 @@ pub trait Moving {
 
     /// Says whether a newer computation is on its way.
     fn coming(&mut self, _coming: bool) {}
+
+    /// The writing end of a live value, for a job that feeds it.
+    fn feed(&self) -> Option<Box<dyn Any + Send>> {
+        None
+    }
 }
 
 /// Work that runs on another thread and hands back a value of any type.

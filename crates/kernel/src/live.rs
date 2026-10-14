@@ -70,7 +70,11 @@ impl<T> Clone for Live<T> {
     }
 }
 
-impl<T> Moving for Live<T> {
+impl<T: Send + Sync + 'static> Moving for Live<T> {
+    fn feed(&self) -> Option<Box<dyn Any + Send>> {
+        Some(Box::new(Feed { slot: self.slot.clone() }))
+    }
+
     fn pin(&mut self) -> bool {
         if !self.slot.fresh.swap(false, Ordering::AcqRel) {
             return false;

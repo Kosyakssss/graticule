@@ -110,6 +110,7 @@ Apps can show pictures: icons and small drawings, made as SVG files in any drawi
 `cargo run -p bindery -- new apps/hello` starts a new app: a window with a counter, two commands and one named state, ready to change, which already passes Assay and opens in Specimen. `cargo run -p bindery -- dev apps/hello` runs it and watches the code: every time a file is saved it builds the app again, and if the build works, the window closes and reopens with the new version in the same place, at the same size, with the same things in it. If the build fails, the errors show in the terminal and the app you have keeps running.
 
 Some of what an app shows changes on its own: prices from a market, the level of a microphone, a download's progress. Such a value is written by its own source as often as it likes, and the window wakes to show it at most once per picture, never more. Other values are worked out from the app's facts, a chart from thousands of prices or a count over a long list. They are worked out in the background, only when what they come from has changed, so the window never waits for them; until the new one is ready the app shows the last one, and the status line says "Working out …" with its name.
+An app can also run work of its own in the background, such as a feed that keeps prices current or a search through many files. Every such job shows by its name in the status line while it runs, and if one stops without finishing, the message line says so.
 
 ## How speed is measured
 

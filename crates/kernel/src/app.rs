@@ -3,9 +3,10 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ledger::{Facts, Field, Key, Outcome, Value};
+use ledger::{FactPath, Facts, Field, Key, Outcome, Value};
 
 use crate::command::{Available, Commands};
+use crate::live::{Feed, Live};
 use crate::message::Message;
 use crate::ui::Ui;
 
@@ -18,6 +19,9 @@ pub trait App: Facts + Send {
 
     /// What each command does. It runs only after `available` said yes, and returns `Outcome::Nothing` if the command can no longer apply.
     fn update(&mut self, cmd: Self::Cmd, cx: &mut Cx<Self::Cmd>) -> Outcome;
+
+    /// Starts the work that runs as long as the app does, such as a feed that writes a live value. Every job shows by name in the status line while it runs.
+    fn start(&self, _jobs: &mut Jobs<Self::Cmd>) {}
 
     /// How the facts look. It is a pure function of the facts: it reads them and never writes back.
     fn view(&self, ui: &mut Ui<Self::Cmd>);
@@ -175,6 +179,44 @@ pub enum Effect<C> {
     Write { path: Path, write: Contents, reply: fn(Result<Path, Failure>) -> C },
     Open { target: String },
     Copy { text: String },
+    Job { name: String, work: ledger::Work, reply: Reply<C> },
+    Stream { name: String, field: u16, run: Box<dyn FnOnce(Box<dyn Any + Send>) + Send> },
+}
+
+/// What turns a job's finished result back into a command.
+pub type Reply<C> = Box<dyn FnOnce(Box<dyn Any + Send>) -> Option<C> + Send>;
+
+/// Work that runs while the app does, started in `App::start`.
+pub struct Jobs<C> {
+    pub(crate) effects: Vec<Effect<C>>,
+}
+
+impl<C: 'static> Jobs<C> {
+    pub(crate) fn new() -> Self {
+        Self { effects: Vec::new() }
+    }
+
+    /// Runs `source` on its own thread with the writing end of a `#[live]` field, for as long as it keeps going: `jobs.stream(t!("Market data"), market::connect(), Ticker::quotes)`.
+    pub fn stream<F: Field, T: Send + Sync + 'static>(&mut self, name: impl Into<Message>, source: impl FnOnce(Feed<T>) + Send + 'static, field: FactPath<F, Live<T>>) {
+        let Some(field) = field.erased().first_field() else { return };
+        let run = move |feed: Box<dyn Any + Send>| {
+            if let Ok(feed) = feed.downcast::<Feed<T>>() {
+                source(*feed);
+            }
+        };
+        self.effects.push(Effect::Stream { name: name.into().to_string(), field, run: Box::new(run) });
+    }
+
+    /// Runs `work` once in the background, like `Cx::job`.
+    pub fn job<T: Send + 'static>(&mut self, name: impl Into<Message>, work: impl FnOnce() -> T + Send + 'static, reply: fn(T) -> C) {
+        self.effects.push(job(name.into(), work, reply));
+    }
+}
+
+fn job<C: 'static, T: Send + 'static>(name: Message, work: impl FnOnce() -> T + Send + 'static, reply: fn(T) -> C) -> Effect<C> {
+    let work: ledger::Work = Box::new(move || Box::new(work()));
+    let reply: Reply<C> = Box::new(move |done: Box<dyn Any + Send>| done.downcast::<T>().ok().map(|done| reply(*done)));
+    Effect::Job { name: name.to_string(), work, reply }
 }
 
 impl<C> fmt::Debug for Effect<C> {
@@ -184,6 +226,8 @@ impl<C> fmt::Debug for Effect<C> {
             Effect::Write { path, .. } => write!(f, "write {}", path.0.display()),
             Effect::Open { target } => write!(f, "open {target}"),
             Effect::Copy { text } => write!(f, "copy {} characters", text.chars().count()),
+            Effect::Job { name, .. } => write!(f, "run “{name}”"),
+            Effect::Stream { name, .. } => write!(f, "stream “{name}”"),
         }
     }
 }
@@ -260,6 +304,14 @@ impl<C> Cx<C> {
 
     pub fn copy(&mut self, text: impl Into<String>) {
         self.effects.push(Effect::Copy { text: text.into() });
+    }
+
+    /// Runs `work` in the background, shown by `name` in the status line while it runs. Its result comes back as `reply`. Give it the parts of the facts it needs; Ledger's types share their storage, so cloning a long list costs little.
+    pub fn job<T: Send + 'static>(&mut self, name: impl Into<Message>, work: impl FnOnce() -> T + Send + 'static, reply: fn(T) -> C)
+    where
+        C: 'static,
+    {
+        self.effects.push(job(name.into(), work, reply));
     }
 
     pub fn effects(&self) -> &[Effect<C>] {

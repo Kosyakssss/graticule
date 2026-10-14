@@ -37,7 +37,7 @@ pub mod ui;
 pub mod value;
 
 pub use accesskit;
-pub use app::{App, Cx, Effect, Failure, Moment, Path, Said, States};
+pub use app::{App, Cx, Effect, Failure, Jobs, Moment, Path, Reply, Said, States};
 pub use command::{Arg, Argument, Available, Commands, Entry, Form, Subject, no_if, read_arg};
 pub use ink::Ink;
 pub use message::Message;

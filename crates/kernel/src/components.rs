@@ -8,7 +8,7 @@ use crate::paint::Painter;
 use crate::picture::Picture;
 use crate::px::Rect;
 use crate::text::{Block, Data, Outline, Paint, SpanStyle};
-use crate::tree::{Kind, NONE, Node, Tone, Tree};
+use crate::tree::{Holds, Kind, NONE, Node, Tone, Tree};
 use crate::value::Value;
 
 /// How the pointer and the keyboard are touching a node right now. Changing it repaints the node without building the tree again.
@@ -320,35 +320,81 @@ fn link(p: &mut Painter, n: &Node, label: &str, look: Look, ink: Color) {
     }
 }
 
-fn field(p: &mut Painter, n: &Node, value: &str, placeholder: &str, composing: &str, look: Look) {
+/// How far in from a field's left edge its text starts, in cells: past the magnifying glass of a search field.
+pub fn field_inset(holds: Holds) -> f32 {
+    if holds == Holds::Search { 2.5 } else { 0.5 }
+}
+
+/// How many cells wide a field's text wraps at.
+pub fn field_width(n: &Node) -> usize {
+    (n.area.cols - 1).max(1) as usize
+}
+
+fn field(p: &mut Painter, n: &Node, holds: Holds, value: &str, placeholder: &str, composing: &str, look: Look) {
     let r = p.rect(n.area);
     let theme = p.theme;
-    p.fill(r, theme.field);
+    if holds != Holds::Inline || look.focused {
+        p.fill(r, theme.field);
+    }
     let clip = p.clip_to(r);
-    let mono = p.m.mono();
-    let tx = r.x + p.m.cell_w * 0.5;
+    let (mono, ink) = (p.m.mono(), if n.enabled { theme.ink } else { theme.faint });
+    let tx = r.x + p.m.cell_w * field_inset(holds);
+    if holds == Holds::Search {
+        let glass = Rect::new(r.x + p.m.cell_w * 0.25, r.y + p.m.cell_h * 0.15, p.m.cell_w * 2.0, p.m.cell_h * 0.7);
+        draw_picture(p, glass, &crate::picture::icons::SEARCH, Some(theme.muted));
+    }
     let bar = (p.m.scale * 2.0).round().max(1.0);
+    let caret = crate::field::boundary(value, look.caret as usize);
+    let anchor = crate::field::boundary(value, look.anchor as usize);
     if value.is_empty() && composing.is_empty() {
         p.text(placeholder, mono, (tx, r.y), Some(r.w - p.m.cell_w), theme.faint);
         if look.focused {
             p.fill(Rect::new(tx.floor(), r.y + p.m.cell_h * 0.15, bar, p.m.cell_h * 0.7), theme.ink);
         }
+    } else if let Holds::Lines { .. } = holds {
+        let width = field_width(n);
+        let on = crate::field::row_of(value, width, caret).0;
+        let chosen = anchor.min(caret)..anchor.max(caret);
+        for (k, row) in crate::field::rows(value, width).enumerate() {
+            let y = r.y + k as f32 * p.m.cell_h;
+            if y >= r.bottom() {
+                break;
+            }
+            if look.focused && !chosen.is_empty() && composing.is_empty() {
+                let (a, b) = (chosen.start.clamp(row.start, row.end), chosen.end.clamp(row.start, row.end));
+                let (xa, xb) = (p.advance(&value[row.start..a], mono), p.advance(&value[row.start..b], mono));
+                let past = if chosen.end > row.end && chosen.start <= row.end { p.m.cell_w * 0.5 } else { 0.0 };
+                if xb + past > xa {
+                    p.fill(Rect::new((tx + xa).floor(), y, (xb - xa + past).ceil(), p.m.cell_h), theme.selection);
+                }
+            }
+            if k == on && !composing.is_empty() {
+                let before = p.advance(&value[row.start..caret], mono);
+                let composed = p.advance(composing, mono);
+                p.text(&value[row.start..caret], mono, (tx, y), None, ink);
+                p.text(composing, mono, (tx + before, y), None, ink);
+                p.text(&value[caret..row.end], mono, (tx + before + composed, y), None, ink);
+                let t = p.style.line(p.m);
+                p.fill(Rect::new((tx + before).floor(), (y + p.m.cell_h * 0.85).round(), composed.ceil(), t), ink);
+            } else {
+                p.text(&value[row.clone()], mono, (tx, y), None, ink);
+            }
+            if look.focused && k == on {
+                let x = tx + p.advance(&value[row.start..caret], mono) + p.advance(composing, mono);
+                p.fill(Rect::new(x.floor(), y + p.m.cell_h * 0.15, bar, p.m.cell_h * 0.7), theme.ink);
+            }
+        }
     } else {
-        let caret = (look.caret as usize).min(value.len());
-        let caret = (0..=caret).rev().find(|&i| value.is_char_boundary(i)).unwrap_or(0);
         let before = p.advance(&value[..caret], mono);
         let composed = p.advance(composing, mono);
-        let room = r.w - p.m.cell_w * 1.5;
+        let room = r.right() - tx - p.m.cell_w;
         let shift = if look.focused { (before + composed - room).max(0.0) } else { 0.0 };
         let x0 = tx - shift;
-        let anchor = (look.anchor as usize).min(value.len());
-        let anchor = (0..=anchor).rev().find(|&i| value.is_char_boundary(i)).unwrap_or(0);
         if look.focused && anchor != caret && composing.is_empty() {
             let other = p.advance(&value[..anchor], mono);
             let (a, b) = (before.min(other), before.max(other));
             p.fill(Rect::new((x0 + a).floor(), r.y, (b - a).ceil(), p.m.cell_h), theme.selection);
         }
-        let ink = if n.enabled { theme.ink } else { theme.faint };
         if composing.is_empty() {
             p.text(value, mono, (x0, r.y), None, ink);
         } else {
@@ -490,7 +536,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
                 border(p, r, t, cursor);
             }
         }
-        (Layer::Over, Kind::Field) => field(p, &n, text, tree.str(n.name), tree.str(look.composing), look),
+        (Layer::Over, Kind::Field { holds }) => field(p, &n, holds, text, tree.str(n.name), tree.str(look.composing), look),
         (Layer::Under, Kind::ListRow { selected, focused, .. }) => {
             let theme = p.theme;
             if selected {

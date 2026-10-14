@@ -25,7 +25,6 @@ Several names on either side are the same component. They are merged into one ro
 | Button | Button | Button | |
 | Link | Link | Link | |
 | Check | Checkbox | Checkbox | |
-| Field | Input, TextField | InputGroup | single line; the full field is wave 2 |
 | List | ListBox | | selection, ranges, keyboard |
 | Empty | EmptyState | NonIdealState | |
 | Swatch | ColorSwatch | | |
@@ -62,6 +61,10 @@ Several names on either side are the same component. They are merged into one ro
 | Panel stack | | PanelStack | drill in and back, in place: a fact for the depth and breadcrumbs, not a component of its own |
 | Overflow | | OverflowList | what doesn't fit goes into a "more" choice |
 | Scroll edges | ScrollShadow | | every list draws a rule at an edge with more beyond |
+| Text field | TextField, Input, InputGroup | InputGroup | one line; pieces beside it are other components in a row with it |
+| Text area | TextArea | TextArea | several lines, wrapped, growing with the text |
+| Search field | SearchField | InputGroup (search) | the app filters by its text (§7.4); Escape empties it |
+| Editable text | | EditableText | text that becomes a field when you act on it |
 
 ## Wave 2: fields in full
 
@@ -69,12 +72,8 @@ These need the full field (spec §7.2, build-plan item 11): input methods, selec
 
 | Graticule | HeroUI | Blueprint | Notes |
 |---|---|---|---|
-| Text field | TextField, Input, InputGroup | InputGroup | with leading and trailing pieces |
-| Text area | TextArea | TextArea | multi-line |
-| Search field | SearchField | InputGroup (search) | filters as you type (§7.4) |
 | Number field | NumberField | NumericInput | evaluates expressions; steps with the keys |
 | Code field | InputOTP | | one character per box |
-| Editable text | | EditableText | text that becomes a field when you act on it |
 | File field | | FileInput | opens the system's file panel |
 | Tag field | TagGroup (removable) | TagInput | |
 | Slider | Slider | Slider, RangeSlider, MultiSlider | one value, a range, or several handles |

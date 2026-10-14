@@ -85,6 +85,19 @@ pub enum Tone {
     Warn,
 }
 
+/// What a field is for, which decides how it is drawn and what its keys do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Holds {
+    /// One line of text.
+    Line,
+    /// Words to search for, after a magnifying glass; Escape empties it.
+    Search,
+    /// Several lines, wrapped, at least `rows` tall and growing with the text.
+    Lines { rows: u16 },
+    /// Text that reads as text and becomes a field when it is clicked or reached with Tab.
+    Inline,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Kind {
     Root,
@@ -94,7 +107,7 @@ pub enum Kind {
     Columns,
     List { count: u32, first: u32, shown: u32 },
     ListRow { key: u128, index: u32, selected: bool, focused: bool },
-    Field,
+    Field { holds: Holds },
     Check { on: bool },
     Link,
     Button,
@@ -148,7 +161,7 @@ pub enum Anchor {
 
 impl Kind {
     pub fn acts(&self) -> bool {
-        matches!(self, Kind::Field | Kind::Choice { .. } | Kind::Action | Kind::ListRow { .. } | Kind::Entry) || self.control()
+        matches!(self, Kind::Field { .. } | Kind::Choice { .. } | Kind::Action | Kind::ListRow { .. } | Kind::Entry) || self.control()
     }
 
     /// Whether it is a control the user presses: a button, a link, a box to tick or a switch to flip.
@@ -203,7 +216,10 @@ impl Kind {
             Kind::Column => "column",
             Kind::List { .. } => "list",
             Kind::ListRow { .. } => "list item",
-            Kind::Field => "text field",
+            Kind::Field { holds: Holds::Lines { .. } } => "text area",
+            Kind::Field { holds: Holds::Search } => "search field",
+            Kind::Field { holds: Holds::Inline } => "editable text",
+            Kind::Field { .. } => "text field",
             Kind::Check { .. } => "checkbox",
             Kind::Link => "link",
             Kind::Button => "button",

@@ -29,7 +29,7 @@ fn walk<C>(tree: &Tree<C>, i: u32, depth: usize, lines: &mut Vec<Line>) {
     }
     let (text, name) = (tree.str(n.text), tree.str(n.name));
     let label = match n.kind {
-        Kind::Field => name,
+        Kind::Field { .. } => name,
         _ if text.is_empty() => name,
         _ => text,
     };
@@ -57,7 +57,7 @@ fn state<C>(tree: &Tree<C>, n: &Node) -> String {
             };
             parts.extend(tone.map(str::to_string));
         }
-        Kind::Field if !tree.str(n.text).is_empty() => parts.push(format!("holds “{}”", tree.str(n.text))),
+        Kind::Field { .. } if !tree.str(n.text).is_empty() => parts.push(format!("holds “{}”", tree.str(n.text))),
         Kind::Check { on: true } => parts.push("ticked".to_string()),
         Kind::ListRow { selected, focused, .. } => {
             parts.extend(selected.then(|| "chosen".to_string()));

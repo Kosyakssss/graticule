@@ -359,7 +359,7 @@ fn take<A: App>(runner: &mut Runner<A>, step: Step) -> (String, Option<Probe<A>>
                 Kind::ListRow { index, .. } if label.is_empty() => format!("list item {}", index + 1),
                 kind => format!("{} “{label}”", kind.role()),
             };
-            if matches!(node.kind, Kind::Field) {
+            if matches!(node.kind, Kind::Field { .. }) {
                 runner.act(node.id.0, Action::Focus);
                 return (format!("go to the {what}"), None);
             }
@@ -371,7 +371,7 @@ fn take<A: App>(runner: &mut Runner<A>, step: Step) -> (String, Option<Probe<A>>
             return (format!("click the {what}"), probe);
         }
         Step::Fill(pick) => {
-            let fields: Vec<u32> = (0..runner.tree.nodes.len() as u32).filter(|&i| matches!(runner.tree.nodes[i as usize].kind, Kind::Field)).collect();
+            let fields: Vec<u32> = (0..runner.tree.nodes.len() as u32).filter(|&i| matches!(runner.tree.nodes[i as usize].kind, Kind::Field { .. })).collect();
             if fields.is_empty() {
                 return ("fill in a field, with none on screen".into(), None);
             }

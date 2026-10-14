@@ -22,7 +22,7 @@ use crate::metrics::Metrics;
 use crate::paint::Painter;
 use crate::shell::{Button, Face, Frame, Input, Mods, Seen, Waker};
 use crate::text::Text;
-use crate::tree::{Anchor, Id, Kind, ListInfo, NONE, Range32, Tree};
+use crate::tree::{Anchor, Holds, Id, Kind, ListInfo, NONE, Range32, Tree};
 use crate::ui::{Scroll, Scrolls, Ui};
 use crate::value::{Calendar, Dates};
 
@@ -765,7 +765,7 @@ impl<A: App> Runner<A> {
     fn build_palette(&mut self, root: u32, here: &Here) {
         let Some(palette) = self.palette.clone() else { return };
         let p = self.tree.add(root, Kind::Palette, Some(Id::ROOT.mix(7)), std::panic::Location::caller());
-        let f = self.tree.add(p, Kind::Field, Some(PALETTE), std::panic::Location::caller());
+        let f = self.tree.add(p, Kind::Field { holds: Holds::Line }, Some(PALETTE), std::panic::Location::caller());
         self.tree.nodes[f as usize].text = self.tree.put(&palette.query);
         self.tree.nodes[f as usize].span = crate::tree::Fill;
         if let Some(asking) = &palette.asking {
@@ -2335,7 +2335,7 @@ impl<A: App> Runner<A> {
 
     fn focusable(&self, i: usize) -> bool {
         match self.tree.nodes[i].kind {
-            kind if kind == Kind::Field || kind.control() => !self.tree.in_row(i as u32) && self.tree.ancestor(i as u32, |n| n.kind == Kind::Palette).is_none(),
+            kind if matches!(kind, Kind::Field { .. }) || kind.control() => !self.tree.in_row(i as u32) && self.tree.ancestor(i as u32, |n| n.kind == Kind::Palette).is_none(),
             Kind::List { .. } => true,
             _ => false,
         }
@@ -2361,7 +2361,7 @@ impl<A: App> Runner<A> {
         self.focus = Some(id);
         self.typing = None;
         if let Some(i) = self.tree.find(id)
-            && self.tree.nodes[i as usize].kind == Kind::Field
+            && matches!(self.tree.nodes[i as usize].kind, Kind::Field { .. })
         {
             let len = self.tree.str(self.tree.nodes[i as usize].text).len();
             let caret = if select_all { Caret { caret: len, anchor: 0 } } else { Caret::at(len) };
@@ -2406,7 +2406,7 @@ impl<A: App> Runner<A> {
     fn focused_field(&self) -> Option<u32> {
         let i = self.tree.find(self.focus?)?;
         let n = self.tree.nodes[i as usize];
-        (n.kind == Kind::Field && n.path.is_some()).then_some(i)
+        (matches!(n.kind, Kind::Field { .. }) && n.path.is_some()).then_some(i)
     }
 
     fn focused_control(&self) -> Option<u32> {
@@ -2481,10 +2481,27 @@ impl<A: App> Runner<A> {
             {
                 return self.field_action(i, field::insert(self.caret(i), &t));
             }
-            if field::handles(chord.key, chord.mods) {
-                let value = self.tree.str(self.tree.nodes[i as usize].text).to_string();
-                let action = field::key(&value, self.caret(i), chord.key, chord.mods, &mut self.kill);
-                return self.field_action(i, action);
+            let n = self.tree.nodes[i as usize];
+            let holds = if let Kind::Field { holds } = n.kind { holds } else { Holds::Line };
+            let several = matches!(holds, Holds::Lines { .. });
+            if holds == Holds::Search && chord.key == Key::Escape && chord.mods == Mods::default() && !n.text.is_empty() {
+                let len = self.tree.str(n.text).len();
+                return self.splice(i, 0..len, String::new(), 0, field::Kind::Alone);
+            }
+            if field::handles(chord.key, chord.mods) || several && matches!(chord.key, Key::Up | Key::Down) {
+                let value = self.tree.str(n.text).to_string();
+                let action = if several {
+                    field::key_rows(&value, self.caret(i), chord.key, chord.mods, &mut self.kill, crate::components::field_width(&n))
+                } else {
+                    field::key(&value, self.caret(i), chord.key, chord.mods, &mut self.kill)
+                };
+                let leave = holds == Holds::Inline && action == Action::Submit;
+                let done = self.field_action(i, action);
+                if leave {
+                    self.focus = None;
+                    self.stale = true;
+                }
+                return done;
             }
         }
         let control = if self.pending.is_empty() && self.count == 0 && chord.mods == Mods::default() && matches!(chord.key, Key::Enter | Key::Char(' ')) { self.focused_control() } else { None };
@@ -2613,7 +2630,10 @@ impl<A: App> Runner<A> {
                 self.splice(i, range, String::new(), caret, field::Kind::Alone)
             }
             Action::Paste => {
-                let pasted = self.paste();
+                let mut pasted = self.paste();
+                if !matches!(n.kind, Kind::Field { holds: Holds::Lines { .. } }) {
+                    pasted = pasted.lines().collect::<Vec<_>>().join(" ");
+                }
                 if pasted.is_empty() {
                     return true;
                 }
@@ -2965,17 +2985,28 @@ impl<A: App> Runner<A> {
         self.hit(col, row).map(|i| self.tree.nodes[i as usize].id)
     }
 
-    fn caret_at(&self, text: &mut Text, m: Metrics, i: u32, x: f32) -> usize {
+    fn caret_at(&self, text: &mut Text, m: Metrics, i: u32, (x, y): (f32, f32)) -> usize {
         let n = self.tree.nodes[i as usize];
         let value = self.tree.str(n.text);
         let r = m.rect(n.area);
         let mono = m.mono();
-        let before = crate::paint::advance(text, m, &value[..self.caret(i).caret.min(value.len())], mono);
-        let shift = if self.focus == Some(n.id) { (before - (r.w - m.cell_w * 1.5)).max(0.0) } else { 0.0 };
-        let local = x - (r.x + m.cell_w * 0.5) + shift;
-        let mut best = (0, f32::MAX);
-        for at in value.char_indices().map(|(i, _)| i).chain([value.len()]) {
-            let d = (crate::paint::advance(text, m, &value[..at], mono) - local).abs();
+        let holds = if let Kind::Field { holds } = n.kind { holds } else { Holds::Line };
+        let tx = r.x + m.cell_w * crate::components::field_inset(holds);
+        let several = matches!(holds, Holds::Lines { .. });
+        let row = if several {
+            let k = ((y - r.y) / m.cell_h).max(0.0) as usize;
+            let width = crate::components::field_width(&n);
+            let count = field::rows(value, width).count();
+            field::rows(value, width).nth(k.min(count.saturating_sub(1))).unwrap_or(0..value.len())
+        } else {
+            0..value.len()
+        };
+        let before = crate::paint::advance(text, m, &value[row.start..self.caret(i).caret.clamp(row.start, row.end)], mono);
+        let shift = if !several && self.focus == Some(n.id) { (before - (r.right() - tx - m.cell_w)).max(0.0) } else { 0.0 };
+        let local = x - tx + shift;
+        let mut best = (row.start, f32::MAX);
+        for at in value[row.clone()].char_indices().map(|(k, _)| row.start + k).chain([row.end]) {
+            let d = (crate::paint::advance(text, m, &value[row.start..at], mono) - local).abs();
             if d < best.1 {
                 best = (at, d);
             }
@@ -3091,10 +3122,17 @@ impl<A: App> Face for Runner<A> {
             let r = m.rect(n.area);
             let value = self.tree.str(n.text);
             let caret = field::boundary(value, self.caret(i).caret.min(value.len()));
-            let before = crate::paint::advance(frame.text, m, &value[..caret], m.mono());
+            let holds = if let Kind::Field { holds } = n.kind { holds } else { Holds::Line };
+            let tx = r.x + m.cell_w * crate::components::field_inset(holds);
             let composed = crate::paint::advance(frame.text, m, &self.composing, m.mono());
-            let x = r.x + m.cell_w * 0.5 + before - (before + composed - (r.w - m.cell_w * 1.5)).max(0.0);
-            frame.window.set_ime_cursor_area(winit::dpi::PhysicalPosition::new(x as f64, r.y as f64), winit::dpi::PhysicalSize::new(m.cell_w as f64, r.h as f64));
+            let (x, y) = if let Holds::Lines { .. } = holds {
+                let (k, row) = field::row_of(value, crate::components::field_width(&n), caret);
+                (tx + crate::paint::advance(frame.text, m, &value[row.start..caret], m.mono()), r.y + k as f32 * m.cell_h)
+            } else {
+                let before = crate::paint::advance(frame.text, m, &value[..caret], m.mono());
+                (tx + before - (before + composed - (r.right() - tx - m.cell_w)).max(0.0), r.y)
+            };
+            frame.window.set_ime_cursor_area(winit::dpi::PhysicalPosition::new(x as f64, y as f64), winit::dpi::PhysicalSize::new(m.cell_w as f64, m.cell_h as f64));
         }
     }
 
@@ -3171,7 +3209,7 @@ impl<A: App> Face for Runner<A> {
             self.stale = true;
         }
         match input {
-            Input::Moved { x, .. } => {
+            Input::Moved { .. } => {
                 if self.carried(frame) {
                     return true;
                 }
@@ -3187,7 +3225,7 @@ impl<A: App> Face for Runner<A> {
                 if let Some(id) = self.drag
                     && let Some(i) = self.tree.find(id)
                 {
-                    let at = self.caret_at(frame.text, frame.metrics, i, x);
+                    let at = self.caret_at(frame.text, frame.metrics, i, frame.pointer.unwrap_or_default());
                     let c = self.carets.entry(id).or_default();
                     c.caret = at;
                     return true;
@@ -3236,10 +3274,9 @@ impl<A: App> Face for Runner<A> {
                 }
                 let Some(i) = self.pressed.and_then(|id| self.tree.find(id)) else { return false };
                 let n = self.tree.nodes[i as usize];
-                if n.kind == Kind::Field && n.path.is_some() {
-                    let (x, _) = frame.pointer.unwrap_or_default();
+                if matches!(n.kind, Kind::Field { .. }) && n.path.is_some() {
                     self.reading = None;
-                    let at = self.caret_at(frame.text, frame.metrics, i, x);
+                    let at = self.caret_at(frame.text, frame.metrics, i, frame.pointer.unwrap_or_default());
                     let before = self.caret(i);
                     let was = self.focus == Some(n.id);
                     self.focus_on(n.id, false);

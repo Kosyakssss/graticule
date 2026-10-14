@@ -235,3 +235,106 @@ pub fn word_at(text: &str, at: usize) -> Caret {
         Caret { caret: next(text, at), anchor: at }
     }
 }
+
+/// The rows a text wraps into at `width` cells, as byte ranges: a new line ends a row, and a line too long for the width breaks after its last space that fits, or mid-word when there is none. A row that wraps keeps its space, so the rows of a line touch.
+pub fn rows(text: &str, width: usize) -> Rows<'_> {
+    Rows { text, width: width.max(1), at: 0, done: false }
+}
+
+/// The rows of a text, from [`rows`].
+pub struct Rows<'a> {
+    text: &'a str,
+    width: usize,
+    at: usize,
+    done: bool,
+}
+
+impl Iterator for Rows<'_> {
+    type Item = Range<usize>;
+
+    fn next(&mut self) -> Option<Range<usize>> {
+        if self.done {
+            return None;
+        }
+        let at = self.at;
+        let line_end = self.text[at..].find('\n').map_or(self.text.len(), |k| at + k);
+        let (mut used, mut space) = (0, None);
+        for (k, c) in self.text[at..line_end].char_indices() {
+            let w = crate::text::cells(c);
+            if used + w > self.width && k > 0 {
+                let end = space.unwrap_or(at + k);
+                self.at = end;
+                return Some(at..end);
+            }
+            used += w;
+            if c == ' ' {
+                space = Some(at + k + 1);
+            }
+        }
+        if line_end == self.text.len() {
+            self.done = true;
+        } else {
+            self.at = line_end + 1;
+        }
+        Some(at..line_end)
+    }
+}
+
+/// The row a byte sits on, and that row: the last row that starts at or before it.
+pub fn row_of(text: &str, width: usize, at: usize) -> (usize, Range<usize>) {
+    let mut found = (0, 0..0);
+    for (k, row) in rows(text, width).enumerate() {
+        if row.start > at {
+            break;
+        }
+        found = (k, row);
+    }
+    found
+}
+
+/// Where a row really ends for the caret: before the last character of a row that wraps, since the end of such a row is the start of the next.
+fn row_end(text: &str, row: &Range<usize>) -> usize {
+    if row.end < text.len() && !text[row.end..].starts_with('\n') { prev(text, row.end) } else { row.end }
+}
+
+/// The byte on `row` nearest to `cells` cells in from its start.
+pub fn at_cells(text: &str, row: &Range<usize>, cells: usize) -> usize {
+    let end = row_end(text, row);
+    let mut used = 0;
+    for (k, c) in text[row.start..end].char_indices() {
+        let w = crate::text::cells(c);
+        if used + w / 2 >= cells {
+            return row.start + k;
+        }
+        used += w;
+    }
+    end
+}
+
+/// What a key does to a field of several rows, `width` cells wide: Return starts a new line, the arrows up and down move between rows, and Home and End go to the ends of the row. Every other key does what it does in one line.
+pub fn key_rows(text: &str, at: Caret, key: Key, m: Mods, kill: &mut String, width: usize) -> Action {
+    let Mods { shift, alt, primary, control } = m;
+    let at = Caret { caret: boundary(text, at.caret), anchor: boundary(text, at.anchor) };
+    let moved = |to: usize| Action::Moved(Caret { caret: to, anchor: if shift { at.anchor } else { to } });
+    match (key, primary, alt, control) {
+        (Key::Enter, false, false, false) => insert(at, "\n"),
+        (Key::Enter, true, false, false) => Action::Submit,
+        (Key::Up | Key::Down, false, false, false) => {
+            let (k, row) = row_of(text, width, at.caret);
+            let cells: usize = text[row.start..at.caret].chars().map(crate::text::cells).sum();
+            let target = if key == Key::Up { k.checked_sub(1) } else { Some(k + 1) };
+            match target.and_then(|t| rows(text, width).nth(t)) {
+                Some(row) => moved(at_cells(text, &row, cells)),
+                None => moved(if key == Key::Up { 0 } else { text.len() }),
+            }
+        }
+        (Key::Home, false, false, false) => moved(row_of(text, width, at.caret).1.start),
+        (Key::End, false, false, false) => {
+            let row = row_of(text, width, at.caret).1;
+            moved(row_end(text, &row))
+        }
+        (Key::Up, true, false, false) => moved(0),
+        (Key::Down, true, false, false) => moved(text.len()),
+        _ => self::key(text, at, key, m, kill),
+    }
+}

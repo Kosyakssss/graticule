@@ -1,7 +1,7 @@
 use accesskit::{Action, Node, NodeId, Rect as Bounds, Role, Toggled, TreeId, TreeInfo, TreeUpdate};
 
 use crate::metrics::Metrics;
-use crate::tree::{Id, Kind, NONE, Tree};
+use crate::tree::{Holds, Id, Kind, NONE, Tree};
 
 fn role(kind: Kind) -> Role {
     match kind {
@@ -10,7 +10,9 @@ fn role(kind: Kind) -> Role {
         Kind::Row | Kind::Columns | Kind::Column | Kind::Empty => Role::Group,
         Kind::List { .. } => Role::List,
         Kind::ListRow { .. } => Role::ListItem,
-        Kind::Field => Role::TextInput,
+        Kind::Field { holds: Holds::Lines { .. } } => Role::MultilineTextInput,
+        Kind::Field { holds: Holds::Search } => Role::SearchInput,
+        Kind::Field { .. } => Role::TextInput,
         Kind::Check { .. } => Role::CheckBox,
         Kind::Link => Role::Link,
         Kind::Button | Kind::Action => Role::Button,
@@ -55,7 +57,7 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
         let name = tree.str(n.name);
         match n.kind {
             Kind::Root => node.set_label(title),
-            Kind::Field => {
+            Kind::Field { .. } => {
                 node.set_value(text);
                 node.set_placeholder(name);
             }

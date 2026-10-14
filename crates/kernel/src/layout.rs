@@ -2,7 +2,7 @@ use crate::grid::Area;
 use crate::metrics::Metrics;
 use crate::picture::Picture;
 use crate::text::{SpanStyle, Text, TextStyle};
-use crate::tree::{Anchor, Kind, NONE, Tree, Width};
+use crate::tree::{Anchor, Holds, Kind, NONE, Tree, Width};
 use crate::value::Value;
 
 pub const GAP: i32 = 2;
@@ -212,7 +212,11 @@ impl<'t> Layout<'t> {
                 let c = self.cols(tree.str(n.text), true) + i32::from(value.boxed());
                 (c.min(8), c)
             }
-            Kind::Field => (16, 32),
+            Kind::Field { holds: Holds::Inline } => {
+                let c = self.cols(if tree.str(n.text).is_empty() { tree.str(n.name) } else { tree.str(n.text) }, true) + 2;
+                (c.min(8), c)
+            }
+            Kind::Field { .. } => (16, 32),
             Kind::Rule | Kind::Placeholder { .. } => (0, 0),
             Kind::Keys | Kind::Tag | Kind::Avatar => {
                 let c = self.cols(tree.str(n.text), matches!(n.kind, Kind::Keys | Kind::Avatar)) + 1;
@@ -366,6 +370,7 @@ impl<'t> Layout<'t> {
             }
             Kind::Check { .. } | Kind::Radio { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
             Kind::Switch { .. } => self.wrapped(tree.str(n.text), false, cols - SWITCH - 1),
+            Kind::Field { holds: Holds::Lines { rows } } => (crate::field::rows(tree.str(n.text), (cols - 1).max(1) as usize).count() as i32).max(rows as i32),
             Kind::Toggle { .. } | Kind::IconButton { .. } | Kind::Group | Kind::Crumbs | Kind::Overflow | Kind::Places => 1,
             Kind::Tab { .. } | Kind::Place { .. } | Kind::Opener { .. } | Kind::PageLink { .. } | Kind::More => 1,
             Kind::Strip => {
@@ -411,7 +416,15 @@ impl<'t> Layout<'t> {
             }
             Kind::Value { value: Value::Error } => self.wrapped(tree.str(n.text), false, cols),
             Kind::Value { .. } => 1,
-            Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Entry | Kind::Link | Kind::Field | Kind::Status | Kind::Note | Kind::Swatch { .. } => 1,
+            Kind::Button
+            | Kind::Action
+            | Kind::Choice { .. }
+            | Kind::Entry
+            | Kind::Link
+            | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline }
+            | Kind::Status
+            | Kind::Note
+            | Kind::Swatch { .. } => 1,
             Kind::Picture { rows, .. } => rows,
             Kind::Rule => 2,
             Kind::Keys | Kind::Gauge { .. } | Kind::Tag | Kind::Avatar => 1,

@@ -1,4 +1,4 @@
-# Field
+# Text field
 
 A one-line field that types into a `Text` in the facts. The text is the app's; the caret and the selection inside the field are the field's own. Each change arrives in `update` as an `Edit`, so typing is undoable like any command, a word at a time.
 
@@ -13,6 +13,8 @@ ui.field(Todo::draft, t!("Something to do")).on_submit(Cmd::Add);
 ```
 
 `on_submit` names the command Return runs.
+
+Pieces beside a field, such as a picture before it or a button after it, are other components in a row with it; a search field has its magnifying glass built in. Pasting several lines into a one-line field joins them with spaces.
 
 ## Keys
 

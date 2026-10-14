@@ -128,6 +128,12 @@ pub struct Catalog {
     depth: u32,
     #[session]
     trail: u32,
+    #[session]
+    notes: Text,
+    #[session]
+    query: Text,
+    #[session]
+    title: Text,
 }
 
 #[derive(Facts)]
@@ -244,10 +250,13 @@ pub enum Component {
     PanelStack,
     Overflow,
     ScrollEdges,
+    TextArea,
+    Search,
+    Editable,
 }
 
 impl Component {
-    const ALL: [Component; 42] = [
+    const ALL: [Component; 45] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -290,6 +299,9 @@ impl Component {
         Component::PanelStack,
         Component::Overflow,
         Component::ScrollEdges,
+        Component::TextArea,
+        Component::Search,
+        Component::Editable,
     ];
 
     fn name(self) -> &'static str {
@@ -299,7 +311,7 @@ impl Component {
             Component::Button => "Button",
             Component::Link => "Link",
             Component::Check => "Check",
-            Component::Field => "Field",
+            Component::Field => "Text field",
             Component::List => "List",
             Component::Empty => "Empty",
             Component::Swatch => "Swatch",
@@ -336,6 +348,9 @@ impl Component {
             Component::PanelStack => "Panel stack",
             Component::Overflow => "Overflow",
             Component::ScrollEdges => "Scroll edges",
+            Component::TextArea => "Text area",
+            Component::Search => "Search field",
+            Component::Editable => "Editable text",
         }
     }
 
@@ -383,6 +398,9 @@ impl Component {
             Component::PanelStack => include_str!("../../../docs/components/panel-stack.md"),
             Component::Overflow => include_str!("../../../docs/components/overflow.md"),
             Component::ScrollEdges => include_str!("../../../docs/components/scroll-edges.md"),
+            Component::TextArea => include_str!("../../../docs/components/text-area.md"),
+            Component::Search => include_str!("../../../docs/components/search-field.md"),
+            Component::Editable => include_str!("../../../docs/components/editable-text.md"),
         }
     }
 
@@ -490,6 +508,9 @@ impl Default for Catalog {
             leaf: 4,
             depth: 0,
             trail: 5,
+            notes: Text::from("Milk, eggs and bread.\nAsk about the long weekend before Friday, since the office closes early that week."),
+            query: Text::default(),
+            title: Text::from("Groceries"),
         }
     }
 }
@@ -874,6 +895,15 @@ impl Catalog {
                 ui.button(Cmd::Say);
             }),
             Component::ScrollEdges => ui.muted("This page's list shows them: scroll it, and a rule marks the edge with more beyond"),
+            Component::TextArea => {
+                ui.text_area(Catalog::notes, Message::from("A few lines"), 3);
+            }
+            Component::Search => {
+                ui.search(Catalog::query, Message::from("Words to look for"));
+            }
+            Component::Editable => {
+                ui.editable(Catalog::title, Message::from("Untitled"));
+            }
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);

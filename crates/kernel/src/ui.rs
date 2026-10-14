@@ -10,7 +10,7 @@ use crate::form::{Control, Item, Setting, Settings};
 use crate::ink::Ink;
 use crate::message::Message;
 use crate::picture::Picture;
-use crate::tree::{Id, Kind, ListInfo, NONE, Span, Tone, Tree};
+use crate::tree::{Holds, Id, Kind, ListInfo, NONE, Span, Tone, Tree};
 use crate::value::{Integer, Value, grouped};
 
 const CHECK_MIN: i32 = 12;
@@ -655,7 +655,7 @@ impl<'a, C, S> Ui<'a, C, S> {
                 let around = self.tree.add(self.parent, Kind::Labelled, Some(id.mix(1)), at);
                 let r = self.tree.put(item.label);
                 self.tree.nodes[around as usize].text = r;
-                let i = self.tree.add(around, Kind::Field, Some(id), at);
+                let i = self.tree.add(around, Kind::Field { holds: Holds::Line }, Some(id), at);
                 self.tree.nodes[i as usize].path = Some(path);
                 let r = self.tree.put(&item.shown());
                 self.tree.nodes[i as usize].text = r;
@@ -701,9 +701,31 @@ impl<'a, C, S> Ui<'a, C, S> {
     /// A one-line field that types into the `Text` at `path`. Its caret and selection are the field's own; each change arrives in `update` as an `Edit`.
     #[track_caller]
     pub fn field<F: Field>(&mut self, path: FactPath<F, Text>, placeholder: Message) -> Placed<'_, 'a, C, S> {
+        self.field_as(path, placeholder, Holds::Line, Location::caller())
+    }
+
+    /// A field for words to search for, after a magnifying glass. The app filters by the `Text` at `path` as it changes; Escape empties it.
+    #[track_caller]
+    pub fn search<F: Field>(&mut self, path: FactPath<F, Text>, placeholder: Message) -> Placed<'_, 'a, C, S> {
+        self.field_as(path, placeholder, Holds::Search, Location::caller())
+    }
+
+    /// A field of several lines that types into the `Text` at `path`: at least `rows` tall, growing with what is typed. Return starts a new line; the primary key with Return submits it.
+    #[track_caller]
+    pub fn text_area<F: Field>(&mut self, path: FactPath<F, Text>, placeholder: Message, rows: u16) -> Placed<'_, 'a, C, S> {
+        self.field_as(path, placeholder, Holds::Lines { rows }, Location::caller())
+    }
+
+    /// The `Text` at `path`, reading as text, which becomes a field when it is clicked or reached with Tab. Return finishes the edit.
+    #[track_caller]
+    pub fn editable<F: Field>(&mut self, path: FactPath<F, Text>, placeholder: Message) -> Placed<'_, 'a, C, S> {
+        self.field_as(path, placeholder, Holds::Inline, Location::caller())
+    }
+
+    fn field_as<F: Field>(&mut self, path: FactPath<F, Text>, placeholder: Message, holds: Holds, at: &'static Location<'static>) -> Placed<'_, 'a, C, S> {
         let erased = path.erased();
         let id = Id::ROOT.mix(erased.hash64());
-        let i = self.tree.add(self.parent, Kind::Field, Some(id), Location::caller());
+        let i = self.tree.add(self.parent, Kind::Field { holds }, Some(id), at);
         let node = &mut self.tree.nodes[i as usize];
         node.subject = self.subject;
         node.path = Some(erased);
@@ -712,7 +734,9 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.tree.nodes[i as usize].text = r;
         let r = self.tree.put(placeholder.as_str());
         self.tree.nodes[i as usize].name = r;
-        self.tree.nodes[i as usize].span = crate::tree::Fill.min(16);
+        if holds != Holds::Inline {
+            self.tree.nodes[i as usize].span = crate::tree::Fill.min(16);
+        }
         Placed { ui: self, node: i }
     }
 

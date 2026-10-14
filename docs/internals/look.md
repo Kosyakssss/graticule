@@ -18,4 +18,8 @@ The shell owns the `Looks`. It reads them once before the first frame and gives 
 
 `Face::look` lets a face draw in a look other than the chosen one; Specimen's style editor uses it to show a theme or style as it is being edited.
 
-A file in the looks folder that can't be read doesn't stop the app. It is left out, and the message line says which file and why.
+## Editing live
+
+The shell watches the looks folder with the system's file notifications (`notify`), so watching costs nothing while nothing changes, as the idle law asks. When a `.theme`, `.style` or `look.txt` file changes, the watcher's own thread reads the folder afresh and sends the new `Looks` to the event loop. The shell swaps it in and draws again only if it differs from the old one, so writing `look.txt` after a switch, which the watcher also sees, costs one comparison. Every Graticule app that is running sees a saved file at once.
+
+A file in the looks folder that can't be read doesn't stop the app. The message line says it once, not again on every later change. It is left out, and the message line says which file and why.

@@ -40,7 +40,7 @@ impl Cause {
             Cause::Click => "a click",
             Cause::Wheel => "scrolling",
             Cause::Resize => "a resize",
-            Cause::Appearance => "the appearance changing",
+            Cause::Appearance => "the look changing: the appearance, the theme or the style",
             Cause::Woken => "a thread waking it",
             Cause::Assistive => "an assistive tool",
             Cause::Uncovered => "the window being uncovered",

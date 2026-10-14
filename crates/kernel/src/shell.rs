@@ -149,6 +149,7 @@ fn micros(since: Instant) -> u32 {
 pub enum Signal {
     Wake,
     Reload,
+    Looks(Box<Looks>),
     Access(accesskit_winit::Event),
 }
 
@@ -224,6 +225,7 @@ struct Running<F: Face> {
     access: accesskit_winit::Adapter,
     title: String,
     looks: Looks,
+    _watcher: Option<notify::RecommendedWatcher>,
 }
 
 #[derive(Default)]
@@ -379,6 +381,10 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             _ => Appearance::Light,
         };
         let looks = Looks::load(&crate::look::folder());
+        let to = self.proxy.clone();
+        let watcher = crate::look::watch(&crate::look::folder(), move |looks| {
+            let _ = to.send_event(Signal::Looks(Box::new(looks)));
+        });
         face.offered(&looks);
         let scope = std::env::var_os("GRATICULE_SCOPE").is_some_and(|v| v != "0");
         let mut running = Running {
@@ -400,6 +406,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             access,
             title: self.config.title.clone(),
             looks,
+            _watcher: watcher,
         };
         running.render();
         running.window.set_visible(true);
@@ -425,6 +432,14 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
         let Some(r) = self.running.as_mut() else { return };
         match signal {
             Signal::Wake => r.input(Input::Woken),
+            Signal::Looks(looks) => {
+                if *looks != r.looks {
+                    let since = Instant::now();
+                    r.looks = *looks;
+                    r.face.offered(&r.looks);
+                    r.wants(Cause::Appearance, since);
+                }
+            }
             Signal::Reload => {
                 if let Some(reload) = &self.reload {
                     match reload.save(&r.window, r.face.keep()) {

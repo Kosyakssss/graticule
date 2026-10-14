@@ -456,3 +456,23 @@ impl Looks {
 pub fn folder() -> std::path::PathBuf {
     dirs::data_dir().unwrap_or_else(std::env::temp_dir).join("Graticule").join("looks")
 }
+
+/// Watches the looks folder and calls `changed` with the looks read afresh whenever a file in it changes, on the watcher's own thread. The system tells it of changes, so it costs nothing while nothing changes. `None` when the folder can't be watched.
+pub fn watch(folder: &Path, changed: impl Fn(Looks) + Send + 'static) -> Option<notify::RecommendedWatcher> {
+    use notify::Watcher;
+    std::fs::create_dir_all(folder).ok()?;
+    let at = folder.to_path_buf();
+    let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        let Ok(event) = event else { return };
+        if event.kind.is_access() {
+            return;
+        }
+        let relevant = event.paths.iter().any(|p| p.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e, "theme" | "style" | "txt")));
+        if relevant {
+            changed(Looks::load(&at));
+        }
+    })
+    .ok()?;
+    watcher.watch(folder, notify::RecursiveMode::NonRecursive).ok()?;
+    Some(watcher)
+}

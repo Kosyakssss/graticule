@@ -170,6 +170,7 @@ pub struct Runner<A: App> {
     drawn_in: Option<(crate::ink::Theme, Style)>,
     switch: Option<Switch>,
     offered: Offered,
+    offered_problem: Option<String>,
 }
 
 impl<A: App> Runner<A> {
@@ -223,6 +224,7 @@ impl<A: App> Runner<A> {
             drawn_in: None,
             switch: None,
             offered: Offered::default(),
+            offered_problem: None,
         }
     }
 
@@ -1771,8 +1773,13 @@ impl<A: App> Face for Runner<A> {
             self.offered = offered;
             self.stale = true;
         }
-        if let Some(problem) = looks.problems.first() {
-            self.said = Some(Said::Note(Message::plain(format!("A look in the looks folder can't be used: {problem}"))));
+        let problem = looks.problems.first().cloned();
+        if problem != self.offered_problem {
+            if let Some(p) = &problem {
+                self.said = Some(Said::Note(Message::plain(format!("A look in the looks folder can't be used: {p}"))));
+                self.stale = true;
+            }
+            self.offered_problem = problem;
         }
     }
 

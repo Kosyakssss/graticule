@@ -889,7 +889,7 @@ impl<A: App> Runner<A> {
             let text = if short { label(&mut self.tree.text, cmd, &self.facts, Form::Short) } else { name };
             let node = &mut self.tree.nodes[i];
             node.name = name;
-            if !matches!(n.kind, Kind::Check { .. }) {
+            if !matches!(n.kind, Kind::Check { .. } | Kind::Radio { .. } | Kind::Switch { .. }) {
                 node.text = text;
             }
             if let Available::No(reason) = available {
@@ -2312,7 +2312,7 @@ impl<A: App> Runner<A> {
 
     fn focusable(&self, i: usize) -> bool {
         match self.tree.nodes[i].kind {
-            Kind::Field | Kind::Button | Kind::Link | Kind::Check { .. } => !self.tree.in_row(i as u32) && self.tree.ancestor(i as u32, |n| n.kind == Kind::Palette).is_none(),
+            kind if kind == Kind::Field || kind.control() => !self.tree.in_row(i as u32) && self.tree.ancestor(i as u32, |n| n.kind == Kind::Palette).is_none(),
             Kind::List { .. } => true,
             _ => false,
         }
@@ -2388,7 +2388,7 @@ impl<A: App> Runner<A> {
 
     fn focused_control(&self) -> Option<u32> {
         let i = self.tree.find(self.focus?)?;
-        matches!(self.tree.nodes[i as usize].kind, Kind::Button | Kind::Link | Kind::Check { .. }).then_some(i)
+        self.tree.nodes[i as usize].kind.control().then_some(i)
     }
 
     fn caret(&self, i: u32) -> Caret {
@@ -2759,7 +2759,7 @@ impl<A: App> Runner<A> {
     fn activate(&mut self, i: u32, mods: Mods) -> bool {
         let n = self.tree.nodes[i as usize];
         match n.kind {
-            Kind::Button | Kind::Link | Kind::Action | Kind::Check { .. } => self.fire(i),
+            kind if kind == Kind::Action || kind.control() => self.fire(i),
             Kind::Choice { .. } => {
                 self.palette = None;
                 self.stale = true;

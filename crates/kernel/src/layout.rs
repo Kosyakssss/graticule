@@ -12,6 +12,7 @@ pub const BUTTON: i32 = 3;
 pub const SWATCH: i32 = 4;
 const BUTTON_MIN: i32 = 16;
 pub const CALLOUT: i32 = 4;
+pub const SWITCH: i32 = CHECK;
 const GAUGE: i32 = 20;
 const GAUGE_MIN: i32 = 8;
 
@@ -117,7 +118,7 @@ impl<'t> Layout<'t> {
                 let pref = self.cols_as(tree.str(n.text), style);
                 (pref.min(8), pref)
             }
-            Kind::Button => {
+            Kind::Button | Kind::Toggle { .. } => {
                 let c = self.cols(tree.str(n.text), true) + BUTTON;
                 (c.min(BUTTON_MIN + BUTTON), c)
             }
@@ -131,9 +132,40 @@ impl<'t> Layout<'t> {
                 let c = self.cols(tree.str(n.text), false).max(1);
                 (c, c)
             }
-            Kind::Check { .. } => {
+            Kind::Check { .. } | Kind::Radio { .. } => {
                 let label = self.cols(tree.str(n.text), false);
                 (CHECK + 1 + label.min(8), CHECK + 1 + label)
+            }
+            Kind::Switch { .. } => {
+                let label = self.cols(tree.str(n.text), false);
+                (SWITCH + 1 + label.min(8), SWITCH + 1 + label)
+            }
+            Kind::IconButton { picture } => {
+                let c = self.picture_cols(picture, 1) + 2;
+                (c, c)
+            }
+            Kind::Group => {
+                let (start, end) = self.children(tree, i);
+                let (mut min, mut pref) = (0, 0);
+                for k in start..end {
+                    let (_, b) = self.size(tree, self.stack[k]);
+                    min += b;
+                    pref += b;
+                }
+                self.release(start);
+                (min, pref)
+            }
+            Kind::Fieldset | Kind::Labelled => {
+                let label = self.cols(tree.str(n.text), false);
+                let (start, end) = self.children(tree, i);
+                let (mut min, mut pref) = (label.min(8), label);
+                for k in start..end {
+                    let (a, b) = self.size(tree, self.stack[k]);
+                    min = min.max(a);
+                    pref = pref.max(b);
+                }
+                self.release(start);
+                (min, pref)
             }
             Kind::Value { value: Value::Error } => {
                 let pref = self.cols(tree.str(n.text), false);
@@ -295,7 +327,18 @@ impl<'t> Layout<'t> {
                 let style = self.text_style(n.kind);
                 self.wrapped_as(tree.str(n.text), style, cols)
             }
-            Kind::Check { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
+            Kind::Check { .. } | Kind::Radio { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
+            Kind::Switch { .. } => self.wrapped(tree.str(n.text), false, cols - SWITCH - 1),
+            Kind::Toggle { .. } | Kind::IconButton { .. } | Kind::Group => 1,
+            Kind::Fieldset | Kind::Labelled => {
+                let (start, end) = self.children(tree, i);
+                let mut rows = self.wrapped(tree.str(n.text), false, cols);
+                for k in start..end {
+                    rows += self.rows(tree, self.stack[k], cols);
+                }
+                self.release(start);
+                rows
+            }
             Kind::Value { value: Value::Error } => self.wrapped(tree.str(n.text), false, cols),
             Kind::Value { .. } => 1,
             Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Entry | Kind::Link | Kind::Field | Kind::Status | Kind::Note | Kind::Swatch { .. } => 1,
@@ -445,6 +488,21 @@ impl<'t> Layout<'t> {
             Kind::Row | Kind::ListRow { .. } | Kind::Columns => self.side_by_side(tree, i, area),
             Kind::Callout { .. } => self.stack_down(tree, i, Area::new(area.col + CALLOUT, area.row, area.cols - CALLOUT - 1, area.rows), 0),
             Kind::Card => self.stack_down(tree, i, Area::new(area.col + 2, area.row + 2, area.cols - 4, area.rows - 3), 0),
+            Kind::Fieldset | Kind::Labelled => {
+                let label = self.wrapped(tree.str(tree.nodes[i as usize].text), false, area.cols);
+                self.stack_down(tree, i, Area::new(area.col, area.row + label, area.cols, area.rows - label), 0);
+            }
+            Kind::Group => {
+                let (start, end) = self.children(tree, i);
+                let mut col = area.col;
+                for k in start..end {
+                    let c = self.stack[k];
+                    let w = self.size(tree, c).1.min(area.right() - col).max(0);
+                    self.place(tree, c, if w > 0 { Area::new(col, area.row, w, area.rows.min(1)) } else { Area::default() });
+                    col += w;
+                }
+                self.release(start);
+            }
             Kind::List { .. } => self.list(tree, i, area),
             Kind::Bar => {
                 let (start, end) = self.children(tree, i);
@@ -494,7 +552,7 @@ impl<'t> Layout<'t> {
                 self.rows(tree, c, area.cols)
             };
             let rows = rows.min(area.bottom() - row).max(0);
-            let cols = if matches!(tree.nodes[c as usize].kind, Kind::Button | Kind::Link | Kind::Swatch { .. } | Kind::Picture { .. } | Kind::Keys | Kind::Tag | Kind::Avatar) { self.size(tree, c).1.min(area.cols) } else { area.cols };
+            let cols = if matches!(tree.nodes[c as usize].kind, Kind::Button | Kind::Link | Kind::Swatch { .. } | Kind::Picture { .. } | Kind::Keys | Kind::Tag | Kind::Avatar | Kind::Toggle { .. } | Kind::IconButton { .. } | Kind::Group) { self.size(tree, c).1.min(area.cols) } else { area.cols };
             let a = if rows > 0 { Area::new(area.col, row, cols, rows) } else { Area::default() };
             self.place(tree, c, a);
             row += rows + self.gap_after(tree, k, end, gap);

@@ -1,6 +1,6 @@
 window		0 0 120 30	
-  page	Style	0 0 120 24	
-    list		2 3 116 20	33 items
+  page	Style	0 0 120 23	
+    list		2 3 116 19	33 items
       list item		2 3 114 1	
         heading	Inks	2 3 4 1	strong
       list item		2 4 114 3	
@@ -185,28 +185,28 @@ window		0 0 120 30
             text	0.770 0.130 151 · 9.2	60 21 34 1	mono
           column		96 21 20 1	
             text		96 21 20 1	muted
-      list item		2 22 114 1	
-  alert		2 24 116 1	
-  status		2 25 116 1	
-  toolbar		2 26 116 4	
-    button	Press	2 26 7 1	
-    button	Follow the link	11 26 13 1	
-    button	Tick or untick the box	26 26 18 1	
-    button	Say it	46 26 7 1	unavailable (Type something first)
-    button	Back to all components	55 26 20 1	unavailable (All components are showing)
-    button	Make “link” lighter	77 26 16 1	
-    button	Make “link” darker	95 26 16 1	
-    button	Give “link” more color	2 27 19 1	
-    button	Give “link” less color	23 27 18 1	
-    button	Turn the hue of “link” forward	43 27 25 1	
-    button	Turn the hue of “link” back	70 27 22 1	
-    button	Change the light appearance	94 27 24 1	unavailable (The light appearance is being changed already)
-    button	Change the dark appearance	2 28 24 1	
-    button	Use the next weight of lines	28 28 23 1	
-    button	Deepen the shadow	53 28 17 1	
-    button	Make the shadow shallower	72 28 23 1	
-    button	Use the other check mark	2 29 22 1	
-    button	Save the theme and the style	26 29 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
-    button	Undo	52 29 13 1	unavailable (Nothing to undo)
-    button	Redo	67 29 19 1	unavailable (Nothing to redo)
-    button	Open the palette	88 29 15 1	
+  alert		2 23 116 1	
+  status		2 24 116 1	
+  toolbar		2 25 116 5	
+    button	Press	2 25 7 1	
+    button	Follow the link	11 25 13 1	
+    button	Tick or untick the box	26 25 18 1	
+    button	Bold	46 25 6 1	
+    button	Say it	54 25 7 1	unavailable (Type something first)
+    button	Back to all components	63 25 20 1	unavailable (All components are showing)
+    button	Make “link” lighter	85 25 16 1	
+    button	Make “link” darker	2 26 16 1	
+    button	Give “link” more color	20 26 19 1	
+    button	Give “link” less color	41 26 18 1	
+    button	Turn the hue of “link” forward	61 26 25 1	
+    button	Turn the hue of “link” back	88 26 22 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

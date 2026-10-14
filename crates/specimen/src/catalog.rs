@@ -1,4 +1,4 @@
-use graticule_macros::{Commands, Facts};
+use graticule_macros::{Choice, Commands, Facts};
 use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
@@ -39,6 +39,15 @@ impl Place {
     }
 }
 
+/// How a collection is laid out, the option the live examples of choices choose between.
+#[derive(Facts, Choice, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Shape {
+    #[default]
+    List,
+    Grid,
+    Board,
+}
+
 /// Specimen's own facts: where it is, and the live examples on its pages, which are as real as any app's.
 #[derive(Facts)]
 pub struct Catalog {
@@ -76,6 +85,12 @@ pub struct Catalog {
     ticked: bool,
     #[session]
     pressed: u32,
+    #[session]
+    bold: bool,
+    #[session]
+    wrapping: bool,
+    #[session]
+    shape: Shape,
 }
 
 #[derive(Facts)]
@@ -177,10 +192,17 @@ pub enum Component {
     Avatar,
     Callout,
     Card,
+    Toggle,
+    Group,
+    IconButton,
+    Switch,
+    Radio,
+    Fieldset,
+    Labelled,
 }
 
 impl Component {
-    const ALL: [Component; 27] = [
+    const ALL: [Component; 34] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -208,6 +230,13 @@ impl Component {
         Component::Avatar,
         Component::Callout,
         Component::Card,
+        Component::Toggle,
+        Component::Group,
+        Component::IconButton,
+        Component::Switch,
+        Component::Radio,
+        Component::Fieldset,
+        Component::Labelled,
     ];
 
     fn name(self) -> &'static str {
@@ -239,6 +268,13 @@ impl Component {
             Component::Avatar => "Avatar",
             Component::Callout => "Callout",
             Component::Card => "Card",
+            Component::Toggle => "Toggle button",
+            Component::Group => "Button group",
+            Component::IconButton => "Icon button",
+            Component::Switch => "Switch",
+            Component::Radio => "Radio group",
+            Component::Fieldset => "Fieldset",
+            Component::Labelled => "Label",
         }
     }
 
@@ -271,6 +307,13 @@ impl Component {
             Component::Avatar => include_str!("../../../docs/components/avatar.md"),
             Component::Callout => include_str!("../../../docs/components/callout.md"),
             Component::Card => include_str!("../../../docs/components/card.md"),
+            Component::Toggle => include_str!("../../../docs/components/toggle.md"),
+            Component::Group => include_str!("../../../docs/components/group.md"),
+            Component::IconButton => include_str!("../../../docs/components/icon-button.md"),
+            Component::Switch => include_str!("../../../docs/components/switch.md"),
+            Component::Radio => include_str!("../../../docs/components/radio.md"),
+            Component::Fieldset => include_str!("../../../docs/components/fieldset.md"),
+            Component::Labelled => include_str!("../../../docs/components/labelled.md"),
         }
     }
 
@@ -287,6 +330,8 @@ pub enum Cmd {
     Follow,
     #[label("Tick or untick the box")]
     Tick,
+    #[label("Bold")]
+    Bold,
     #[label("Say it")]
     Say,
     #[label("Open the page for “{name}”", short: "Open")]
@@ -365,6 +410,9 @@ impl Default for Catalog {
             draft: Text::default(),
             ticked: false,
             pressed: 0,
+            bold: false,
+            wrapping: true,
+            shape: Shape::List,
         }
     }
 }
@@ -387,7 +435,7 @@ impl App for Catalog {
             Cmd::DeeperShadow => kernel::no_if(self.shadow >= 50, Message::from("The shadow is as deep as it goes, half a row")),
             Cmd::ShallowerShadow => kernel::no_if(self.shadow == 0, Message::from("There is no shadow now")),
             Cmd::SaveLook => kernel::no_if(!self.edited(), Message::from("Nothing has been changed from Graticule's own theme and style")),
-            Cmd::Press | Cmd::Follow | Cmd::Tick | Cmd::Go(_) | Cmd::Edit(_) | Cmd::NextLines | Cmd::OtherCheck | Cmd::SavedLook(_) | Cmd::Reached(_) => Available::Yes,
+            Cmd::Press | Cmd::Follow | Cmd::Tick | Cmd::Bold | Cmd::Go(_) | Cmd::Edit(_) | Cmd::NextLines | Cmd::OtherCheck | Cmd::SavedLook(_) | Cmd::Reached(_) => Available::Yes,
         }
     }
 
@@ -401,6 +449,10 @@ impl App for Catalog {
             Cmd::Follow => cx.say(Message::from("A link runs a command, the same as a button")),
             Cmd::Tick => {
                 self.ticked = !self.ticked;
+                Outcome::Changed
+            }
+            Cmd::Bold => {
+                self.bold = !self.bold;
                 Outcome::Changed
             }
             Cmd::Say => {
@@ -687,6 +739,29 @@ impl Catalog {
             Component::Card => ui.card("Account", |ui| {
                 ui.text("ada@example.org");
                 ui.button(Cmd::Press);
+            }),
+            Component::Toggle => {
+                ui.toggle(self.bold, Cmd::Bold);
+            }
+            Component::Group => {
+                ui.group(|ui| {
+                    ui.button(Cmd::Press);
+                    ui.toggle(self.bold, Cmd::Bold);
+                });
+                ui.segments("Show as", Catalog::shape);
+            }
+            Component::IconButton => {
+                ui.icon_button(&kernel::icons::CLOSE, Cmd::Back);
+            }
+            Component::Switch => ui.switch("Wrap long lines", Catalog::wrapping),
+            Component::Radio => ui.radio("Show as", Catalog::shape),
+            Component::Fieldset => ui.fieldset("Writing", |ui| {
+                ui.check("A yes-or-no fact", self.ticked, Cmd::Tick);
+                ui.switch("Wrap long lines", Catalog::wrapping);
+            }),
+            Component::Labelled => ui.labelled("Something to say", |ui| {
+                ui.field(Catalog::draft, Message::from("Type here")).on_submit(Cmd::Say);
+                ui.muted("It shows in the message line");
             }),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);

@@ -35,6 +35,14 @@ Several names on either side are the same component. They are merged into one ro
 | Status line | Tooltip | Tooltip | grounded: a hint, never a floating tip |
 | Message line | Toast | Toast, Toaster | grounded |
 | Palette | | Omnibar | |
+| Toggle button | ToggleButton | Button (active) | a button that stays on |
+| Button group | ButtonGroup, ToggleButtonGroup | ButtonGroup, SegmentedControl | joined buttons and toggles; segments choose one option of a fact |
+| Close button | CloseButton | | an icon button with the close icon; any picture works the same way |
+| Radio group | RadioGroup, Radio | RadioGroup, Radio | |
+| Check group | CheckboxGroup | | a fieldset of check boxes |
+| Switch | Switch, SwitchGroup | Switch | an on/off fact, applied at once |
+| Label, description, error | Label, Description, FieldError, ErrorMessage | Label, FormGroup helper text | the parts of a labelled control |
+| Fieldset | Fieldset, Form | FormGroup, ControlGroup | controls grouped under a heading |
 | Key label | Kbd | KeyComboTag | drawn from the keymap, never typed by hand |
 | Separator | Separator | Divider | a rule on a cell edge |
 | Spinner | Spinner | Spinner | the status line says what is running, in words; nothing spins, since nothing moves by itself (§4.5) |
@@ -53,14 +61,6 @@ These are drawn from what exists now: boxes, text, pictures, the registry and fo
 
 | Graticule | HeroUI | Blueprint | Notes |
 |---|---|---|---|
-| Toggle button | ToggleButton | Button (active) | a button that stays on |
-| Button group | ButtonGroup, ToggleButtonGroup | ButtonGroup, SegmentedControl | segmented choice of one or several |
-| Close button | CloseButton | | a button with the close icon and its command |
-| Radio group | RadioGroup, Radio | RadioGroup, Radio | |
-| Check group | CheckboxGroup | | |
-| Switch | Switch, SwitchGroup | Switch | an on/off fact, applied at once |
-| Label, description, error | Label, Description, FieldError, ErrorMessage | Label, FormGroup helper text | the parts of a labelled control |
-| Fieldset | Fieldset, Form | FormGroup, ControlGroup | controls grouped under a heading |
 | Breadcrumbs | Breadcrumbs | Breadcrumbs | long paths shortened in the middle |
 | Navigation | | Navbar | places along the top, the current one marked |
 | Pagination | Pagination | | only where paging is the data's own shape |

@@ -119,6 +119,13 @@ pub enum Kind {
     Avatar,
     Callout { ink: Ink },
     Card,
+    Toggle { on: bool },
+    IconButton { picture: &'static Picture },
+    Group,
+    Radio { on: bool },
+    Switch { on: bool },
+    Fieldset,
+    Labelled,
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -130,11 +137,16 @@ pub enum Anchor {
 
 impl Kind {
     pub fn acts(&self) -> bool {
-        matches!(self, Kind::Field | Kind::Check { .. } | Kind::Link | Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::ListRow { .. } | Kind::Entry)
+        matches!(self, Kind::Field | Kind::Choice { .. } | Kind::Action | Kind::ListRow { .. } | Kind::Entry) || self.control()
+    }
+
+    /// Whether it is a control the user presses: a button, a link, a box to tick or a switch to flip.
+    pub fn control(&self) -> bool {
+        matches!(self, Kind::Button | Kind::Link | Kind::Check { .. } | Kind::Toggle { .. } | Kind::IconButton { .. } | Kind::Radio { .. } | Kind::Switch { .. })
     }
 
     pub fn container(&self) -> bool {
-        matches!(self, Kind::Root | Kind::Page | Kind::Row | Kind::Column | Kind::Columns | Kind::List { .. } | Kind::ListRow { .. } | Kind::Overlay { .. } | Kind::Callout { .. } | Kind::Card)
+        matches!(self, Kind::Root | Kind::Page | Kind::Row | Kind::Column | Kind::Columns | Kind::List { .. } | Kind::ListRow { .. } | Kind::Overlay { .. } | Kind::Callout { .. } | Kind::Card | Kind::Group | Kind::Fieldset | Kind::Labelled)
     }
 
     pub fn role(&self) -> &'static str {
@@ -172,6 +184,13 @@ impl Kind {
             Kind::Avatar => "avatar",
             Kind::Callout { .. } => "callout",
             Kind::Card => "card",
+            Kind::Toggle { .. } => "toggle button",
+            Kind::IconButton { .. } => "button",
+            Kind::Group => "group",
+            Kind::Radio { .. } => "radio button",
+            Kind::Switch { .. } => "switch",
+            Kind::Fieldset => "fieldset",
+            Kind::Labelled => "labelled",
         }
     }
 }

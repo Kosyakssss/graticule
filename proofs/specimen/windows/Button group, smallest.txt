@@ -1,0 +1,24 @@
+window		0 0 53 17	
+  page	Button group	0 0 53 7	
+    list		2 3 49 3	15 items
+      list item		2 3 47 3	
+        text	Buttons and toggle buttons joined side by side with no room between them, read as one control. Segments are a group over a fact: one of a few named options, each a toggle button, the chosen one pressed in.	2 3 47 3	
+  alert		2 7 49 1	
+  status		2 8 49 1	
+  toolbar		2 9 49 8	
+    button	Press	2 9 7 1	
+    button	Follow the link	11 9 13 1	
+    button	Tick or untick the box	26 9 18 1	
+    button	Bold	2 10 6 1	
+    button	Say it	10 10 7 1	unavailable (Type something first)
+    button	Back to all components	19 10 20 1	
+    button	Change the light appearance	2 11 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	2 12 24 1	
+    button	Use the next weight of lines	28 12 23 1	
+    button	Deepen the shadow	2 13 17 1	
+    button	Make the shadow shallower	21 13 23 1	
+    button	Use the other check mark	2 14 22 1	
+    button	Save the theme and the style	26 14 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	2 15 13 1	unavailable (Nothing to undo)
+    button	Redo	17 15 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 16 15 1	

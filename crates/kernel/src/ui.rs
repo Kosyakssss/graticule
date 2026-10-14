@@ -6,7 +6,7 @@ use std::panic::Location;
 use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
 use crate::app::{Moment, Path};
-use crate::form::{Control, Item, Settings};
+use crate::form::{Control, Item, Setting, Settings};
 use crate::ink::Ink;
 use crate::message::Message;
 use crate::picture::Picture;
@@ -385,6 +385,111 @@ impl<'a, C, S> Ui<'a, C, S> {
         Placed { ui: self, node: i }
     }
 
+    /// A button that stays pressed in while `on`. Clicking it runs `cmd`, which turns the thing on or off: a mode, such as bold or wrapping lines.
+    #[track_caller]
+    pub fn toggle<M>(&mut self, on: bool, cmd: impl Bind<C, S, M>) -> Placed<'_, 'a, C, S> {
+        let i = self.add(Kind::Toggle { on }, Location::caller());
+        self.command(i, cmd);
+        Placed { ui: self, node: i }
+    }
+
+    /// A button that shows a picture instead of words, such as `icons::CLOSE`. The command's label is what the status line and a screen reader say.
+    #[track_caller]
+    pub fn icon_button<M>(&mut self, picture: &'static Picture, cmd: impl Bind<C, S, M>) -> Placed<'_, 'a, C, S> {
+        let i = self.add(Kind::IconButton { picture }, Location::caller());
+        self.command(i, cmd);
+        Placed { ui: self, node: i }
+    }
+
+    /// Buttons and toggles joined side by side, with no room between them, read as one control.
+    #[track_caller]
+    pub fn group(&mut self, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let i = self.add(Kind::Group, Location::caller());
+        let subject = self.subject;
+        f(&mut self.child(i, subject));
+    }
+
+    /// An on or off fact at `path`, after `label`, changed the moment it is clicked. Each change is an `Edit` and one undo step.
+    #[track_caller]
+    pub fn switch<F: Field>(&mut self, label: impl AsRef<str>, path: FactPath<F, bool>) {
+        let on = self.facts::<F>().and_then(|f| path.get(f)).copied().unwrap_or(false);
+        self.switch_at(label.as_ref(), path.erased(), on, Location::caller());
+    }
+
+    /// One of a few named options, as joined toggles after `label`: the fact at `path`, an enum with `derive(Choice)`. Choosing one is an `Edit` and one undo step.
+    #[track_caller]
+    pub fn segments<F: Field, T: Setting>(&mut self, label: impl AsRef<str>, path: FactPath<F, T>) {
+        let (Control::Choice(options), Some(now)) = (T::control(), self.facts::<F>().and_then(|f| path.get(f)).map(Field::value)) else { return };
+        self.segments_at(label.as_ref(), path.erased(), &options, &now, Location::caller());
+    }
+
+    /// One of a few named options, as radio buttons one under another under `label`: the fact at `path`, an enum with `derive(Choice)`. Choosing one is an `Edit` and one undo step.
+    #[track_caller]
+    pub fn radio<F: Field, T: Setting>(&mut self, label: impl AsRef<str>, path: FactPath<F, T>) {
+        let (Control::Choice(options), Some(now)) = (T::control(), self.facts::<F>().and_then(|f| path.get(f)).map(Field::value)) else { return };
+        let (label, at) = (label.as_ref(), Location::caller());
+        let path = path.erased();
+        let id = Id::ROOT.mix(path.hash64());
+        let set = self.tree.add(self.parent, Kind::Fieldset, Some(id), at);
+        let r = self.tree.put(label);
+        self.tree.nodes[set as usize].text = r;
+        for (k, (option, value)) in options.iter().enumerate() {
+            let c = self.tree.add(set, Kind::Radio { on: *value == now }, Some(id.mix(3).mix(k as u64)), at);
+            let r = self.tree.put(option);
+            self.tree.nodes[c as usize].text = r;
+            let said = format!("{label}: {option}");
+            let r = self.tree.put(&said);
+            self.tree.nodes[c as usize].name = r;
+            self.set(c, path, value.clone(), said);
+        }
+    }
+
+    /// Controls grouped under a heading, such as the settings of one kind. A screen reader names the group with it.
+    #[track_caller]
+    pub fn fieldset(&mut self, legend: impl AsRef<str>, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let i = self.add(Kind::Fieldset, Location::caller());
+        let r = self.tree.put(legend.as_ref());
+        self.tree.nodes[i as usize].text = r;
+        let subject = self.subject;
+        f(&mut self.child(i, subject));
+    }
+
+    /// A control with its label above it. Muted text and an error described after the control say more about it, and a screen reader reads them with it.
+    #[track_caller]
+    pub fn labelled(&mut self, label: impl AsRef<str>, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let i = self.add(Kind::Labelled, Location::caller());
+        let r = self.tree.put(label.as_ref());
+        self.tree.nodes[i as usize].text = r;
+        let subject = self.subject;
+        f(&mut self.child(i, subject));
+    }
+
+    fn switch_at(&mut self, label: &str, path: ledger::ErasedPath, on: bool, at: &'static Location<'static>) {
+        let i = self.tree.add(self.parent, Kind::Switch { on }, Some(Id::ROOT.mix(path.hash64())), at);
+        let r = self.tree.put(label);
+        self.tree.nodes[i as usize].text = r;
+        self.tree.nodes[i as usize].span = crate::tree::Fill.min(CHECK_MIN);
+        self.set(i, path, ledger::Value::Bool(!on), format!("{label}: {}", if on { "off" } else { "on" }));
+    }
+
+    fn segments_at(&mut self, label: &str, path: ledger::ErasedPath, options: &[(&'static str, ledger::Value)], now: &ledger::Value, at: &'static Location<'static>) {
+        let id = Id::ROOT.mix(path.hash64());
+        let row = self.tree.add(self.parent, Kind::Row, Some(id), at);
+        let l = self.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(1)), at);
+        let r = self.tree.put(label);
+        self.tree.nodes[l as usize].text = r;
+        let group = self.tree.add(row, Kind::Group, Some(id.mix(2)), at);
+        for (k, (option, value)) in options.iter().enumerate() {
+            let c = self.tree.add(group, Kind::Toggle { on: value == now }, Some(id.mix(3).mix(k as u64)), at);
+            let r = self.tree.put(option);
+            self.tree.nodes[c as usize].text = r;
+            let said = format!("{label}: {option}");
+            let r = self.tree.put(&said);
+            self.tree.nodes[c as usize].name = r;
+            self.set(c, path, value.clone(), said);
+        }
+    }
+
     /// Every setting of the form at `path`, each with the control its type asks for: a switch, a row of options, a stepper or a field. Each change arrives in `update` as an `Edit` and is one undo step.
     #[track_caller]
     pub fn form<F: Field, T: Settings>(&mut self, path: FactPath<F, T>) {
@@ -414,37 +519,18 @@ impl<'a, C, S> Ui<'a, C, S> {
     fn setting(&mut self, path: ledger::ErasedPath, item: Item, at: &'static Location<'static>) {
         let id = Id::ROOT.mix(path.hash64());
         match &item.control {
-            Control::Switch => {
-                let on = item.value == ledger::Value::Bool(true);
-                let i = self.tree.add(self.parent, Kind::Check { on }, Some(id), at);
-                let r = self.tree.put(item.label);
-                self.tree.nodes[i as usize].text = r;
-                self.tree.nodes[i as usize].span = crate::tree::Fill.min(CHECK_MIN);
-                self.set(i, path, ledger::Value::Bool(!on), format!("{}: {}", item.label, if on { "off" } else { "on" }));
-            }
+            Control::Switch => self.switch_at(item.label, path, item.value == ledger::Value::Bool(true), at),
             Control::Text => {
-                let i = self.tree.add(self.parent, Kind::Field, Some(id), at);
+                let around = self.tree.add(self.parent, Kind::Labelled, Some(id.mix(1)), at);
+                let r = self.tree.put(item.label);
+                self.tree.nodes[around as usize].text = r;
+                let i = self.tree.add(around, Kind::Field, Some(id), at);
                 self.tree.nodes[i as usize].path = Some(path);
                 let r = self.tree.put(&item.shown());
                 self.tree.nodes[i as usize].text = r;
-                let r = self.tree.put(item.label);
-                self.tree.nodes[i as usize].name = r;
                 self.tree.nodes[i as usize].span = crate::tree::Fill.min(16);
             }
-            Control::Choice(options) => {
-                let row = self.tree.add(self.parent, Kind::Row, Some(id), at);
-                let label = self.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(1)), at);
-                let r = self.tree.put(item.label);
-                self.tree.nodes[label as usize].text = r;
-                for (k, (option, value)) in options.iter().enumerate() {
-                    let c = self.tree.add(row, Kind::Choice { chosen: *value == item.value }, Some(id.mix(2).mix(k as u64)), at);
-                    let r = self.tree.put(option);
-                    self.tree.nodes[c as usize].text = r;
-                    let r = self.tree.put(&format!("{}: {option}", item.label));
-                    self.tree.nodes[c as usize].name = r;
-                    self.set(c, path, value.clone(), format!("{}: {option}", item.label));
-                }
-            }
+            Control::Choice(options) => self.segments_at(item.label, path, options, &item.value, at),
             Control::Whole { least, most } => {
                 let row = self.tree.add(self.parent, Kind::Row, Some(id), at);
                 let label = self.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(1)), at);

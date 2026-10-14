@@ -9,7 +9,8 @@ window		0 0 68 18
     button	Press	2 9 7 1	
     button	Follow the link	11 9 13 1	
     button	Tick or untick the box	26 9 18 1	
-    button	Say it	46 9 7 1	unavailable (Type something first)
+    button	Bold	46 9 6 1	
+    button	Say it	54 9 7 1	unavailable (Type something first)
     button	Back to all components	2 10 20 1	unavailable (All components are showing)
     button	Make “link” lighter	24 10 16 1	
     button	Make “link” darker	42 10 16 1	

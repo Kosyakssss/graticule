@@ -2,13 +2,13 @@ use std::hash::{Hash, Hasher};
 
 use crate::grid::Area;
 use crate::ink::{Color, Ink};
-use crate::layout::{CHECK, MARGIN};
+use crate::layout::{CHECK, MARGIN, SWITCH};
 use crate::look::CheckMark;
 use crate::paint::Painter;
 use crate::picture::Picture;
 use crate::px::Rect;
 use crate::text::{Block, Data, Outline, Paint, SpanStyle};
-use crate::tree::{Kind, Node, Tone, Tree};
+use crate::tree::{Kind, NONE, Node, Tone, Tree};
 use crate::value::Value;
 
 /// How the pointer and the keyboard are touching a node right now. Changing it repaints the node without building the tree again.
@@ -109,22 +109,108 @@ pub fn checkbox(p: &mut Painter, x: f32, y: f32, on: bool, enabled: bool) {
     }
 }
 
-fn button(p: &mut Painter, n: &Node, label: &str, look: Look) {
+fn radio(p: &mut Painter, x: f32, y: f32, on: bool, enabled: bool) {
+    let t = p.style.line(p.m);
+    let side = (p.m.cell_h * 0.6).round();
+    let at = ((x + (p.m.cell_w * CHECK as f32 - side) / 2.0).floor(), (y + (p.m.cell_h - side) / 2.0).floor());
+    let ink = if !enabled {
+        p.theme.faint
+    } else if on {
+        p.theme.ink
+    } else {
+        p.theme.muted
+    };
+    disc(p, at, side / 2.0, side / 2.0 - t, ink);
+    if on {
+        let dot = (side * 0.25).round();
+        disc(p, (at.0 + side / 2.0 - dot, at.1 + side / 2.0 - dot), dot, 0.0, ink);
+    }
+}
+
+fn disc(p: &mut Painter, at: (f32, f32), radius: f32, hole: f32, color: Color) {
+    let (r, h) = (radius, hole.max(0.0));
+    let mut path = format!("M 0 {r} A {r} {r} 0 1 0 {d} {r} A {r} {r} 0 1 0 0 {r} Z", d = r * 2.0);
+    if h > 0.0 {
+        let _ = std::fmt::Write::write_fmt(&mut path, format_args!(" M {a} {r} A {h} {h} 0 1 0 {b} {r} A {h} {h} 0 1 0 {a} {r} Z", a = r - h, b = r + h));
+    }
+    let key = {
+        let mut k = std::collections::hash_map::DefaultHasher::new();
+        ("disc", r.to_bits(), h.to_bits()).hash(&mut k);
+        k.finish()
+    };
+    let clip = p.clip();
+    let outline = Outline { path: Data::Svg(&path), stroke: None, even_odd: true, scale: 1.0 };
+    p.text.shape(p.quads, key, outline, Paint { origin: at, limit: None, colors: &[color], clip });
+}
+
+fn switch(p: &mut Painter, x: f32, y: f32, on: bool, enabled: bool) {
+    let t = p.style.line(p.m);
+    let inset = (p.m.cell_h * 0.25).round();
+    let track = Rect::new((x + p.m.cell_w * 0.25).round(), y + inset, (p.m.cell_w * (SWITCH as f32 - 0.5)).round(), p.m.cell_h - inset * 2.0);
+    let theme = p.theme;
+    let ink = if enabled { theme.ink } else { theme.faint };
+    if on {
+        p.fill(track, ink);
+    }
+    border(p, track, t, if on || !enabled { ink } else { theme.muted });
+    let knob = (track.h - t * 4.0).max(t);
+    let kx = if on { track.right() - t * 2.0 - knob } else { track.x + t * 2.0 };
+    p.fill(Rect::new(kx, track.y + t * 2.0, knob, knob), if on { theme.bg } else { theme.muted });
+}
+
+/// Where a button sits in a group of joined buttons, which share one shadow and their edges.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Joined {
+    Alone,
+    First,
+    Inside,
+    Last,
+}
+
+fn joined<C>(tree: &Tree<C>, i: u32) -> Joined {
+    let n = &tree.nodes[i as usize];
+    if n.parent == NONE || tree.nodes[n.parent as usize].kind != Kind::Group {
+        return Joined::Alone;
+    }
+    match (tree.nodes[n.parent as usize].first == i, n.next == NONE) {
+        (true, true) => Joined::Alone,
+        (true, false) => Joined::First,
+        (false, true) => Joined::Last,
+        (false, false) => Joined::Inside,
+    }
+}
+
+fn button(p: &mut Painter, n: &Node, label: &str, joined: Joined, look: Look) {
+    pressable(p, n, label, None, false, joined, look);
+}
+
+fn pressable(p: &mut Painter, n: &Node, label: &str, picture: Option<&'static Picture>, on: bool, joined: Joined, look: Look) {
     let outer = p.rect(n.area);
     let d = shadow(p);
-    let body = Rect::new(outer.x, outer.y, outer.w - d, outer.h - d);
-    let pressed = n.enabled && look.pressed;
-    let r = if pressed { Rect::new(body.x + d, body.y + d, body.w, body.h) } else { body };
+    let alone = joined == Joined::Alone;
+    let right = if matches!(joined, Joined::First | Joined::Inside) { 0.0 } else { d };
+    let body = Rect::new(outer.x, outer.y, outer.w - right, outer.h - d);
+    let pressed = n.enabled && look.pressed || on;
+    let r = if pressed && alone { Rect::new(body.x + d, body.y + d, body.w, body.h) } else { body };
     let theme = p.theme;
-    let (edge, fill, ink) = if n.enabled { (theme.ink, if look.hovered { theme.hover } else { theme.bg }, theme.ink) } else { (theme.rule, theme.bg, theme.faint) };
-    if n.enabled && !pressed {
+    let rest = if on { theme.selection } else { theme.bg };
+    let (edge, fill, ink) = if n.enabled { (theme.ink, if look.hovered || look.pressed && !alone { theme.hover } else { rest }, theme.ink) } else { (theme.rule, rest, theme.faint) };
+    if n.enabled && !pressed && alone {
         p.fill(Rect::new(body.x + d, body.y + d, body.w, body.h), edge);
     }
     p.fill(r, fill);
     let t = p.style.line(p.m);
     border(p, r, t, edge);
+    if matches!(joined, Joined::Inside | Joined::Last) {
+        p.fill(Rect::new(r.x, r.y, t, r.h), edge);
+    }
     if look.focused {
         border(p, Rect::new(r.x + t * 2.0, r.y + t * 2.0, r.w - t * 4.0, r.h - t * 4.0), t, theme.cursor);
+    }
+    if let Some(picture) = picture {
+        let inset = (p.m.cell_h * 0.12).round();
+        draw_picture(p, Rect::new(r.x + inset, r.y + inset, r.w - inset * 2.0, r.h - inset * 2.0), picture, Some(ink));
+        return;
     }
     let mono = p.m.mono();
     let w = p.measure(label, mono);
@@ -322,7 +408,15 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let color = tone(p, t);
             wrapped(p, n.area, text, mono, if strong { 600.0 } else { 400.0 }, color);
         }
-        (Layer::Over, Kind::Button) => button(p, &n, text, look),
+        (Layer::Over, Kind::Button) => button(p, &n, text, joined(tree, i), look),
+        (Layer::Under, Kind::Group) => {
+            let r = p.rect(n.area);
+            let d = shadow(p);
+            let ink = p.theme.ink;
+            if d > 0.0 {
+                p.fill(Rect::new(r.x + d, r.y + d, r.w - d, r.h - d), ink);
+            }
+        }
         (Layer::Over, Kind::Action) => action(p, &n, text, tree.str(n.keys), look),
         (Layer::Over, Kind::Choice { chosen }) => choice(p, &n, chosen, text, tree.str(n.keys), tree.str(n.reason), look),
         (Layer::Under, Kind::Palette) => {
@@ -351,6 +445,34 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         (Layer::Over, Kind::Link) => {
             let ink = p.theme.link;
             link(p, &n, text, look, ink);
+        }
+        (Layer::Over, Kind::Toggle { on }) => pressable(p, &n, text, None, on, joined(tree, i), look),
+        (Layer::Over, Kind::IconButton { picture }) => pressable(p, &n, text, Some(picture), false, joined(tree, i), look),
+        (Layer::Over, Kind::Fieldset | Kind::Labelled) => {
+            let (weight, ink) = (if n.kind == Kind::Fieldset { 600.0 } else { 400.0 }, p.theme.ink);
+            wrapped(p, n.area, text, false, weight, ink);
+        }
+        (Layer::Under, Kind::Radio { .. } | Kind::Switch { .. }) if n.enabled && look.hovered => {
+            let hover = p.theme.hover;
+            p.fill_area(n.area, hover);
+        }
+        (Layer::Over, Kind::Radio { on } | Kind::Switch { on }) => {
+            let r = p.rect(n.area);
+            let mark = if matches!(n.kind, Kind::Radio { .. }) {
+                radio(p, r.x, r.y, on, n.enabled);
+                CHECK
+            } else {
+                switch(p, r.x, r.y, on, n.enabled);
+                SWITCH
+            };
+            let ink = if n.enabled { p.theme.ink } else { p.theme.faint };
+            let a = Area::new(n.area.col + mark + 1, n.area.row, n.area.cols - mark - 1, n.area.rows);
+            wrapped(p, a, text, false, 400.0, ink);
+            if look.focused {
+                let t = p.style.line(p.m);
+                let cursor = p.theme.cursor;
+                border(p, r, t, cursor);
+            }
         }
         (Layer::Under, Kind::Check { .. }) if n.enabled && look.hovered => {
             let hover = p.theme.hover;

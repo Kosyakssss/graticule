@@ -22,7 +22,10 @@ fn role(kind: Kind) -> Role {
         Kind::Avatar => Role::Image,
         Kind::Callout { ink: crate::ink::Ink::Danger | crate::ink::Ink::Warn } => Role::Alert,
         Kind::Callout { .. } => Role::Note,
-        Kind::Card => Role::Group,
+        Kind::Card | Kind::Group | Kind::Fieldset | Kind::Labelled => Role::Group,
+        Kind::Toggle { .. } | Kind::IconButton { .. } => Role::Button,
+        Kind::Radio { .. } => Role::RadioButton,
+        Kind::Switch { .. } => Role::Switch,
         Kind::Bar => Role::Toolbar,
         Kind::Status => Role::Status,
         Kind::Note => Role::Alert,
@@ -49,6 +52,10 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 node.set_value(text);
                 node.set_placeholder(name);
             }
+            Kind::Toggle { on } | Kind::Radio { on } | Kind::Switch { on } => {
+                node.set_label(if name.is_empty() { text } else { name });
+                node.set_toggled(if on { Toggled::True } else { Toggled::False });
+            }
             Kind::Check { on } => {
                 node.set_label(text);
                 node.set_toggled(if on { Toggled::True } else { Toggled::False });
@@ -74,6 +81,22 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
         }
         if !n.reason.is_empty() {
             node.set_description(tree.str(n.reason));
+        }
+        if n.kind.acts() && n.parent != NONE && tree.nodes[n.parent as usize].kind == Kind::Labelled {
+            let around = tree.nodes[n.parent as usize];
+            node.set_label(tree.str(around.text));
+            let mut said = Vec::new();
+            let mut c = around.first;
+            while c != NONE {
+                let s = tree.nodes[c as usize];
+                if matches!(s.kind, Kind::Text { tone: crate::tree::Tone::Muted, .. } | Kind::Value { value: crate::value::Value::Error }) {
+                    said.push(tree.str(s.text));
+                }
+                c = s.next;
+            }
+            if !said.is_empty() {
+                node.set_description(said.join(". "));
+            }
         }
         if n.kind.acts() {
             if n.enabled {

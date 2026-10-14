@@ -53,11 +53,19 @@ struct Asking {
     got: Vec<Value>,
 }
 
+/// A page the kernel draws in place of the app's: the help, or the log of what was done.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Sheet {
+    Help,
+    Log,
+}
+
 /// One line of the help page.
 enum Help {
     Heading(String),
     Item { label: String, keys: String, state: String },
     Doc(String),
+    Dated(Moment, String),
 }
 
 /// A command named by a key, the palette or the bar, once its subjects are filled in.
@@ -185,7 +193,8 @@ pub struct Runner<A: App> {
     count: u32,
     keymap: Keymap,
     mode: Mode,
-    help: Option<i32>,
+    sheet: Option<(Sheet, i32)>,
+    done: VecDeque<(Moment, String)>,
     inspecting: bool,
     palette: Option<Palette>,
     clipboard: Option<arboard::Clipboard>,
@@ -249,7 +258,8 @@ impl<A: App> Runner<A> {
             count: 0,
             keymap,
             mode: Mode::Normal,
-            help: None,
+            sheet: None,
+            done: VecDeque::new(),
             inspecting: false,
             palette: None,
             clipboard: None,
@@ -312,11 +322,14 @@ impl<A: App> Runner<A> {
         self.tree.reindex();
         self.follow();
         let here = self.glance();
-        let root = match self.help {
-            Some(top) => {
-                let lines = self.help_lines(&here);
+        let root = match self.sheet {
+            Some((sheet, top)) => {
+                let lines = match sheet {
+                    Sheet::Help => self.help_lines(&here),
+                    Sheet::Log => self.log_lines(),
+                };
                 let root = self.tree.root();
-                self.build_help(root, lines, top);
+                self.build_sheet(root, sheet, lines, top);
                 root
             }
             None => root,
@@ -470,7 +483,21 @@ impl<A: App> Runner<A> {
         lines
     }
 
-    fn build_help(&mut self, root: u32, lines: Vec<Help>, top: i32) {
+    fn log_lines(&self) -> Vec<Help> {
+        match self.done.len() {
+            0 => vec![Help::Doc("Nothing yet: what you do in this window shows here, newest first".into())],
+            _ => self.done.iter().rev().map(|(at, what)| Help::Dated(*at, what.clone())).collect(),
+        }
+    }
+
+    fn did(&mut self, what: String) {
+        if self.done.len() == DONE_KEPT {
+            self.done.pop_front();
+        }
+        self.done.push_back((Moment::now(), what));
+    }
+
+    fn build_sheet(&mut self, root: u32, sheet: Sheet, lines: Vec<Help>, top: i32) {
         let screen = self.metrics.map_or(crate::grid::Area::new(0, 0, 100, 40), |m| m.screen());
         let budget = (screen.rows - HELP_CHROME).max(1);
         let full = (screen.cols - 4).max(1) as usize;
@@ -483,6 +510,7 @@ impl<A: App> Runner<A> {
                 Help::Doc(text) => rows(text, full),
                 Help::Item { label, state, .. } if stacked => rows(label, full) + 1 + rows(state, full),
                 Help::Item { label, state, .. } => rows(label, wide).max(rows(state, wide)),
+                Help::Dated(_, text) => rows(text, full.saturating_sub(HELP_DATE as usize).max(1)),
             }
         };
         let mut last = lines.len();
@@ -500,14 +528,22 @@ impl<A: App> Runner<A> {
             shown += 1;
         }
         let shown = shown.max(1);
-        self.help = Some(top);
+        self.sheet = Some((sheet, top));
         let mut ui = Ui::<A::Cmd>::new(&mut self.tree, &self.facts, &self.scrolls, root);
-        ui.page(Message::plain(format!("Help, lines {} to {} of {}", top + 1, (top + shown).min(lines.len() as i32), lines.len())), |ui| {
+        let name = match sheet {
+            Sheet::Help => "Help",
+            Sheet::Log => "What was done, newest first",
+        };
+        ui.page(Message::plain(format!("{name}, lines {} to {} of {}", top + 1, (top + shown).min(lines.len() as i32), lines.len())), |ui| {
             ui.column(crate::tree::Fill, |ui| {
                 for line in lines.into_iter().skip(top as usize).take(shown as usize) {
                     match line {
                         Help::Heading(text) => ui.strong(text),
                         Help::Doc(text) => ui.muted(text),
+                        Help::Dated(at, text) => ui.columns(|ui| {
+                            ui.column(crate::tree::cols(HELP_DATE), |ui| ui.date(at));
+                            ui.column(crate::tree::Fill, |ui| ui.text(text));
+                        }),
                         Help::Item { label, keys, state } => ui.columns(|ui| {
                             ui.column(crate::tree::Fill.min(HELP_LABEL), |ui| ui.text(label));
                             ui.column(crate::tree::cols(HELP_KEYS), |ui| ui.mono(keys));
@@ -521,8 +557,8 @@ impl<A: App> Runner<A> {
     }
 
     fn scroll_help(&mut self, by: i32) -> bool {
-        let Some(top) = self.help else { return false };
-        self.help = Some(top.saturating_add(by).max(0));
+        let Some((sheet, top)) = self.sheet else { return false };
+        self.sheet = Some((sheet, top.saturating_add(by).max(0)));
         self.stale = true;
         true
     }
@@ -1086,7 +1122,10 @@ impl<A: App> Runner<A> {
             self.background.push_back(Background { label, gesture, place, ops, parts });
             return;
         }
-        self.history.commit(ops, || label, gesture, place);
+        let what = done_as(&label);
+        if self.history.commit(ops, || label, gesture, place) == ledger::Kept::Step {
+            self.did(what);
+        }
         self.repair(marks);
     }
 
@@ -1185,6 +1224,7 @@ impl<A: App> Runner<A> {
         if !back && !self.background.is_empty() {
             return false;
         }
+        let step = if back { self.history.undo_label() } else { self.history.redo_label() }.map(str::to_string);
         let place = self.place();
         let moved = if back { self.history.undo(&mut self.facts, place) } else { self.history.redo(&mut self.facts) };
         let Some(moved) = moved else { return false };
@@ -1192,6 +1232,9 @@ impl<A: App> Runner<A> {
         let pruned = self.prune(&ops);
         ops.extend(pruned);
         self.record(Value::Map(vec![("do".into(), Value::Str(if back { "undo" } else { "redo" }.into()))]), &ops);
+        if let Some(step) = step {
+            self.did(format!("{} {step}", if back { "Undid" } else { "Redid" }));
+        }
         self.restore(place);
         self.said = None;
         self.stale = true;
@@ -1314,7 +1357,10 @@ impl<A: App> Runner<A> {
         if background.parts.is_empty()
             && let Some(done) = self.background.pop_front()
         {
-            self.history.commit(done.ops, || done.label, done.gesture, done.place);
+            let what = done_as(&done.label);
+            if self.history.commit(done.ops, || done.label, done.gesture, done.place) == ledger::Kept::Step {
+                self.did(what);
+            }
         }
         true
     }
@@ -1617,7 +1663,12 @@ impl<A: App> Runner<A> {
             Builtin::Cancel => self.cancel(),
             Builtin::EditKeys => self.edit_keys(),
             Builtin::Help => {
-                self.help = if self.help.is_some() { None } else { Some(0) };
+                self.sheet = if matches!(self.sheet, Some((Sheet::Help, _))) { None } else { Some((Sheet::Help, 0)) };
+                self.stale = true;
+                true
+            }
+            Builtin::Log => {
+                self.sheet = if matches!(self.sheet, Some((Sheet::Log, _))) { None } else { Some((Sheet::Log, 0)) };
                 self.stale = true;
                 true
             }
@@ -1638,6 +1689,7 @@ impl<A: App> Runner<A> {
             }
             Builtin::LightAppearance | Builtin::DarkAppearance | Builtin::SystemAppearance | Builtin::NextTheme | Builtin::NextStyle | Builtin::AbsoluteDates | Builtin::RelativeDates => {
                 self.switch = b.switch();
+                self.did(b.label().to_string());
                 true
             }
             _ => {
@@ -1719,7 +1771,7 @@ impl<A: App> Runner<A> {
     }
 
     fn cancel(&mut self) -> bool {
-        if self.help.take().is_some() {
+        if self.sheet.take().is_some() {
             self.stale = true;
             return true;
         }
@@ -1793,7 +1845,7 @@ impl<A: App> Runner<A> {
         if self.palette.is_some() {
             return self.palette_key(chord, text);
         }
-        if self.help.is_some() && self.pending.is_empty() && chord.mods == Mods::default() {
+        if self.sheet.is_some() && self.pending.is_empty() && chord.mods == Mods::default() {
             let page = self.metrics.map_or(30, |m| m.screen().rows - HELP_CHROME).max(1);
             let by = match chord.key {
                 Key::Up => -1,
@@ -2575,7 +2627,7 @@ impl<A: App> Face for Runner<A> {
                 let Some((x, y)) = frame.pointer else { return false };
                 let (col, row) = frame.metrics.cell_at(x, y);
                 let by = -(dy / frame.metrics.cell_h).round() as i32;
-                if self.help.is_some() {
+                if self.sheet.is_some() {
                     return by != 0 && self.scroll_help(by);
                 }
                 by != 0 && self.scroll(col, row, by)
@@ -2608,7 +2660,7 @@ impl<A: App> Face for Runner<A> {
                 true
             }
             Input::Resized => {
-                if self.help.is_some() {
+                if self.sheet.is_some() {
                     self.stale = true;
                 }
                 true
@@ -2629,8 +2681,18 @@ fn read_keymap<A: App>(source: &str, file: &str) -> Result<(Keymap, Option<Said>
 const HELP_CHROME: i32 = 9;
 const HELP_KEYS: i32 = 20;
 const HELP_LABEL: i32 = 16;
+const HELP_DATE: i32 = 18;
+const DONE_KEPT: usize = 500;
 
 const MOST_TIMES: u32 = 9999;
+
+fn done_as(label: &str) -> String {
+    match label.strip_prefix('“').and_then(|l| l.strip_suffix('”')) {
+        Some(plain) => plain.to_string(),
+        None if label == "typing" => "Typed".into(),
+        None => label.to_string(),
+    }
+}
 
 const KEYMAP: &str = "keymap.txt";
 

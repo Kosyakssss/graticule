@@ -249,6 +249,8 @@ A key goes, in order, to the palette when it is open; to the focused field, whic
 
 The built-in "What's this?" (`whats-this`) makes the next click, or the next Return or Space on a focused control, describe instead of act: for a command, its label, its keys, its documentation and whether it can run now or why not; for anything else, what it is and that it has no command. The description goes to the message line, which the screen reader reads. Escape stops without describing.
 
+The built-in "Show what was done" (`log`) draws, on the same kind of page, what the user did in this window, newest first, each with when as a date value (so it follows the date setting): every change that became an undo step under its label, every undo and redo ("Undid “Add”"), and every switch of the look. Typing that joins a step is not logged again, and moving around is not logged. The window keeps the last 500 in memory and doesn't save them; the command log in Ledger is the record that lasts.
+
 ### 9.5 Bindable everywhere
 
 A component takes a command in one of two forms, chosen by type:

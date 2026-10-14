@@ -306,7 +306,7 @@ mod tree {
             let mut scrolls = Scrolls::new();
             build(&mut tree, &shapes, &board, &scrolls);
             let id = tree.nodes.iter().find(|n| matches!(n.kind, Kind::List { .. })).map(|n| n.id).expect("a list");
-            scrolls.insert(id, Scroll { anchor: Some(anchor.raw()), index: top as u32, rows: 5, focus: None });
+            scrolls.insert(id, Scroll { anchor: Some(anchor.raw()), index: top as u32, rows: 5 });
             let mut next = len + 1;
             for (insert, at) in changes {
                 let nth = board.items.keys().nth(at as usize % board.items.len().max(1));
@@ -478,6 +478,7 @@ mod commands {
             let mut runner = Runner::new(shelf(&done));
             for step in &steps {
                 take(&mut runner, step);
+                prop_assert_eq!(runner.failure(), None);
             }
         }
 
@@ -494,9 +495,9 @@ mod commands {
             let stays = |k: &Key<Item>| !chosen.contains(k) || runner.facts.items.find(*k).is_some_and(|i| i.done);
             let left: Vec<Key<Item>> = runner.facts.items.keys().filter(stays).collect();
             let removed = runner.facts.items.len() - left.len();
-            let before = runner.steps.len();
+            let before = runner.history.len();
             runner.run_named("remove");
-            prop_assert_eq!(runner.steps.len() - before, usize::from(removed > 0));
+            prop_assert_eq!(runner.history.len() - before, usize::from(removed > 0));
             prop_assert_eq!(runner.facts.items.keys().collect::<Vec<_>>(), left);
         }
 
@@ -528,6 +529,30 @@ mod commands {
                 }
                 take(&mut runner, step);
                 prop_assert_eq!(runner.facts.draft.as_str(), text.as_str());
+            }
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn undo_returns_to_where_you_were_and_redo_to_where_you_left(done in prop::collection::vec(any::<bool>(), 0..8), steps in prop::collection::vec(step(), 0..40)) {
+            let mut runner = Runner::new(shelf(&done));
+            let mut befores = Vec::new();
+            for step in &steps {
+                let (value, len) = (ledger::Field::value(&runner.facts), runner.history.len());
+                take(&mut runner, step);
+                if runner.history.len() > len {
+                    befores.push(value);
+                }
+            }
+            let left = ledger::Field::value(&runner.facts);
+            for before in befores.iter().rev() {
+                prop_assert!(runner.run_named("undo"));
+                prop_assert_eq!(&ledger::Field::value(&runner.facts), before);
+            }
+            for after in befores.iter().skip(1).chain([&left]) {
+                prop_assert!(runner.run_named("redo"));
+                prop_assert_eq!(&ledger::Field::value(&runner.facts), after);
             }
         }
     }

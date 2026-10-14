@@ -191,6 +191,7 @@ impl<T: 'static> Field for Selection<T> {
         if deleted.is_empty() {
             return;
         }
+        let before = self.value();
         for k in deleted {
             self.keys.remove(&Key::from_raw(*k));
         }
@@ -199,6 +200,10 @@ impl<T: 'static> Field for Selection<T> {
         }
         if self.anchor.is_some_and(|a| deleted.contains(&a.raw())) {
             self.anchor = self.focus;
+        }
+        let after = self.value();
+        if after != before {
+            journal::record(|| Op::Select { selection: self.at, before, after });
         }
     }
 }

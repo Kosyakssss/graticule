@@ -10,13 +10,12 @@ use crate::tree::{Id, Kind, ListInfo, NONE, Span, Tone, Tree};
 
 const CHECK_MIN: i32 = 12;
 
-/// Where a list is scrolled to: the row at its top, by key so rows arriving above don’t move it, and how many rows it showed last frame, and where its focused row was, so focus can stay in place when that row goes.
+/// Where a list is scrolled to: the row at its top, by key so rows arriving above don’t move it, and how many rows it showed last frame.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Scroll {
     pub anchor: Option<u128>,
     pub index: u32,
     pub rows: i32,
-    pub focus: Option<u32>,
 }
 
 pub type Scrolls = HashMap<Id, Scroll>;
@@ -244,7 +243,6 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.tree.nodes[i as usize].kind = Kind::List { count: len as u32, first: first as u32, shown };
         let focused = chosen.and_then(|s| s.focused());
         let focus_index = focused.and_then(|k| items.position(k));
-        let gone = scroll.focus.filter(|_| focused.is_some() && focus_index.is_none() && len > 0).and_then(|p| items.get((p as usize).min(len - 1))).map(|t| t.key().raw());
         let near = |d: isize| focus_index.and_then(|p| p.checked_add_signed(d)).and_then(|p| items.get(p)).map(|t| t.key().raw());
         self.tree.nodes[i as usize].list = self.tree.lists.len() as u32;
         self.tree.lists.push(ListInfo {
@@ -261,8 +259,8 @@ impl<'a, C, S> Ui<'a, C, S> {
             after: near(1),
             first: items.first().map(|t| t.key().raw()),
             last: items.last().map(|t| t.key().raw()),
-            gone,
             keys: keys::<F, T>,
+            nth: nth::<F, T>,
         });
     }
 
@@ -304,4 +302,9 @@ fn keys<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, selecti
             keys.into_iter().map(|(_, k)| k).collect()
         }
     }
+}
+
+fn nth<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, index: u32) -> Option<u128> {
+    let list = facts.downcast_ref::<F>()?.reach(items.steps())?.downcast_ref::<List<T>>()?;
+    list.get(index as usize).map(|t| t.key().raw())
 }

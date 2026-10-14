@@ -208,6 +208,9 @@ impl Node {
 /// Reads keys out of the facts a list was built from: the chosen keys in list order, or the keys from one to another.
 pub type Keys = fn(&dyn std::any::Any, ErasedPath, ErasedPath, Option<(u128, u128)>) -> Vec<u128>;
 
+/// Reads the key of the row at a place in a list, counting from the top.
+pub type Nth = fn(&dyn std::any::Any, ErasedPath, u32) -> Option<u128>;
+
 /// What the kernel knows about a list it can move around in and choose from, without knowing the type of its items.
 #[derive(Clone, Copy, Debug)]
 pub struct ListInfo {
@@ -224,9 +227,8 @@ pub struct ListInfo {
     pub after: Option<u128>,
     pub first: Option<u128>,
     pub last: Option<u128>,
-    /// When the focused row has gone from the list, the row now where it was.
-    pub gone: Option<u128>,
     pub keys: Keys,
+    pub nth: Nth,
 }
 
 /// The flat tree a view builds: every component on screen, in building order, with stable ids. Its vectors keep their capacity, so building it again allocates nothing in steady state.

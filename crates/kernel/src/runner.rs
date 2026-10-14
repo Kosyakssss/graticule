@@ -2,7 +2,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-use ledger::{Change, Choose, Edit, ErasedPath, Op, Transaction};
+use ledger::{Change, Choose, Edit, ErasedPath, History, Op, Transaction};
 use winit::event::{Ime, KeyEvent};
 
 use crate::app::{App, Cx, Moment, Said};
@@ -24,6 +24,13 @@ use crate::ui::{Scroll, Scrolls, Ui};
 
 const CHOICES: usize = 12;
 const PALETTE: Id = Id(0x9a1e_77e5_0000_0001);
+
+/// Where the user was: the focused component and its caret. Each undo step keeps it, so undo puts the user back.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Place {
+    pub focus: Option<Id>,
+    pub caret: Option<Caret>,
+}
 
 #[derive(Clone, Debug, Default)]
 struct Palette {
@@ -47,8 +54,7 @@ type Here = Option<(ListInfo, Vec<u128>)>;
 /// Runs an app in a window: builds its tree from the facts, lays it out, keeps its quads and turns input into commands.
 pub struct Runner<A: App> {
     pub facts: A,
-    /// Every transaction that changed more than a selection, oldest first, as the operations it made.
-    pub steps: Vec<Vec<Op>>,
+    pub history: History<Place>,
     pub tree: Tree<A::Cmd>,
     scrolls: Scrolls,
     pub kept: Kept,
@@ -87,7 +93,7 @@ impl<A: App> Runner<A> {
         let (keymap, said) = read_keymap::<A>();
         Self {
             facts,
-            steps: Vec::new(),
+            history: History::new(),
             tree: Tree::default(),
             scrolls: Scrolls::new(),
             kept: Kept::default(),
@@ -126,11 +132,6 @@ impl<A: App> Runner<A> {
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
-        for list in &self.tree.lists {
-            if let Some(at) = list.focus_index {
-                self.scrolls.entry(self.tree.nodes[list.node as usize].id).or_default().focus = Some(at);
-            }
-        }
         self.follow();
         let here = self.here();
         if self.palette.is_some() {
@@ -283,7 +284,12 @@ impl<A: App> Runner<A> {
         for i in 0..self.tree.nodes.len() {
             let n = self.tree.nodes[i];
             if let Some(b) = n.builtin {
-                let r = self.tree.put(b.label());
+                let label = match (b, self.history.undo_label(), self.history.redo_label()) {
+                    (Builtin::Undo, Some(step), _) => format!("Undo {step}"),
+                    (Builtin::Redo, _, Some(step)) => format!("Redo {step}"),
+                    _ => b.label().to_string(),
+                };
+                let r = self.tree.put(&label);
                 self.tree.nodes[i].name = r;
                 self.tree.nodes[i].text = r;
                 if let Available::No(reason) = self.builtin_available(b) {
@@ -476,12 +482,20 @@ impl<A: App> Runner<A> {
 
     fn builtin_available(&self, b: Builtin) -> Available {
         match b {
-            Builtin::Undo => Available::No(Message::from("Nothing to undo")),
-            Builtin::Redo => Available::No(Message::from("Nothing to redo")),
+            Builtin::Undo if self.history.undo_label().is_none() => Available::No(Message::from("Nothing to undo")),
+            Builtin::Redo if self.history.redo_label().is_none() => Available::No(Message::from("Nothing to redo")),
             Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::First | Builtin::Last | Builtin::SelectAll if self.tree.lists.is_empty() => {
                 Available::No(Message::from("There is no list here"))
             }
             _ => Available::Yes,
+        }
+    }
+
+    /// What went wrong in the last command, if it failed.
+    pub fn failure(&self) -> Option<&str> {
+        match &self.said {
+            Some(Said::Failure(f)) => Some(f),
+            _ => None,
         }
     }
 
@@ -497,58 +511,126 @@ impl<A: App> Runner<A> {
             self.say(reason);
             return false;
         }
-        let mut cx = Cx::new(self.replica, self.counter, Moment::now(), self.counter ^ 0x9e37_79b9_7f4a_7c15);
-        let tx = Transaction::begin();
-        let _ = self.facts.update(cmd, &mut cx);
-        self.commit(tx.end());
-        self.counter = cx.counter;
-        self.said = cx.said.pop();
-        self.stale = true;
-        self.repair();
+        self.transact(vec![cmd]);
         true
     }
 
     /// Runs one command over several subjects as one transaction. Subjects it can't take are skipped, and the message line says which and why.
     pub fn run_many(&mut self, cmds: Vec<A::Cmd>) -> bool {
-        let mut cx = Cx::new(self.replica, self.counter, Moment::now(), self.counter ^ 0x9e37_79b9_7f4a_7c15);
         let mut skipped: Vec<(String, Message)> = Vec::new();
-        let tx = Transaction::begin();
+        let mut take = Vec::new();
         for cmd in cmds {
             match self.facts.available(&cmd) {
                 Available::No(reason) => skipped.push((cmd.label_string(&self.facts, Form::Long), reason)),
-                Available::Yes => {
-                    let _ = self.facts.update(cmd, &mut cx);
-                }
+                Available::Yes => take.push(cmd),
             }
         }
-        self.commit(tx.end());
-        self.counter = cx.counter;
-        self.said = match skipped.first() {
-            Some((what, why)) if skipped.len() == 1 => Some(Said::Note(Message::plain(format!("{what} was skipped: {}", why.as_str())))),
-            Some((what, why)) => Some(Said::Note(Message::plain(format!("{} were skipped, among them {what}: {}", skipped.len(), why.as_str())))),
-            None => cx.said.pop(),
-        };
+        if !take.is_empty() {
+            self.transact(take);
+        }
+        match skipped.first() {
+            Some((what, why)) if skipped.len() == 1 => self.said = Some(Said::Note(Message::plain(format!("{what} was skipped: {}", why.as_str())))),
+            Some((what, why)) => self.said = Some(Said::Note(Message::plain(format!("{} were skipped, among them {what}: {}", skipped.len(), why.as_str())))),
+            None => {}
+        }
         self.stale = true;
-        self.repair();
         true
     }
 
-    fn commit(&mut self, ops: Vec<Op>) {
-        if ops.iter().any(|op| !matches!(op, Op::Select { .. })) {
-            self.steps.push(ops);
+    fn transact(&mut self, cmds: Vec<A::Cmd>) {
+        let many = cmds.len();
+        let (label, gesture) = match cmds.first().and_then(Commands::as_edit) {
+            Some(edit) if edit.is_typing() => ("typing".to_string(), edit.gesture),
+            _ => {
+                self.gesture += 1;
+                let form = if many > 1 { Form::Many(many) } else { Form::Long };
+                (cmds.first().map_or_else(String::new, |c| format!("“{}”", c.label_string(&self.facts, form))), self.gesture)
+            }
+        };
+        let marks = self.marks();
+        let place = self.place();
+        let mut cx = Cx::new(self.replica, self.counter, Moment::now(), self.counter ^ 0x9e37_79b9_7f4a_7c15);
+        let before = self.facts.snap();
+        let tx = Transaction::begin();
+        let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            for cmd in cmds {
+                let _ = self.facts.update(cmd, &mut cx);
+            }
+        }));
+        let mut ops = tx.end();
+        self.facts.diff(&before, ErasedPath::ROOT, &mut ops);
+        self.stale = true;
+        if let Err(panic) = ran {
+            for op in ops.iter().rev() {
+                let inverse = op.inverse();
+                self.facts.apply(inverse.path().steps(), &inverse);
+            }
+            let why = panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned()).unwrap_or_default();
+            self.said = Some(Said::Failure(format!("{label} failed, and nothing changed: {why}")));
+            return;
+        }
+        self.counter = cx.counter;
+        self.said = cx.said.pop();
+        let pruned = self.prune(&ops);
+        ops.extend(pruned);
+        self.history.commit(ops, || label, gesture, place);
+        self.repair(marks);
+    }
+
+    fn place(&self) -> Place {
+        Place { focus: self.focus, caret: self.focus.and_then(|f| self.carets.get(&f).copied()) }
+    }
+
+    fn restore(&mut self, place: Place) {
+        self.focus = place.focus;
+        self.typing = None;
+        if let (Some(focus), Some(caret)) = (place.focus, place.caret) {
+            self.carets.insert(focus, caret);
         }
     }
 
-    fn repair(&mut self) {
-        if self.repairing {
+    fn prune(&mut self, ops: &[Op]) -> Vec<Op> {
+        let mut deleted: Vec<u128> = ops.iter().filter_map(Op::deleted).collect();
+        deleted.retain(|k| !ops.iter().any(|op| matches!(op, Op::Insert { key, .. } if key == k)));
+        if deleted.is_empty() {
+            return Vec::new();
+        }
+        let tx = Transaction::begin();
+        self.facts.prune(&deleted);
+        tx.end()
+    }
+
+    fn undo(&mut self, back: bool) -> bool {
+        let place = self.place();
+        let moved = if back { self.history.undo(&mut self.facts, place) } else { self.history.redo(&mut self.facts) };
+        let Some(moved) = moved else { return false };
+        let (ops, place) = (moved.ops, *moved.place);
+        self.prune(&ops);
+        self.restore(place);
+        self.said = None;
+        self.stale = true;
+        true
+    }
+
+    fn marks(&self) -> Vec<(Id, u128, u32)> {
+        self.tree.lists.iter().filter_map(|l| Some((self.tree.nodes[l.node as usize].id, l.focused?, l.focus_index?))).collect()
+    }
+
+    fn repair(&mut self, marks: Vec<(Id, u128, u32)>) {
+        if self.repairing || marks.is_empty() {
             return;
         }
         self.repairing = true;
         self.build();
-        let gone: Vec<(ListInfo, u128)> = self.tree.lists.iter().filter_map(|l| l.gone.map(|k| (*l, k))).collect();
-        for (list, key) in gone {
+        for (id, focused, index) in marks {
+            let Some(list) = self.tree.find(id).and_then(|i| self.tree.lists.get(self.tree.nodes[i as usize].list as usize).copied()) else { continue };
+            let facts = &self.facts as &dyn Any;
+            if list.count == 0 || !(list.keys)(facts, list.items, list.selection, Some((focused, focused))).is_empty() || list.focused.is_some_and(|f| f != focused) {
+                continue;
+            }
+            let Some(key) = (list.nth)(facts, list.items, index.min(list.count - 1)) else { continue };
             self.gesture += 1;
-            if let Some(cmd) = A::Cmd::edit(Edit::new(list.selection, Change::Select(Choose::Only(key)), self.gesture)) {
+            if let Some(cmd) = <A::Cmd as Commands<A>>::edit(Edit::new(list.selection, Change::Select(Choose::Only(key)), self.gesture)) {
                 let said = self.said.take();
                 self.run(cmd);
                 self.said = said;
@@ -608,7 +690,7 @@ impl<A: App> Runner<A> {
                 self.stale = true;
                 true
             }
-            Builtin::Undo | Builtin::Redo => false,
+            Builtin::Undo | Builtin::Redo => self.undo(b == Builtin::Undo),
             Builtin::Next | Builtin::Previous => self.cycle(b == Builtin::Next),
             Builtin::Cancel => self.cancel(),
             _ => {
@@ -646,7 +728,7 @@ impl<A: App> Runner<A> {
     fn select(&mut self, list: &ListInfo, choose: Choose) -> bool {
         self.gesture += 1;
         self.reveal = true;
-        match A::Cmd::edit(Edit::new(list.selection, Change::Select(choose), self.gesture)) {
+        match <A::Cmd as Commands<A>>::edit(Edit::new(list.selection, Change::Select(choose), self.gesture)) {
             Some(cmd) => self.run(cmd),
             None => false,
         }
@@ -853,7 +935,7 @@ impl<A: App> Runner<A> {
             self.gesture += 1;
         }
         self.typing = (kind != field::Kind::Alone).then_some((n.id, kind, text.ends_with(char::is_whitespace)));
-        let Some(cmd) = A::Cmd::edit(Edit::new(path, Change::Splice { range, text }, self.gesture)) else { return false };
+        let Some(cmd) = <A::Cmd as Commands<A>>::edit(Edit::new(path, Change::Splice { range, text }, self.gesture)) else { return false };
         if self.run(cmd) {
             self.carets.insert(n.id, Caret::at(caret));
         }

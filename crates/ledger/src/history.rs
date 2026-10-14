@@ -1,0 +1,168 @@
+use crate::op::Op;
+use crate::path::{Field, Kind};
+
+/// What became of a transaction once committed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kept {
+    /// It changed the document or typed into a field, so it is a new step.
+    Step,
+    /// It continued the typing of the newest step, so it joined it.
+    Merged,
+    /// It only moved around: a selection changed. Not a step, but undo puts it back.
+    Moved,
+    /// It changed nothing that history keeps.
+    Nothing,
+}
+
+/// One history per document, a tree rather than a line: undoing and then making a change starts a new branch, and the old one stays. `P` is where the user was (the kernel keeps its focus and caret there), so undo and redo can put them back.
+pub struct History<P> {
+    steps: Vec<Node<P>>,
+    at: Option<usize>,
+    moves: Vec<Op>,
+}
+
+struct Node<P> {
+    parent: Option<usize>,
+    newest: Option<usize>,
+    label: String,
+    ops: Vec<Op>,
+    gesture: u64,
+    typing: bool,
+    moves_before: Vec<Op>,
+    moves_after: Vec<Op>,
+    before: P,
+    after: Option<P>,
+}
+
+/// What undo or redo did: the operations it applied to the facts, in order, and where to put the user.
+pub struct Moved<'a, P> {
+    pub ops: Vec<Op>,
+    pub place: &'a P,
+}
+
+impl<P> Default for History<P> {
+    fn default() -> Self {
+        Self { steps: Vec::new(), at: None, moves: Vec::new() }
+    }
+}
+
+impl<P: Clone> History<P> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// How many steps the tree holds, on every branch.
+    pub fn len(&self) -> usize {
+        self.steps.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
+    }
+
+    /// Takes a committed transaction's operations. `label` names the command that made them, `gesture` joins typing of one word into one step, and `place` is where the user was before it.
+    pub fn commit(&mut self, ops: Vec<Op>, label: impl FnOnce() -> String, gesture: u64, place: P) -> Kept {
+        if ops.is_empty() {
+            return Kept::Nothing;
+        }
+        let typed = ops.iter().any(|op| matches!(op, Op::Splice { .. }));
+        let step = typed || ops.iter().any(|op| op.path().kind() == Kind::Document);
+        if !step {
+            let moved = ops.iter().any(|op| matches!(op, Op::Select { .. }));
+            self.moves.extend(ops.into_iter().filter(|op| matches!(op, Op::Select { .. })));
+            return if moved { Kept::Moved } else { Kept::Nothing };
+        }
+        let only_typing = ops.iter().all(|op| matches!(op, Op::Splice { .. } | Op::Select { .. }));
+        if let Some(at) = self.at
+            && only_typing
+            && self.moves.is_empty()
+            && self.steps[at].typing
+            && self.steps[at].gesture == gesture
+            && self.steps[at].newest.is_none()
+        {
+            self.steps[at].ops.extend(ops);
+            return Kept::Merged;
+        }
+        let index = self.steps.len();
+        if let Some(parent) = self.at {
+            self.steps[parent].newest = Some(index);
+        }
+        self.steps.push(Node {
+            parent: self.at,
+            newest: None,
+            label: label(),
+            ops,
+            gesture,
+            typing: only_typing,
+            moves_before: std::mem::take(&mut self.moves),
+            moves_after: Vec::new(),
+            before: place,
+            after: None,
+        });
+        self.at = Some(index);
+        Kept::Step
+    }
+
+    /// The label of the step undo would take back.
+    pub fn undo_label(&self) -> Option<&str> {
+        self.at.map(|at| self.steps[at].label.as_str())
+    }
+
+    /// The label of the step redo would put back: the newest branch from here.
+    pub fn redo_label(&self) -> Option<&str> {
+        self.next().map(|n| self.steps[n].label.as_str())
+    }
+
+    fn next(&self) -> Option<usize> {
+        match self.at {
+            Some(at) => self.steps[at].newest,
+            None => self.steps.iter().rposition(|n| n.parent.is_none()),
+        }
+    }
+
+    /// Takes back the newest step of the current branch: the selection moves since, the step's own changes, then the moves before it, so the facts are as they were just before the step. `place` is where the user is now, kept for redo.
+    pub fn undo<F: Field>(&mut self, facts: &mut F, place: P) -> Option<Moved<'_, P>> {
+        let at = self.at?;
+        let trailing = std::mem::take(&mut self.moves);
+        let mut ops = Vec::new();
+        reverse(facts, &trailing, &mut ops);
+        let node = &mut self.steps[at];
+        reverse(facts, &node.ops, &mut ops);
+        node.moves_after = trailing;
+        node.after = Some(place);
+        self.moves = node.moves_before.clone();
+        self.at = node.parent;
+        Some(Moved { ops, place: &self.steps[at].before })
+    }
+
+    /// Puts back the newest step undone from here, and the selection as it was when it was undone.
+    pub fn redo<F: Field>(&mut self, facts: &mut F) -> Option<Moved<'_, P>> {
+        let next = self.next()?;
+        let trailing = std::mem::take(&mut self.moves);
+        let mut ops = Vec::new();
+        reverse(facts, &trailing, &mut ops);
+        let node = &self.steps[next];
+        for list in [&node.moves_before, &node.ops, &node.moves_after] {
+            forward(facts, list, &mut ops);
+        }
+        self.moves = node.moves_after.clone();
+        self.at = Some(next);
+        let node = &self.steps[next];
+        Some(Moved { ops, place: node.after.as_ref().unwrap_or(&node.before) })
+    }
+}
+
+fn reverse<F: Field>(facts: &mut F, ops: &[Op], out: &mut Vec<Op>) {
+    for op in ops.iter().rev() {
+        let inverse = op.inverse();
+        facts.apply(inverse.path().steps(), &inverse);
+        out.push(inverse);
+    }
+}
+
+fn forward<F: Field>(facts: &mut F, ops: &[Op], out: &mut Vec<Op>) {
+    for op in ops {
+        facts.apply(op.path().steps(), op);
+        out.push(op.clone());
+    }
+}

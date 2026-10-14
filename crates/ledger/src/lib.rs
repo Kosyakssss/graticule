@@ -1,6 +1,7 @@
 //! LD-01, Ledger: the document's types and the command log. Saving, undo, history, replays and sync are built on it. It needs no screen, so any Rust program can keep a ledger.
 
 mod edit;
+mod history;
 mod journal;
 mod key;
 mod list;
@@ -13,6 +14,7 @@ mod text;
 mod value;
 
 pub use edit::{Change, Edit};
+pub use history::{History, Kept, Moved};
 pub use journal::{Transaction, record, recording};
 pub use key::Key;
 pub use list::List;

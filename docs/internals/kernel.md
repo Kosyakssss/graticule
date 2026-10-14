@@ -313,27 +313,30 @@ The command log records the result command, not the effect, so a replay never op
 
 ### 13.1 The contract
 
-The kernel sees Ledger through a handful of calls:
+The kernel runs a command and hands the result to Ledger's history:
 
 ```rust
-let transaction = ledger.begin(focus);
-let outcome = app.update(cmd, &mut cx);
-let committed = ledger.commit(transaction, &mut app, cmd_entry, outcome);
+let before = facts.snap();
+let transaction = Transaction::begin();
+app.update(cmd, &mut cx);
+let mut ops = transaction.end();
+facts.diff(&before, ErasedPath::ROOT, &mut ops);
+let kept = history.commit(ops, label, gesture, place);
 
-let committed = ledger.undo(&mut app);
-let committed = ledger.redo(&mut app);
-let committed = ledger.receive(&mut app);
-
-ledger.keep_session(&interaction_state);
-let (app, interaction_state) = Ledger::open::<Todo>(folder)?;
+let moved = history.undo(&mut facts, place);
+let moved = history.redo(&mut facts);
 ```
 
-`Committed` lists the top-level fields that changed (for versions), the keys that were deleted (for selections), whether the transaction became a step or merged into the last one, and the focus to restore after an undo. `focus` is the focused id and caret before the command.
+The transaction collects what Ledger's containers recorded while `update` ran; `diff` adds a `Set` for every plain field that changed. `label` names the step for the Undo command ("Undo “Add”", "Undo typing"), `gesture` joins the typing of one word into one step, and `place` is where the user was (the focused id and the caret), which `undo` and `redo` hand back so the kernel can put the user there again. `Kept` says whether the commit became a step, merged into the last one, only moved the selection, or kept nothing.
+
+If `update` panics, the kernel applies the inverses of what was recorded so far, the message line says the command failed and that nothing changed, and the app keeps running. After a commit that removed keys, the kernel asks the facts to drop them from every selection (`Field::prune`), inside a transaction of its own whose operations join the step, so undo puts the selection back.
+
+Saving, the command log and Ledger's thread come next in S5, with `Ledger::open` loading the facts and the kernel's interaction state before the first frame.
 
 ### 13.2 What Ledger does with a commit
 
 - **Registers.** Compares the plain fields (§4.2) and adds `Set` operations to the journal.
-- **Steps.** A commit is an undo step if it changed the document, or typed into any field. A step keeps every operation of the transaction, document and session alike, each with its inverse, plus the selection and focus from before. Commits that only move around (selecting, opening a file, switching places) are not steps.
+- **Steps.** A commit is an undo step if it changed the document, or typed into any field. A step keeps every operation of the transaction, document and session alike, each with its inverse, plus the focus from before and the selection moves made since the step before it. Commits that only move around (selecting, opening a file, switching places) are not steps; their selection moves are kept until the next step. Undo takes back the moves since the step, the step, and the moves before it, so the facts are exactly as they were just before the step; redo puts them back, with the selection as it was when the step was undone.
 - **Undo** applies a step's inverse operations to the facts through `Facts::apply`, as new operations, so sync sees an undo like any change. Undo and redo don't go through the app's `update`: the facts they produce are facts the app already had.
 - **The command log** gets the command, its subject, the values `Cx` handed out and the outcome, for replays and Scope. Commands that returned `Nothing` are not recorded.
 - **Off the main thread.** The commit's operations go over a channel to Ledger's own thread, which keeps the CRDT, appends to the saved log and writes snapshots. The main thread's cost is the size of the change. The price is memory: the document is held twice, once as the app's plain values and once inside the CRDT.

@@ -383,9 +383,17 @@ Order, by difficulty, because each forces new pieces into the kernel: Galley's e
 - Mobile.
 
 ## 17. Build plan
-Status: done, partial, open, paused or later. Each step is committed when it works and adds to the guide when it changes what the owner sees.
+Status: done, partial, taken, open, paused or later. The plan is the whole of Graticule: everything in §1–§14 is built through the items below, and nothing in §16 is.
 
-**The first slice** comes before anything else and cuts across items 3–6, 11 and 12: the kernel, Ledger with saving and undo, the to-do app from `docs/api.md` and a minimal Specimen. It is done when the to-do app runs in a window on the grid; undo works, field typing included; the app reopens where it was left; `Remove` works from a row, from a keymap sequence and from the palette through its subject; one effect (export to a file) brings its result back as a command; and Specimen shows the app's named states. The laws for the grid, the frame budget, no allocation per frame and idle start with it. It is built in steps, one thread each, in this order:
+**How to work through it.** Take the first item, from the top, that isn't done or taken; mark it taken; build it to its finish line; commit; mark it done; take the next. An item's finish line is its own text, the laws of the unit it belongs to (§13) and the "Hit every surface" list in `AGENTS.md`; when it changes what the owner sees, it also adds to the guide. The sections run in order. Inside a section, items that don't need each other may run in parallel threads, each in its own checkout. A product or taste question goes to §15 and to the owner; the item waits for the answer, and work goes on with the next item that doesn't need it. Code is reviewed by a maintainer, or by a second agent on a different model, before it lands; when neither is reachable, work goes on and the review's findings are fixed when they come. Where an item moves code in from Feedreader and Feedreader's source isn't at hand, the item is written fresh from the spec and `docs/internals/`.
+
+### 17.1 Foundations
+1. **Partial.** The documents: `AGENTS.md`, this spec, the guide's first page and `docs/api.md`. Open: the owner's reading and adjustment.
+2. **Partial.** The code we want to write (`docs/api.md`): a to-do app, Galley's editor screen, Ticker's main screen and Lightbox's GPU box, revised after two rounds of review. Open: the owner's approval.
+3. **Open.** The workspace: a crate per unit (a core crate without the kernel where the unit has one), `graticule`, the one crate apps import, above the kernel and Specimen, `apps/`, the lints (no `unsafe`), and the recipes for recurring jobs. Built in S2.
+
+### 17.2 The first slice
+The first slice builds the first part of most items below: the kernel, Ledger with saving and undo, the to-do app from `docs/api.md` and a minimal Specimen. The to-do app is not a demo app; it is the smallest app that runs through every layer, and its code is the yardstick for app code a person can read. The slice is done when the to-do app runs in a window on the grid; undo works, field typing included; the app reopens where it was left; `Remove` works from a row, from a keymap sequence and from the palette through its subject; one effect (export to a file) brings its result back as a command; and Specimen shows the app's named states. The laws for the grid, the frame budget, no allocation per frame and idle start with it. It is built in steps, one thread each, in this order:
 
 - **S1. Written, awaiting maintainer review.** **The kernel's design**, written as `docs/internals/kernel.md` before any kernel code: the tree and its ids, layout in cells, comparing trees and repainting changed regions, hit testing, subjects and selection, edits through `update`, effects, derived and live values, paths and their versions, and how Ledger plugs in. Reviewed by a maintainer. The owner has answered the questions it raised.
 - **S2. First light.** The workspace and the lints; the window, event loop, fonts, text and GPU renderer moved in from Feedreader; an empty window with the grid drawn. Laws: idle is zero, no allocation per frame.
@@ -395,41 +403,53 @@ Status: done, partial, open, paused or later. Each step is committed when it wor
 - **S6. Effects.** The save dialog, making and writing the file in the background, the result back as an internal command, the message line.
 - **S7. Specimen, minimal.** The Screens place with the to-do app's named states, and offscreen renders.
 
-**After the first slice**, tooling comes before the apps, by the owner's decision. First Specimen properly (item 12): the Components place with a page per component, Style and Changes, so every later piece is reviewed as pictures. Then the component inventory (item 9): HeroUI and Blueprint mapped with the owner into a list, then built in waves, each component with its page, its Specimen entry and its laws, and the kernel pieces a wave needs (overlays for menus and popovers, drag and drop, jobs) built with it. Scope and Assay start small beside Specimen, so every component is measured and checked from its first commit. The demo apps come once the components are done properly, and from then on every demo app exercises every version of every component it uses. **Proposed** order of the apps: Twin, Galley, Ticker, Lightbox, Plotter with Patchbay and Atlas, Four-track.
+### 17.3 Tooling
+Tooling comes before the apps, by the owner's decision, so every later piece is reviewed as pictures, measured and checked from its first commit.
 
-### 17.1 Foundations
-1. **Partial.** The documents: `AGENTS.md`, this spec, the guide's first page and `docs/api.md`. Open: the owner's reading and adjustment.
-2. **Partial.** The code we want to write (`docs/api.md`): a to-do app, Galley's editor screen, Ticker's main screen and Lightbox's GPU box, revised after two rounds of review. Open: the owner's approval.
-3. **Open.** The workspace: a crate per unit (a core crate without the kernel where the unit has one), `graticule`, the one crate apps import, above the kernel and Specimen, `apps/`, the lints (no `unsafe`), and the recipes for recurring jobs.
+4. **Open.** SP-01 Specimen properly (§13.5): Components (the live overview and component pages), Screens, Style, Changes, reference images, offscreen pages.
+5. **Open.** SC-01 Scope, small (§13.6): the ring buffer, its own window, why it redrew, time.
+6. **Open.** AS-01 Assay, small (§13.7): the universal laws over generated command sequences, the grid and contrast laws, the frame, allocation and idle budgets, the `assay` report.
+7. **Open.** BD-01 Bindery's development loop moved in: `bindery new` and `bindery dev` with the in-place reload.
+8. **Open.** EN-01 Engraver moved in; the built-in icon set.
 
-### 17.2 DK-01 Kernel
-4. **Open.** The tree: automatic ids, comparison with the last tree, layout in cells only, painting of changed regions, hit testing, source locations. Laws from the first commit: the grid, the frame budget, no allocation per frame, idle is zero.
-5. **Open.** Moved in from Feedreader, each with its laws and its traps in `docs/internals/`: the window and event loop, fonts and the text system, the GPU renderer and atlas, character graphics, fields with input methods and the macOS key bindings, selection, clipboard, menus and context menus (the `unsafe` exception), file dialogs, scroll anchoring, accessibility through AccessKit, the in-place reload, launch measurement.
-6. **Open.** Commands: typed arguments, availability with reasons, keymap files applied live, sequences, counts, operators and modes, the which-key tree, typing as commands.
-7. **Open.** Jobs and live values; the main thread freed of shaping and waiting; late reading.
-8. **Open.** Anchored overlays; drag and drop.
-9. **Open.** The component inventory from HeroUI and Blueprint, mapped with the owner, then built one at a time with its page and its Specimen entry.
-10. **Open.** The escape hatch ladder: the paint hook, Rust shaders, GPU compute.
+### 17.4 Components and the kernel under them
+The components are done properly before any demo app. Each is built with its page in `docs/components/`, its Specimen entry and its laws, and the kernel pieces it needs are built with it.
 
-### 17.3 Units
-11. **Open.** LD-01 Ledger: the log, saving and snapshots, the undo tree, migrations, crash replays, then sync. The `ledger` command.
-12. **Open.** SP-01 Specimen: Components (the live overview and component pages), Screens, Style, Changes.
-13. **Open.** SC-01 Scope: the ring buffer, its own window, rewind, code, facts, causes, layout reasons, commands, taste, effects, time.
-14. **Open.** AS-01 Assay: the universal laws, the taste laws, the budgets, the `assay` report.
-15. **Open.** EN-01 Engraver moved in; the built-in icon set.
-16. **Open.** BD-01 Bindery moved in; `bindery new`.
-17. **Open.** GA-01 Galley: the editing core, then the editor.
-18. **Open.** PL-01 Plotter: the tldraw study written up in `docs/internals/`, then records, bindings, tools as state machines, camera, geometry, snapping, perfect-freehand, then the whiteboard.
+9. **Open.** The inventory: HeroUI and Blueprint mapped with the owner, each component kept, grounded (§4.4) or skipped, plus the components of §6.1 that both lack, sorted into waves.
+10. **Open.** Styles and themes (§5): style and theme files edited live, switching at runtime, OKLCH with contrast as a law, semantic inks, the typed values.
+11. **Open.** The rest moved in from Feedreader, each with its laws and its traps in `docs/internals/`: character graphics, fields with input methods and the macOS key bindings, selection across components, clipboard, menus and context menus (the `unsafe` exception), file dialogs, scroll anchoring, accessibility through AccessKit, launch measurement.
+12. **Open.** Commands in full (§3.3, §3.4, §8.3): typed arguments, keymap files applied live, sequences, counts, operators and modes, the which-key tree; the help page, what's this, settings derived from the facts, the visible log of what the user did.
+13. **Open.** Jobs and live values in full; the main thread freed of shaping and waiting; late reading (§3.5, §12.1).
+14. **Open.** Anchored overlays, drag and drop, motion (§4.4, §4.5, §8.2).
+15. **Open.** The components, wave by wave, including the fields in full (§7.2), filtering by typing, the picker, find and typed filter fields (§7.4), the virtual table, trees, split panes and docking, the time axis, charts, node graphs, the diff view, the date picker.
+16. **Open.** Pictures and the canvas (§6.2, §6.3); the escape hatch ladder: the paint hook, Rust shaders, GPU compute (§6.4).
+17. **Open.** Language (§7.5): labels and messages as Fluent data, the extraction tool, formatting per language, mixed directions, right-to-left mirroring.
+18. **Open.** The rest of macOS (§8.1, §10): the menu bar and menu bar items, many windows and monitors, window restoration, full screen, file types and Quick Look, background helpers and login items, appearance, reduced motion, increased contrast, Low Power Mode and thermal state, pen, pinch and haptics, any input bound to any command; the web view (§6.5).
+19. **Open.** SC-01 Scope complete: rewind, code, facts, why it's this size, commands, taste, effects and jobs.
+20. **Open.** AS-01 Assay complete: every taste law, color blindness, the energy and size budgets.
 
-### 17.4 Services
-19. **Open.** Search, documents, data, time, media, networking, secrets, automation, one at a time as the apps need them.
+### 17.5 Units
+21. **Open.** LD-01 Ledger complete (§13.2): snapshots, migrations, crash replays, sync between devices, live collaboration, the `ledger` command.
+22. **Open.** Proofs (§11): Kani on grid arithmetic, field edit operations and Ledger's merging.
+23. **Open.** GA-01 Galley (§13.3): the editing core, then the editor.
+24. **Open.** PL-01 Plotter (§13.4): the tldraw study written up in `docs/internals/`, then records, bindings, tools as state machines, camera, geometry, snapping, perfect-freehand, then the whiteboard.
+25. **Open.** BD-01 Bindery complete (§13.9): `bindery install` and `update`, the fetched fonts, the what's new page.
 
-### 17.5 The apps
-20. **Open.** Twin.
-21. **Open.** Ticker.
-22. **Open.** Atlas and Patchbay.
-23. **Open.** Lightbox.
-24. **Open.** Four-track.
+### 17.6 Services
+26. **Open.** The services of §9 (search, documents, data, time, media, networking, secrets, automation, print and PDF), one at a time, each when the first app needs it.
+
+### 17.7 The apps
+In the order of §14. Each app exercises every version of every component it uses, is checked by Assay, and meets its energy and size budgets (§12.3).
+
+27. **Open.** Galley's editor and Twin.
+28. **Open.** Ticker.
+29. **Open.** Plotter's whiteboard, Atlas and Patchbay.
+30. **Open.** Lightbox.
+31. **Open.** Four-track.
+
+### 17.8 Beyond macOS
+32. **Open.** Linux (§10), verified on a real machine; open questions 1 and 5 answered there.
+33. **Open.** Windows.
 
 ## 18. References
 - [HeroUI](https://heroui.com) · [React Aria](https://react-spectrum.adobe.com/react-aria/) · [Blueprint](https://blueprintjs.com) · [U.S. Graphics Company](https://usgraphics.com)

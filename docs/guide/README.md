@@ -68,6 +68,17 @@ Graticule is made of named parts, each with a model code. Every one is two thing
 
 Galley's editor and Plotter's whiteboard are already apps. Beside them, six small apps each push Graticule somewhere hard: Twin (files), Ticker (fast live data), Atlas (maps), Patchbay (wires and boxes, built on Plotter), Lightbox (photos and scans) and Four-track (recording music). They live next to Graticule, so any change to it shows in all of them at once.
 
+## The order things are built in
+
+The build plan, at the end of the spec, is one list from top to bottom, and anyone (a person or an AI) asked to build Graticule works down it item by item.
+
+1. **A first slice through everything**: a tiny to-do app that runs in a real window with undo, saving and the palette. It isn't a demo app; it's the smallest thing that touches every layer, so design mistakes show up while they're cheap.
+2. **The tools**: Specimen properly, Scope and Assay small, the development loop, icons.
+3. **The components**, from HeroUI and Blueprint, chosen with the owner and built in batches, each with its page in Specimen.
+4. **The units' engines**: Ledger in full with sync, Galley, Plotter.
+5. **The demo apps**, each one using every component it touches.
+6. **Linux, then Windows.**
+
 ## How speed is measured
 
 A screen refreshes 60 to 1000 times a second; at 1000, there is one millisecond per picture. Graticule's goal is to finish its work for an ordinary interaction in a tenth of that, and to do nothing at all when nothing is happening, which is what saves battery. Times are measured automatically and judged by the slowest frames, not the average, because the slow ones are the ones you notice.

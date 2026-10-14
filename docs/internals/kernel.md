@@ -337,7 +337,7 @@ The document is saved by Ledger's thread from the operations it receives. The se
 
 ## 14. Derived and live values, jobs
 
-The to-do app needs jobs (for exporting and for bulk changes), tallies and bulk changes, so the first slice builds those in S5. It has no live or derived values; build-plan item 7 builds them, and the design is fixed now so the first slice leaves room for them.
+The to-do app needs jobs (for exporting and for bulk changes), tallies and bulk changes, so the first slice builds those in S5. It has no live or derived values; build-plan item 13 builds them, and the design is fixed now so the first slice leaves room for them.
 
 - **Jobs.** `Jobs<C>` runs work on a small pool of background threads. Every running job has a name and is visible in the status line and in Scope. A job's result comes back as a command, a live value or a derived value.
 - **Live values.** `Live<T>` holds a shared slot that another thread publishes `Arc<T>` snapshots into without locks (the `arc-swap` crate's safe API). Publishing sets an atomic flag and wakes the event loop only if the flag was clear, so a feed ticking ten thousand times a second wakes the main thread at most once per frame. At the start of a frame the kernel pins each live value's latest snapshot; `now()` returns the pinned one, so a whole frame sees one value. A new snapshot bumps the field's version.
@@ -380,7 +380,7 @@ Everything else is supported as written, by the parts above:
 - The undo story ("type milk, add it, Cmd-Z: the item goes and milk is back"): the Add step holds both the `Text` splice from `take()` and the list insert (§13.2); the typing is the step before it.
 - `states()` and `graticule::run::<Todo>(t!("To do"))`: `run` requires `App + Default` for the first launch, when there is no snapshot yet.
 
-The first draft of `api.md` also had three lines whose cost grew with the list: `available` asked `self.items.none(|item| item.done)`, `ClearDone` ran `retain` on the main thread, and `Export` built the Markdown there. The owner decided that the fast way is the default way and that potentially heavy work runs off the main thread with its progress shown (§21). So `available` asks `self.items.any(Item::done)`, answered from the list's tallies; `retain` is a bulk change (§14); and `save_as` takes `Todo::as_markdown` itself, which runs in a job. The tallies, bulk changes and the job behind `save_as` are part of S5 and S6, not item 7, because the to-do app needs them.
+The first draft of `api.md` also had three lines whose cost grew with the list: `available` asked `self.items.none(|item| item.done)`, `ClearDone` ran `retain` on the main thread, and `Export` built the Markdown there. The owner decided that the fast way is the default way and that potentially heavy work runs off the main thread with its progress shown (§21). So `available` asks `self.items.any(Item::done)`, answered from the list's tallies; `retain` is a bulk change (§14); and `save_as` takes `Todo::as_markdown` itself, which runs in a job. The tallies, bulk changes and the job behind `save_as` are part of S5 and S6, not item 13, because the to-do app needs them.
 
 ## 17. Which step builds what
 
@@ -410,7 +410,7 @@ The first slice's steps each end with something visible. S3 needs facts and labe
 | The command log; saving and reopening with the session snapshot | S5 |
 | `Effect`, the save panel, making and writing the file as a job, results as internal commands, `Path`, `Failure`, the message line | S6 |
 | Specimen's Screens place, `States`, running `update` on a copy, showing effects, offscreen renders, `--specimen` in `graticule::run` | S7 |
-| Live and derived values | build-plan item 7 |
+| Live and derived values | build-plan item 13 |
 | Context menus (the `unsafe` exception), drag and drop, canvases, pictures | later items |
 
 ## 18. What moves in from Feedreader and what is rewritten
@@ -452,7 +452,7 @@ New laws need the owner's approval (`AGENTS.md`). These are the ones the design 
 - How an app's own components and per-window session state look in app code (`api.md`, "Open"). Until then, session fields are one copy per app, and the first slice has one window.
 - Subjects that aren't keys (Ticker's `Choose(#[subject] Symbol)`): they need a `Subject` trait for small `Copy` values. Nothing in the first slice uses one.
 - Versions finer than a top-level field.
-- Late reading and frame pacing (build-plan item 7).
+- Late reading and frame pacing (build-plan item 13).
 
 ## 21. The owner's answers
 

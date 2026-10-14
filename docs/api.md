@@ -326,6 +326,5 @@ The shader is Rust too. It receives the theme's inks, so the scan's false colors
 
 ## Open
 
-- The syntax for labels that follow their subject's state (`done: …, else: …` above).
 - How an app composes its own component and gives it a Specimen page.
-- How a page is opened in a second window, and how places and back and forward look in app code.
+- How places, tabs, back and forward, and a second window look in app code.

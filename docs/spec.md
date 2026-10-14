@@ -9,8 +9,8 @@ Every decision below is the owner's unless marked **Proposed** (engineering choi
 - One Rust codebase: the units, the services and the demo apps, in one cargo workspace. Changing the kernel rebuilds every app in the same step, and a breaking change fixes every app in the same change.
 - Graticule is made of **units** (§13), each with a model code. Every unit is a library that apps build in and a face of its own that you can run, an app or a command-line tool, so every unit also proves Graticule. Where a unit's core doesn't need a screen, it doesn't depend on the kernel.
 - A clean start. Graticule began inside Feedreader; its architecture is rewritten here, and the parts that meet the operating system are moved in one at a time with their laws and the traps they avoid (`docs/internals/`), not rewritten. Feedreader is paused and later depends on Graticule like any other app.
-- Desktop first: macOS, then Linux. Mobile and Windows come later (§15).
-- No `unsafe` in our code; the workspace denies it, with one approved exception (`docs/internals/unsafe.md`): the native context menu on macOS. Every exception is justified to the owner before it lands.
+- Desktop first: macOS, then Linux once macOS works, then Windows. The API never uses a concept only macOS has, so each new platform is work, not a rewrite. Mobile comes later.
+- No `unsafe` in our code; the workspace denies it, with two approved exceptions (`docs/internals/unsafe.md`): the native context menu on macOS, and the macOS spellchecker if no safe binding reaches it. Every other exception is justified to the owner before it lands.
 - Tests are laws (§11). Everything else is verified by running the apps and looking at Specimen.
 
 ## 1. Purpose
@@ -60,10 +60,10 @@ Facts hold four kinds of state, marked on each field, and Ledger (§13.2) treats
 
 - The document part is built from Ledger's types (`List`, `Map`, `Text` and plain values, which are registers), so every app is ready to sync. A `Vec` in the document part is a compile error that points at `List`: a list synced as a whole loses one of two concurrent additions without a word.
 - State that only a component needs (a scroll offset, a split's width, hover) is the kernel's, kept by the component's id. State the app reads in `update` is facts. Both are saved in one session snapshot by Ledger; they differ only in who owns them.
-- Windows: the facts are shared by all of an app's windows; each window has its own session state. Places and back and forward are the kernel's.
+- Windows and navigation: the facts are shared by all of an app's windows; each window has its own session state. Places, tabs, back and forward, and windows are building blocks the kernel provides and each app picks from. Places are always visible when an app has them. Back and forward exist; **Proposed:** their history is visible, like a breadcrumb, never hidden state.
 
 ### 3.3 Commands
-- Commands are an enum with typed arguments. Each has a name and a label; labels can take values from their subject and depend on its state ("Mark 'milk' done", "Mark 'milk' not done"). Messages and labels are written in English in the source and translated through ids (§7.5).
+- Commands are an enum with typed arguments. Each has a name and a label; labels can take values from their subject and depend on its state, both versions written next to the command: `#[label(done: "Mark “{title}” not done", else: "Mark “{title}” done")]`. Messages and labels are written in English in the source and translated through ids (§7.5).
 - `available(&self, &Cmd) -> Available` answers `Yes` or `No(reason)` before a command runs; a disabled control says why in the status line. The `match` is exhaustive, with no catch-all, so a new command can't become available by accident. The kernel asks only for commands on screen, and for the palette and which-key only while they are open; `available` has a time budget that Assay measures.
 - `update(&mut self, Cmd, &mut Cx) -> Outcome` runs only after `available` said `Yes`. It is total: a command that can no longer apply (its item is gone) returns `Outcome::Nothing`, which Ledger doesn't record. Everything non-deterministic (new keys, the time, randomness) comes from `cx` and is logged, so replaying the log gives the same facts.
 - **Subjects.** A list row, a table row or a shape declares its key as its subject. A command argument marked `#[subject]` is filled from the subject under the pointer or with focus, and the bulk version runs over the selection. So the same `Remove` works from a link in a row, a keymap sequence, the palette and a context menu.
@@ -220,7 +220,7 @@ Batteries ship as separate crates; an app plugs in what it needs, and every app'
 ## 10. Native integration
 - Native where the platform has a native; ours where it doesn't.
 - **macOS:** the menu bar (app and Window menus, so system shortcuts and window tiling work), context menus generated from the registry (the one sanctioned `unsafe`), file dialogs, clipboard, input methods, cursors, appearance, accent color, reduced motion, increased contrast, Low Power Mode and thermal state, trackpad scrolling with the system's own momentum and haptics, accessibility through AccessKit, the system web view, menu bar items, background helpers and login items, file types and Quick Look, many windows and monitors, window restoration, full screen.
-- **Linux:** Open, verified later on a real machine. Known: under Wayland there is no system context menu or global menu bar, so Graticule's own drawn menu is the native one; GNOME needs a drawn title bar; file dialogs through the XDG portal; input methods, clipboard, appearance, fontconfig and AT-SPI are available.
+- **Linux:** after macOS works, verified on a real machine. Known: under Wayland there is no system context menu or global menu bar, so Graticule's own drawn menu is the native one; GNOME needs a drawn title bar; file dialogs through the XDG portal; input methods, clipboard, appearance, fontconfig and AT-SPI are available.
 - Qt is not used: native only on KDE, heavy to ship, and its Rust bindings need `unsafe`.
 
 ## 11. Verification
@@ -261,7 +261,9 @@ Budgets apply to the slowest 1% of frames, on the reference machine (an M1), in 
 The M1's clock ticks about every 42 ns, so stages faster than that are measured over many repetitions.
 
 ### 12.3 Energy and size
-**Open:** budgets for energy (an hour of reading in Galley, measured with `powermetrics`) and for each app's binary size and memory, tracked next to frame time.
+Ambition: as far as reasonable means go. Two kinds of budget, tracked next to frame time:
+- **Beat the platform's own app at the same job.** Galley uses less energy than TextEdit for an hour of writing (measured with `powermetrics`) and less memory; Lightbox less than Preview for the same image; Twin less than Finder for the same folder.
+- **Hard ceilings.** **Proposed** numbers, set once the first slice measures the floor: every demo app under 10 MB on disk, not counting the fetched Chinese, Japanese and Korean fonts (today Feedreader's Specimen is 20 MB with line tables, and the bundled Plex is 6 MB); under 30 MB of memory while idle; zero wakeups while idle.
 
 ## 13. The units
 Each unit has a model code, a library that apps build in, a face of its own that you can run, and its own laws. The faces are Graticule apps or command-line tools, so every unit also proves Graticule. Where a unit's core doesn't need a screen (Ledger, Galley's editing core, Plotter's document and geometry), it is a crate that doesn't depend on the kernel, and the parts that draw sit on top of it.
@@ -367,15 +369,11 @@ Order, by difficulty, because each forces new pieces into the kernel: Galley's e
 
 ## 15. Open questions
 1. License, decided once the first slice stands. MPL-2.0 is favored: changes to Graticule stay open, apps built on it may use any license.
-2. Windows support, and when.
-3. The Linux story (§10), after testing on a real machine.
-4. Whether the macOS spellchecker can be reached without `unsafe` through the AppKit bindings; if not, whether it becomes a second exception.
-5. Proofs kept as images, as text descriptions of the tree, or both.
-6. The CRDT library under Ledger's types (§13.2).
-7. Budgets for energy, binary size and memory (§12.3).
-8. The syntax for labels that depend on their subject's state.
-9. The four kinds of state as marks on fields or as separate structs (§3.2); marks for now.
-10. Fractional display scales (Linux), where a cell can't be whole pixels and whole points at once.
+2. The Linux details (§10), after testing on a real machine.
+3. Proofs kept as images, as text descriptions of the tree, or both.
+4. The CRDT library under Ledger's types (§13.2).
+5. The four kinds of state as marks on fields or as separate structs (§3.2); marks for now.
+6. Fractional display scales (Linux), where a cell can't be whole pixels and whole points at once.
 
 ## 16. Later
 - Every Graticule app also running in a terminal or a browser tab, from the same tree. Parked until the framework stands on its own.
@@ -386,7 +384,15 @@ Order, by difficulty, because each forces new pieces into the kernel: Galley's e
 ## 17. Build plan
 Status: done, partial, open, paused or later. Each step is committed when it works and adds to the guide when it changes what the owner sees.
 
-**The first slice** comes before anything else and cuts across items 3–6, 11 and 12: the kernel, Ledger with saving and undo, the to-do app from `docs/api.md` and a minimal Specimen. It is done when the to-do app runs in a window on the grid; undo works, field typing included; the app reopens where it was left; `Remove` works from a row, from a keymap sequence and from the palette through its subject; one effect (export to a file) brings its result back as a command; and Specimen shows the app's named states. The laws for the grid, the frame budget, no allocation per frame and idle start with it.
+**The first slice** comes before anything else and cuts across items 3–6, 11 and 12: the kernel, Ledger with saving and undo, the to-do app from `docs/api.md` and a minimal Specimen. It is done when the to-do app runs in a window on the grid; undo works, field typing included; the app reopens where it was left; `Remove` works from a row, from a keymap sequence and from the palette through its subject; one effect (export to a file) brings its result back as a command; and Specimen shows the app's named states. The laws for the grid, the frame budget, no allocation per frame and idle start with it. It is built in steps, one thread each, in this order:
+
+- **S1. The kernel's design**, written as `docs/internals/kernel.md` before any kernel code: the tree and its ids, layout in cells, comparing trees and repainting changed regions, hit testing, subjects and selection, edits through `update`, effects, derived and live values, paths and their versions, and how Ledger plugs in. Reviewed by a second agent on a different model and by maintainers.
+- **S2. First light.** The workspace and the lints; the window, event loop, fonts, text and GPU renderer moved in from Feedreader; an empty window with the grid drawn. Laws: idle is zero, no allocation per frame.
+- **S3. The tree.** Layout in cells, comparison and repainting, hit testing, and the components the to-do app needs (page, row, list, field, checkbox, link, button, action bar, status line, message line). The to-do view renders from fixed facts.
+- **S4. Commands.** `derive(Commands)`, `available` with reasons, `update` with `Cx` and `Outcome`, subjects and selection, `Edit` from fields, a keymap file with which-key, the palette.
+- **S5. Ledger.** `List`, registers and `Text` on the CRDT library chosen by measuring both candidates; operations; the undo tree with selection and focus; saving and reopening where the app was left.
+- **S6. Effects.** The save dialog and the file write, the result back as an internal command, the message line.
+- **S7. Specimen, minimal.** The Screens place with the to-do app's named states, and offscreen renders.
 
 ### 17.1 Foundations
 1. **Partial.** The documents: `AGENTS.md`, this spec, the guide's first page and `docs/api.md`. Open: the owner's reading and adjustment.

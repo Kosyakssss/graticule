@@ -79,7 +79,7 @@ The most common defect is a change that works on the path you tried and is missi
 
 - Complexity belongs at the edges. Decisions are pure functions over facts; the view is a pure function of the facts.
 - State is enums, not flags that can contradict each other.
-- Inferred types over annotations. No `unsafe` anywhere; the workspace denies it. When a platform API needs it, use a crate that wraps it safely. The only approved exception is the native context menu on macOS, explained in `docs/internals/unsafe.md`; any other one needs the owner's sign-off first, with proof that no safe route exists.
+- Inferred types over annotations. No `unsafe` anywhere; the workspace denies it. When a platform API needs it, use a crate that wraps it safely. The approved exceptions are the native context menu on macOS and the macOS spellchecker (if no safe binding reaches it), explained in `docs/internals/unsafe.md`; any other one needs the owner's sign-off first, with proof that no safe route exists.
 - No code comments, with one exception: documentation comments (`///`, `//!`) on public items that app developers use. Names and types carry the meaning everywhere else; reasons that cross components go in `docs/internals/`.
 - Do not invent keyboard shortcuts. Keys for app commands live in keymap files; Graticule assigns none, the platform's own conventions (text editing, copy and paste, Tab, Escape) belong to the system, and a demo app's defaults are the owner's to approve.
 - Learning from other projects' source is fine; copying it is not. Read, understand, write our own. Code under a permissive license (MIT, Apache-2.0) may be ported with its notice kept.

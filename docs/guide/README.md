@@ -111,6 +111,7 @@ Apps can show pictures: icons and small drawings, made as SVG files in any drawi
 
 Some of what an app shows changes on its own: prices from a market, the level of a microphone, a download's progress. Such a value is written by its own source as often as it likes, and the window wakes to show it at most once per picture, never more. Other values are worked out from the app's facts, a chart from thousands of prices or a count over a long list. They are worked out in the background, only when what they come from has changed, so the window never waits for them; until the new one is ready the app shows the last one, and the status line says "Working out …" with its name.
 An app can also run work of its own in the background, such as a feed that keeps prices current or a search through many files. Every such job shows by its name in the status line while it runs, and if one stops without finishing, the message line says so.
+Doing something to thousands of chosen items at once, or undoing a big change, happens a little at a time, between pictures, with how far it has got in the status line, so the window never stops answering; it is still one step to undo.
 
 ## How speed is measured
 

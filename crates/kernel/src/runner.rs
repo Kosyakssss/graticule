@@ -109,6 +109,15 @@ impl Clock {
         };
         Some(Clock { replica: *replica, counter: *counter, now: Moment(*now), seed: *seed })
     }
+
+    fn fields(&self) -> [(String, Value); 4] {
+        [
+            ("replica".into(), Value::UInt(self.replica)),
+            ("counter".into(), Value::UInt(self.counter)),
+            ("now".into(), Value::Int(self.now.0)),
+            ("seed".into(), Value::UInt(self.seed)),
+        ]
+    }
 }
 
 /// Where committed entries go: nowhere, a list in memory for replays, or the store on disk.
@@ -118,13 +127,25 @@ enum Keep {
     Store(Store),
 }
 
-/// A command whose bulk changes are still landing: its operations so far, kept as one undo step when the last slice lands.
-struct Background {
+/// A command still landing, because it changes many items or runs over many subjects: its operations so far, the subjects still to run and how many there are, kept as one undo step when the last slice lands.
+struct Background<C> {
     label: String,
     gesture: u64,
     place: Place,
     ops: Vec<Op>,
     parts: VecDeque<Part>,
+    rest: VecDeque<C>,
+    left: usize,
+}
+
+struct Batch<C> {
+    ran: Vec<Value>,
+    ops: Vec<Op>,
+    deferred: Vec<ledger::Bulk>,
+    cx: Cx<C>,
+    changed: bool,
+    stopped: Option<(usize, Message)>,
+    failed: Option<String>,
 }
 
 /// An undo or redo too big for one frame, landing a slice per frame: its operations, how many have landed, and where to put the user when the last one does.
@@ -216,7 +237,7 @@ pub struct Runner<A: App> {
     ime: bool,
     repairing: bool,
     keep: Keep,
-    background: VecDeque<Background>,
+    background: VecDeque<Background<A::Cmd>>,
     turning: Option<Turning>,
     waker: Option<Waker>,
     replaying: bool,
@@ -1025,7 +1046,7 @@ impl<A: App> Runner<A> {
             self.say(reason);
             return false;
         }
-        self.transact(vec![cmd], None);
+        self.transact(vec![cmd], None, 0);
         true
     }
 
@@ -1033,7 +1054,7 @@ impl<A: App> Runner<A> {
         if let Available::No(reason) = self.facts.available(&cmd) {
             return self.say(reason);
         }
-        self.transact(vec![cmd; times as usize], None);
+        self.transact(vec![cmd; times as usize], None, 0);
         true
     }
 
@@ -1059,7 +1080,7 @@ impl<A: App> Runner<A> {
             }
         }
         if !take.is_empty() {
-            self.transact(take, None);
+            self.transact(take, None, 0);
         }
         match skipped.first() {
             Some((what, why)) if skipped.len() == 1 => self.said = Some(Said::Note(Message::plain(format!("{what} was skipped: {}", why.as_str())))),
@@ -1070,9 +1091,9 @@ impl<A: App> Runner<A> {
         true
     }
 
-    fn transact(&mut self, cmds: Vec<A::Cmd>, clock: Option<Clock>) {
+    fn transact(&mut self, cmds: Vec<A::Cmd>, clock: Option<Clock>, more: usize) {
         self.turn(Slice::Items(usize::MAX), None);
-        let many = cmds.len();
+        let many = cmds.len() + more;
         let repeated = many > 1 && cmds.windows(2).all(|w| ledger::Field::value(&w[0]) == ledger::Field::value(&w[1]));
         let named = self.naming.take();
         let (label, gesture) = match cmds.first().and_then(Commands::as_edit) {
@@ -1091,29 +1112,74 @@ impl<A: App> Runner<A> {
                 (cmds.first().map_or_else(String::new, |c| format!("“{}”", c.label_string(&self.facts, form))), self.gesture)
             }
         };
-        let clock = clock.unwrap_or(Clock { replica: self.replica, counter: self.counter, now: Moment::now(), seed: self.counter ^ 0x9e37_79b9_7f4a_7c15 });
-        let entry = Value::Map(vec![
-            ("do".into(), Value::Str("command".into())),
-            ("commands".into(), Value::List(cmds.iter().map(ledger::Field::value).collect())),
-            ("replica".into(), Value::UInt(clock.replica)),
-            ("counter".into(), Value::UInt(clock.counter)),
-            ("now".into(), Value::Int(clock.now.0)),
-            ("seed".into(), Value::UInt(clock.seed)),
-        ]);
+        let clock = clock.unwrap_or_else(|| self.clock());
+        let sliced = !self.replaying && self.waker.is_some() && many > 1 && !repeated;
+        let mut queue: VecDeque<A::Cmd> = cmds.into();
         let marks = self.marks();
         let place = self.place();
+        let batch = self.batch(&mut queue, &clock, sliced.then_some(Slice::Time(SLICE)), repeated, false);
+        if let Some(why) = batch.failed {
+            self.said = Some(Said::Failure(format!("{label} failed, and nothing changed: {why}")));
+            return;
+        }
+        let left = queue.len() + more;
+        let mut entry = vec![("do".into(), Value::Str("command".into())), ("commands".into(), Value::List(batch.ran))];
+        entry.extend(clock.fields());
+        if left > 0 {
+            entry.push(("more".into(), Value::UInt(left as u64)));
+        }
+        let stopped = batch.stopped;
+        let ops = self.conclude(&label, batch.ops, batch.cx, batch.changed);
+        if let Some((done, reason)) = stopped {
+            self.said = Some(Said::Note(Message::plain(format!("{label} stopped after {done}: {}", reason.as_str()))));
+        }
+        if !ops.is_empty() || !batch.deferred.is_empty() || left > 0 {
+            self.record(Value::Map(entry), &ops);
+        }
+        if !batch.deferred.is_empty() || left > 0 {
+            let parts = batch.deferred.into_iter().map(|bulk| self.search(bulk)).collect();
+            self.background.push_back(Background { label, gesture, place, ops, parts, rest: queue, left });
+            return;
+        }
+        let what = done_as(&label);
+        if self.history.commit(ops, || label, gesture, place) == ledger::Kept::Step {
+            self.did(what);
+        }
+        self.repair(marks);
+    }
+
+    fn clock(&self) -> Clock {
+        Clock { replica: self.replica, counter: self.counter, now: Moment::now(), seed: self.counter ^ 0x9e37_79b9_7f4a_7c15 }
+    }
+
+    fn batch(&mut self, queue: &mut VecDeque<A::Cmd>, clock: &Clock, slice: Option<Slice>, repeated: bool, checked: bool) -> Batch<A::Cmd> {
         let mut cx = Cx::new(clock.replica, clock.counter, clock.now, clock.seed);
         let before = self.facts.snap();
         let _ = ledger::take_replaced();
+        let started = Instant::now();
         let tx = Transaction::begin();
-        let mut changed = false;
-        let mut stopped = None;
-        let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            for (done, cmd) in cmds.into_iter().enumerate() {
-                if repeated && let Available::No(reason) = self.facts.available(&cmd) {
-                    stopped = Some((done, reason));
+        let (mut ran, mut changed, mut stopped) = (Vec::new(), false, None);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            while let Some(cmd) = queue.pop_front() {
+                let full = match slice {
+                    Some(Slice::Time(budget)) => started.elapsed() >= budget,
+                    Some(Slice::Items(most)) => ran.len() >= most,
+                    None => false,
+                };
+                if full && !ran.is_empty() {
+                    queue.push_front(cmd);
                     break;
                 }
+                if (repeated || checked)
+                    && let Available::No(reason) = self.facts.available(&cmd)
+                {
+                    if repeated {
+                        stopped = Some((ran.len(), reason));
+                        break;
+                    }
+                    continue;
+                }
+                ran.push(ledger::Field::value(&cmd));
                 changed |= self.facts.update(cmd, &mut cx).changed();
             }
         }));
@@ -1121,20 +1187,19 @@ impl<A: App> Runner<A> {
         let mut ops = tx.end();
         self.facts.diff(&before, ErasedPath::ROOT, &mut ops);
         self.stale = true;
-        if let Err(panic) = ran {
+        let failed = outcome.err().map(|panic| {
             for op in ops.iter().rev() {
                 let inverse = op.inverse();
                 self.facts.apply(inverse.path().steps(), &inverse);
             }
-            let why = panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned()).unwrap_or_default();
-            self.said = Some(Said::Failure(format!("{label} failed, and nothing changed: {why}")));
-            return;
-        }
+            panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned()).unwrap_or_default()
+        });
+        Batch { ran, ops, deferred, cx, changed, stopped, failed }
+    }
+
+    fn conclude(&mut self, label: &str, mut ops: Vec<Op>, mut cx: Cx<A::Cmd>, changed: bool) -> Vec<Op> {
         self.counter = cx.counter;
         self.said = cx.said.pop();
-        if let Some((done, reason)) = stopped {
-            self.said = Some(Said::Note(Message::plain(format!("{label} stopped after {done}: {}", reason.as_str()))));
-        }
         if self.hold && !cx.effects.is_empty() {
             let asked: Vec<String> = cx.effects.iter().map(|e| format!("{e:?}")).collect();
             self.said = Some(Said::Note(Message::plain(format!("Specimen didn't run what the app asked for: {}", asked.join(", then ")))));
@@ -1153,19 +1218,39 @@ impl<A: App> Runner<A> {
         }
         let pruned = self.prune(&ops);
         ops.extend(pruned);
-        if !ops.is_empty() || !deferred.is_empty() {
-            self.record(entry, &ops);
+        ops
+    }
+
+    fn more(&mut self, given: Option<(Vec<A::Cmd>, Clock, usize)>, slice: Slice) -> bool {
+        let now = self.clock();
+        let Some(background) = self.background.front_mut() else { return false };
+        let (mut queue, clock, slice, left) = match given {
+            Some((cmds, clock, left)) => (cmds.into(), clock, None, Some(left)),
+            None if !background.rest.is_empty() => (std::mem::take(&mut background.rest), now, Some(slice), None),
+            None => return false,
+        };
+        let label = background.label.clone();
+        let checked = left.is_none();
+        let batch = self.batch(&mut queue, &clock, slice, false, checked);
+        if let Some(why) = batch.failed {
+            self.revert();
+            self.said = Some(Said::Failure(format!("{label} failed partway, and nothing changed: {why}")));
+            return true;
         }
-        if !deferred.is_empty() {
-            let parts = deferred.into_iter().map(|bulk| self.search(bulk)).collect();
-            self.background.push_back(Background { label, gesture, place, ops, parts });
-            return;
-        }
-        let what = done_as(&label);
-        if self.history.commit(ops, || label, gesture, place) == ledger::Kept::Step {
-            self.did(what);
-        }
-        self.repair(marks);
+        let left = left.unwrap_or(queue.len());
+        let mut entry = vec![("do".into(), Value::Str("more".into())), ("commands".into(), Value::List(batch.ran))];
+        entry.extend(clock.fields());
+        entry.push(("left".into(), Value::UInt(left as u64)));
+        let ops = self.conclude(&label, batch.ops, batch.cx, batch.changed);
+        self.record(Value::Map(entry), &ops);
+        let parts: Vec<Part> = batch.deferred.into_iter().map(|bulk| self.search(bulk)).collect();
+        let Some(background) = self.background.front_mut() else { return true };
+        background.ops.extend(ops);
+        background.parts.extend(parts);
+        background.rest = queue;
+        background.left = left;
+        self.land();
+        true
     }
 
     fn record(&mut self, entry: Value, ops: &[Op]) {
@@ -1208,7 +1293,17 @@ impl<A: App> Runner<A> {
             match entry.field("do") {
                 Some(Value::Str(what)) if what == "undo" || what == "redo" => whole &= self.undo(what == "undo"),
                 Some(Value::Str(what)) if what == "stop" => whole &= self.stop(),
-                Some(Value::Str(what)) if what == "turn" => {}
+                Some(Value::Str(what)) if what == "turn" || what == "failed" => {}
+                Some(Value::Str(what)) if what == "more" => {
+                    let cmds = match entry.field("commands") {
+                        Some(Value::List(cmds)) => cmds.iter().map(<A::Cmd as ledger::Field>::from_value).collect::<Option<Vec<_>>>(),
+                        _ => None,
+                    };
+                    match (cmds, Clock::of(entry), entry.field("left")) {
+                        (Some(cmds), Some(clock), Some(Value::UInt(left))) => whole &= self.more(Some((cmds, clock, *left as usize)), Slice::Items(usize::MAX)),
+                        _ => whole = false,
+                    }
+                }
                 Some(Value::Str(what)) if what == "slice" => match entry.field("count") {
                     Some(Value::UInt(count)) => whole &= self.slice(Slice::Items(*count as usize)),
                     _ => whole = false,
@@ -1220,7 +1315,13 @@ impl<A: App> Runner<A> {
                         _ => None,
                     };
                     match (cmds, clock) {
-                        (Some(cmds), Some(clock)) => self.transact(cmds, Some(clock)),
+                        (Some(cmds), Some(clock)) => {
+                            let more = match entry.field("more") {
+                                Some(Value::UInt(more)) => *more as usize,
+                                _ => 0,
+                            };
+                            self.transact(cmds, Some(clock), more)
+                        }
                         _ => whole = false,
                     }
                 }
@@ -1371,6 +1472,9 @@ impl<A: App> Runner<A> {
         if self.turning.is_some() {
             return self.turn(slice, None);
         }
+        if self.background.front().is_some_and(|b| !b.rest.is_empty()) {
+            return self.more(None, slice);
+        }
         let Some(background) = self.background.front_mut() else { return false };
         let Some(part) = background.parts.front_mut() else { return false };
         if let Found::Searching(receive) = &part.found {
@@ -1423,7 +1527,12 @@ impl<A: App> Runner<A> {
         if finished {
             background.parts.pop_front();
         }
-        if background.parts.is_empty()
+        self.land();
+        true
+    }
+
+    fn land(&mut self) {
+        if self.background.front().is_some_and(|b| b.parts.is_empty() && b.rest.is_empty() && b.left == 0)
             && let Some(done) = self.background.pop_front()
         {
             let what = done_as(&done.label);
@@ -1431,7 +1540,6 @@ impl<A: App> Runner<A> {
                 self.did(what);
             }
         }
-        true
     }
 
     /// Lands every bulk change still running, waiting for their searches.
@@ -1442,17 +1550,27 @@ impl<A: App> Runner<A> {
 
     fn stop(&mut self) -> bool {
         let Some(background) = self.background.pop_back() else { return false };
+        self.take_back(background, "stop");
+        true
+    }
+
+    fn revert(&mut self) {
+        if let Some(background) = self.background.pop_front() {
+            self.take_back(background, "failed");
+        }
+    }
+
+    fn take_back(&mut self, background: Background<A::Cmd>, why: &str) {
         let tx = Transaction::begin();
         for op in background.ops.iter().rev() {
             let inverse = op.inverse();
             self.facts.apply(inverse.path().steps(), &inverse);
         }
         let ops = tx.end();
-        self.record(Value::Map(vec![("do".into(), Value::Str("stop".into()))]), &ops);
+        self.record(Value::Map(vec![("do".into(), Value::Str(why.into()))]), &ops);
         self.restore(background.place);
         self.said = Some(Said::Note(Message::plain(format!("{} was stopped, and nothing changed", background.label))));
         self.stale = true;
-        true
     }
 
     fn undo_label(&self) -> Option<&str> {
@@ -1468,6 +1586,9 @@ impl<A: App> Runner<A> {
         }
         let working = || A::derivations().iter().find(|d| self.working.contains(&d.field)).map(|d| format!("Working out “{}”", d.name));
         let Some(background) = self.background.front() else { return self.jobs.first().map(|job| job.name.clone()).or_else(working) };
+        if background.left > 0 {
+            return Some(format!("{}: {} to go", background.label, background.left));
+        }
         let part = background.parts.front()?;
         Some(match &part.found {
             Found::Searching(_) => format!("{}: searching", background.label),
@@ -2654,7 +2775,9 @@ impl<A: App> Face for Runner<A> {
         for effect in std::mem::take(&mut self.effects) {
             self.start(effect, frame.window);
         }
-        if (self.turning.is_some() || self.background.front().and_then(|b| b.parts.front()).is_some_and(|p| matches!(p.found, Found::Ready(_))))
+        if (self.turning.is_some()
+            || self.background.front().is_some_and(|b| !b.rest.is_empty())
+            || self.background.front().and_then(|b| b.parts.front()).is_some_and(|p| matches!(p.found, Found::Ready(_))))
             && let Some(waker) = &self.waker
         {
             waker.wake();

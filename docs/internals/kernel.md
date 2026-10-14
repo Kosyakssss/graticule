@@ -190,7 +190,7 @@ The window's surface textures are not guaranteed to keep their contents from fra
 
 CPU work is proportional to the damage. The GPU redraws everything, which is what GPUs are for: a full screen of text is tens of thousands of quads. This replaces an earlier draft that painted the damage into a kept texture of the whole window and copied it to the surface each frame. At 5K that texture is about 60 MB, so the copy reads 60 MB and writes 60 MB every frame, while drawing the quads writes the surface once; on Apple's tile-based GPUs, overlapping quads are resolved in on-chip memory, so drawing everything costs about half of copying. Boxes on the grid don't overlap, so drawing order matters only for overlays, which are a second list drawn after the first. S3 measures the GPU time at 5K on the M1.
 
-A further step, worth measuring after S3: most of a Graticule screen is cells, so the grid's frames, rules and mono text could be kept the way terminals keep theirs, as one small record per cell (a character, its inks, its style) that a single shader turns into pixels; a 200 × 60 cell window is about 200 KB, and changing a row rewrites a few hundred bytes. Quads would then be needed only for what isn't cell-shaped.
+A further step, which the owner asked to have measured: most of a Graticule screen is cells, so the grid's frames, rules and mono text could be kept the way terminals keep theirs, as one small record per cell (a character, its inks, its style) that a single shader turns into pixels; a 200 × 60 cell window is about 200 KB, and changing a row rewrites a few hundred bytes. Quads would then be needed only for what isn't cell-shaped. S3 studies how Ghostty's renderer keeps and uploads its cells (MIT-licensed, so it can be learned from and ported with its notice), builds the cell buffer beside the quad list, and measures both at 5K on the M1, CPU and GPU time and memory; the faster one becomes the renderer, and the numbers go here.
 
 A law (§19) checks that patching the quad list gives the same pixels as building it from scratch.
 
@@ -396,7 +396,7 @@ The first slice's steps each end with something visible. S3 needs facts and labe
 | `derive(Commands)`, read side: names, labels, subjects; `available` and `Available`; `t!` in English with recorded ids | S3 |
 | The tree, ids, `Ui` with typed subjects, `Bind` | S3 |
 | Layout in cells, the narrow form, list virtualization, scroll anchoring | S3 |
-| Comparing trees, damage, the kept quad list, painting | S3 |
+| Comparing trees, damage, the kept quad list, painting; the quad list measured against a buffer of cells | S3 |
 | Hit testing; hover, press and focus | S3 |
 | Components: page, row, list, field, check, link, button, action bar, status line, message line | S3 |
 | The accessibility tree from the tree | S3 |

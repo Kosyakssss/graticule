@@ -1,0 +1,16 @@
+window		0 0 24 19	
+  page	Scope	0 0 24 9	
+    empty		2 3 20 5	
+      text	No Graticule app is running on this machine. Start one, then look again.	2 3 20 3	muted
+      button	Look for running apps	2 7 20 1	
+  alert		2 9 20 1	
+  status		2 10 20 1	
+  toolbar		2 11 20 8	
+    button	Look for running apps	2 11 19 1	
+    button	Detach	2 12 8 1	unavailable (Attach to an app first)
+    button	Running apps	2 13 13 1	unavailable (It is showing)
+    button	Time	2 14 6 1	unavailable (Attach to an app first)
+    button	Why it redrew	2 15 13 1	unavailable (Attach to an app first)
+    button	Undo	2 16 13 1	unavailable (Nothing to undo)
+    button	Redo	2 17 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 18 15 1	

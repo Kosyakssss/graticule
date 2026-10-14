@@ -12,6 +12,7 @@ use crate::gpu::{Gpu, Quad};
 use crate::ink::{Appearance, Theme};
 use crate::metrics::Metrics;
 use crate::pace::Pace;
+use crate::scope::{Cause, Recorder, Stages};
 use crate::paint::Painter;
 use crate::text::Text;
 
@@ -106,6 +107,27 @@ pub trait Face: 'static {
     fn act(&mut self, _: u64, _: accesskit::Action) -> bool {
         false
     }
+    /// How long the last paint spent building the view, laying it out and painting, for Scope. A face that doesn't measure these leaves them at zero and its whole paint counts as painting.
+    fn stages(&self) -> Stages {
+        Stages::default()
+    }
+}
+
+fn cause(input: &Input) -> Cause {
+    match input {
+        Input::Moved { .. } | Input::Left => Cause::Pointer,
+        Input::Press { .. } | Input::Release { .. } => Cause::Click,
+        Input::Wheel { .. } => Cause::Wheel,
+        Input::Key(_) => Cause::Key,
+        Input::Ime(_) => Cause::Typing,
+        Input::Appearance(_) => Cause::Appearance,
+        Input::Resized => Cause::Resize,
+        Input::Woken => Cause::Woken,
+    }
+}
+
+fn micros(since: Instant) -> u32 {
+    since.elapsed().as_micros().min(u32::MAX as u128) as u32
 }
 
 /// What wakes the event loop: the app's own threads, or an assistive tool.
@@ -170,6 +192,7 @@ struct Running<F: Face> {
     clicks: Clicks,
     appearance: Appearance,
     scope: bool,
+    recorder: Recorder,
     launch: Vec<(&'static str, f32)>,
     minimum: Option<(i32, i32)>,
     access: accesskit_winit::Adapter,
@@ -201,6 +224,7 @@ macro_rules! frame {
 impl<F: Face> Running<F> {
     #[profiling::function]
     fn render(&mut self) {
+        let started = Instant::now();
         self.pace.drawn();
         self.text.begin_frame();
         let theme = self.face.theme(self.appearance);
@@ -208,6 +232,11 @@ impl<F: Face> Running<F> {
         let seen = Seen { mods: Mods::of(self.modifiers), pointer: self.pointer, appearance: self.appearance };
         let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, theme);
         self.face.paint(&mut painter, seen);
+        let mut stages = self.face.stages();
+        if stages == Stages::default() {
+            stages.paint = micros(started);
+        }
+        let painted = Instant::now();
         for u in self.text.uploads.drain(..) {
             self.gpu.upload(u.x, u.y, u.w, u.h, &u.data);
         }
@@ -219,6 +248,8 @@ impl<F: Face> Running<F> {
             }
             None => self.gpu.render(&self.quads, theme.bg),
         }
+        let gpu = micros(painted);
+        let rendered = Instant::now();
         if let Some((cols, rows)) = self.face.minimum()
             && self.minimum != Some((cols, rows))
         {
@@ -229,7 +260,15 @@ impl<F: Face> Running<F> {
         let mut frame = frame!(self);
         self.face.painted(&mut frame);
         self.update_access();
+        self.recorder.drawn(stages, gpu, micros(rendered), micros(started));
         profiling::finish_frame!();
+    }
+
+    fn wants(&mut self, cause: Cause, since: Instant) {
+        self.recorder.wanted(cause, micros(since));
+        if self.pace.want() {
+            self.window.request_redraw();
+        }
     }
 
     fn update_access(&mut self) {
@@ -245,9 +284,13 @@ impl<F: Face> Running<F> {
     }
 
     fn input(&mut self, input: Input) {
+        let since = Instant::now();
+        let why = cause(&input);
         let mut frame = frame!(self);
-        if self.face.input(input, &mut frame) && self.pace.want() {
-            self.window.request_redraw();
+        if self.face.input(input, &mut frame) {
+            self.wants(why, since);
+        } else {
+            self.recorder.spent(micros(since));
         }
     }
 }
@@ -304,6 +347,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             clicks: Clicks::default(),
             appearance,
             scope,
+            recorder: Recorder::new(&self.config.title, self.started),
             launch: Vec::new(),
             minimum: None,
             access,
@@ -325,6 +369,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             let stages: Vec<String> = running.launch.iter().map(|(stage, ms)| format!("{stage} {ms:.1}")).collect();
             eprintln!("launch {:.1} ms from main: {}", (last - self.started).as_secs_f32() * 1000.0, stages.join(", "));
         }
+        running.recorder.launched(&running.launch);
         self.running = Some(running);
     }
 
@@ -335,8 +380,9 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             Signal::Access(e) => match e.window_event {
                 accesskit_winit::WindowEvent::InitialTreeRequested => r.update_access(),
                 accesskit_winit::WindowEvent::ActionRequested(request) => {
-                    if r.face.act(request.target_node.0, request.action) && r.pace.want() {
-                        r.window.request_redraw();
+                    let since = Instant::now();
+                    if r.face.act(request.target_node.0, request.action) {
+                        r.wants(Cause::Assistive, since);
                     }
                 }
                 accesskit_winit::WindowEvent::AccessibilityDeactivated => {}
@@ -356,6 +402,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
                 r.gpu.resize(size.width, size.height);
                 r.metrics = Metrics::measure(&mut r.text, r.metrics.scale, size.width, size.height);
                 r.input(Input::Resized);
+                r.recorder.wanted(Cause::Resize, 0);
                 r.render();
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
@@ -382,9 +429,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
                 r.input(Input::Appearance(r.appearance));
             }
             WindowEvent::Occluded(false) => {
-                if r.pace.want() {
-                    r.window.request_redraw();
-                }
+                r.wants(Cause::Uncovered, Instant::now());
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 let button = match button {

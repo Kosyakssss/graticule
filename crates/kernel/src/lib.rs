@@ -23,6 +23,7 @@ pub mod paint;
 pub mod proof;
 pub mod px;
 pub mod runner;
+pub mod scope;
 pub mod shell;
 pub mod text;
 pub mod tree;

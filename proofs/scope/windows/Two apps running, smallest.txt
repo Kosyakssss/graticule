@@ -1,0 +1,27 @@
+window		0 0 28 20	
+  page	Scope	0 0 28 12	
+    text	The Graticule apps running on this machine. Attach to one to see what each frame costs and why it was drawn.	2 3 24 4	muted
+    list		2 8 24 3	2 items
+      list item		2 8 22 1	
+        group		2 8 22 1	
+          column		2 8 8 1	
+            text	To do	2 8 8 1	
+          column		12 8 12 1	
+            link	Attach	12 8 5 1	
+      list item		2 9 22 1	
+        group		2 9 22 1	
+          column		2 9 8 1	
+            text	Specimen	2 9 8 1	
+          column		12 9 12 1	
+            link	Attach	12 9 5 1	
+  alert		2 12 24 1	
+  status		2 13 24 1	
+  toolbar		2 14 24 6	
+    button	Look for running apps	2 14 19 1	
+    button	Detach	2 15 8 1	unavailable (Attach to an app first)
+    button	Running apps	12 15 13 1	unavailable (It is showing)
+    button	Time	2 16 6 1	unavailable (Attach to an app first)
+    button	Why it redrew	10 16 13 1	unavailable (Attach to an app first)
+    button	Undo	2 17 13 1	unavailable (Nothing to undo)
+    button	Redo	2 18 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 19 15 1	

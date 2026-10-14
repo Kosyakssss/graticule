@@ -1,0 +1,15 @@
+[package]
+name = "scope"
+description = "SC-01, Scope: what each frame of a running Graticule app cost and why it was drawn."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kernel.workspace = true
+ledger.workspace = true
+graticule-macros.workspace = true
+specimen.workspace = true

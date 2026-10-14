@@ -238,6 +238,14 @@ impl<A: App> Face for Specimen<A> {
         let acted = self.face().act(node, action);
         self.switch() || acted
     }
+
+    fn stages(&self) -> kernel::scope::Stages {
+        match self.showing() {
+            Showing::Screen => self.screens[self.state].stages(),
+            Showing::Changes => self.changes.stages(),
+            Showing::Catalog => self.catalog.stages(),
+        }
+    }
 }
 
 /// Renders every named state of an app in both appearances, at its normal size and at the smallest window it allows, into pictures in `folder`, then the Changes page for them, and prints how long each took to paint. It also writes `index.html` there, a page with every picture and what changed, with any images from `references` pinned beside the state they are named after.
@@ -303,4 +311,18 @@ pub fn approve<A: App>() -> Result<(), String> {
     }
     println!("Approved {} sheets in {}", sheets.len(), folder.display());
     Ok(())
+}
+
+/// Runs one of Specimen's modes without a window, when the command line asks for one: `--render <folder> [--references <folder>]`, `--changes` or `--approve`. Returns `None` for anything else, so the caller opens its window.
+pub fn offscreen<A: App>(mut args: impl Iterator<Item = String>) -> Option<Result<(), String>> {
+    Some(match args.next()?.as_str() {
+        "--render" => {
+            let folder = std::path::PathBuf::from(args.next().unwrap_or_else(|| ".".into()));
+            let references = (args.next().as_deref() == Some("--references")).then(|| args.next()).flatten().map(std::path::PathBuf::from);
+            render::<A>(&folder, references.as_deref())
+        }
+        "--changes" => changes::<A>(),
+        "--approve" => approve::<A>(),
+        _ => return None,
+    })
 }

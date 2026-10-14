@@ -165,6 +165,7 @@ pub struct Runner<A: App> {
     asked: Option<usize>,
     hold: bool,
     fonts: u64,
+    stages: crate::scope::Stages,
 }
 
 impl<A: App> Runner<A> {
@@ -214,6 +215,7 @@ impl<A: App> Runner<A> {
             asked: None,
             hold: false,
             fonts: 0,
+            stages: crate::scope::Stages::default(),
         }
     }
 
@@ -1650,16 +1652,25 @@ impl<A: App> Face for Runner<A> {
             self.kept.reset();
             self.laid = false;
         }
+        let started = Instant::now();
         if self.stale {
             self.build();
         }
+        let built = Instant::now();
         if !self.laid {
             self.layout(p);
         }
+        let laid = Instant::now();
         let look = self.look();
         let mut kept = std::mem::take(&mut self.kept);
         kept.update(p, &self.tree, look);
         self.kept = kept;
+        let micros = |from: Instant, to: Instant| (to - from).as_micros().min(u32::MAX as u128) as u32;
+        self.stages = crate::scope::Stages { view: micros(started, built), layout: micros(built, laid), paint: micros(laid, Instant::now()) };
+    }
+
+    fn stages(&self) -> crate::scope::Stages {
+        self.stages
     }
 
     fn painted(&mut self, frame: &mut Frame) {

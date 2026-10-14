@@ -1,0 +1,175 @@
+window		0 0 120 30	
+  page	Why it redrew: To do	0 0 120 26	
+    text	Of the last 40 frames: scrolling 10, a thread waking it 10, a key 10, the pointer moving 10.	2 3 116 1	
+    list		2 5 116 20	40 items
+      list item		2 5 114 1	
+        group		2 5 114 1	
+          column		2 5 8 1	
+            text	39	2 5 8 1	mono
+          column		12 5 12 1	
+            text	1.024 s	12 5 12 1	mono
+          column		26 5 90 1	
+            text	scrolling	26 5 90 1	
+      list item		2 6 114 1	
+        group		2 6 114 1	
+          column		2 6 8 1	
+            text	38	2 6 8 1	mono
+          column		12 6 12 1	
+            text	1.008 s	12 6 12 1	mono
+          column		26 6 90 1	
+            text	a thread waking it	26 6 90 1	
+      list item		2 7 114 1	
+        group		2 7 114 1	
+          column		2 7 8 1	
+            text	37	2 7 8 1	mono
+          column		12 7 12 1	
+            text	0.992 s	12 7 12 1	mono
+          column		26 7 90 1	
+            text	a key	26 7 90 1	
+      list item		2 8 114 1	
+        group		2 8 114 1	
+          column		2 8 8 1	
+            text	36	2 8 8 1	mono
+          column		12 8 12 1	
+            text	0.976 s	12 8 12 1	mono
+          column		26 8 90 1	
+            text	the pointer moving	26 8 90 1	
+      list item		2 9 114 1	
+        group		2 9 114 1	
+          column		2 9 8 1	
+            text	35	2 9 8 1	mono
+          column		12 9 12 1	
+            text	0.960 s	12 9 12 1	mono
+          column		26 9 90 1	
+            text	scrolling	26 9 90 1	
+      list item		2 10 114 1	
+        group		2 10 114 1	
+          column		2 10 8 1	
+            text	34	2 10 8 1	mono
+          column		12 10 12 1	
+            text	0.944 s	12 10 12 1	mono
+          column		26 10 90 1	
+            text	a thread waking it	26 10 90 1	
+      list item		2 11 114 1	
+        group		2 11 114 1	
+          column		2 11 8 1	
+            text	33	2 11 8 1	mono
+          column		12 11 12 1	
+            text	0.928 s	12 11 12 1	mono
+          column		26 11 90 1	
+            text	a key	26 11 90 1	
+      list item		2 12 114 1	
+        group		2 12 114 1	
+          column		2 12 8 1	
+            text	32	2 12 8 1	mono
+          column		12 12 12 1	
+            text	0.912 s	12 12 12 1	mono
+          column		26 12 90 1	
+            text	the pointer moving	26 12 90 1	
+      list item		2 13 114 1	
+        group		2 13 114 1	
+          column		2 13 8 1	
+            text	31	2 13 8 1	mono
+          column		12 13 12 1	
+            text	0.896 s	12 13 12 1	mono
+          column		26 13 90 1	
+            text	scrolling	26 13 90 1	
+      list item		2 14 114 1	
+        group		2 14 114 1	
+          column		2 14 8 1	
+            text	30	2 14 8 1	mono
+          column		12 14 12 1	
+            text	0.880 s	12 14 12 1	mono
+          column		26 14 90 1	
+            text	a thread waking it	26 14 90 1	
+      list item		2 15 114 1	
+        group		2 15 114 1	
+          column		2 15 8 1	
+            text	29	2 15 8 1	mono
+          column		12 15 12 1	
+            text	0.864 s	12 15 12 1	mono
+          column		26 15 90 1	
+            text	a key	26 15 90 1	
+      list item		2 16 114 1	
+        group		2 16 114 1	
+          column		2 16 8 1	
+            text	28	2 16 8 1	mono
+          column		12 16 12 1	
+            text	0.848 s	12 16 12 1	mono
+          column		26 16 90 1	
+            text	the pointer moving	26 16 90 1	
+      list item		2 17 114 1	
+        group		2 17 114 1	
+          column		2 17 8 1	
+            text	27	2 17 8 1	mono
+          column		12 17 12 1	
+            text	0.832 s	12 17 12 1	mono
+          column		26 17 90 1	
+            text	scrolling	26 17 90 1	
+      list item		2 18 114 1	
+        group		2 18 114 1	
+          column		2 18 8 1	
+            text	26	2 18 8 1	mono
+          column		12 18 12 1	
+            text	0.816 s	12 18 12 1	mono
+          column		26 18 90 1	
+            text	a thread waking it	26 18 90 1	
+      list item		2 19 114 1	
+        group		2 19 114 1	
+          column		2 19 8 1	
+            text	25	2 19 8 1	mono
+          column		12 19 12 1	
+            text	0.800 s	12 19 12 1	mono
+          column		26 19 90 1	
+            text	a key	26 19 90 1	
+      list item		2 20 114 1	
+        group		2 20 114 1	
+          column		2 20 8 1	
+            text	24	2 20 8 1	mono
+          column		12 20 12 1	
+            text	0.784 s	12 20 12 1	mono
+          column		26 20 90 1	
+            text	the pointer moving	26 20 90 1	
+      list item		2 21 114 1	
+        group		2 21 114 1	
+          column		2 21 8 1	
+            text	23	2 21 8 1	mono
+          column		12 21 12 1	
+            text	0.768 s	12 21 12 1	mono
+          column		26 21 90 1	
+            text	scrolling	26 21 90 1	
+      list item		2 22 114 1	
+        group		2 22 114 1	
+          column		2 22 8 1	
+            text	22	2 22 8 1	mono
+          column		12 22 12 1	
+            text	0.752 s	12 22 12 1	mono
+          column		26 22 90 1	
+            text	a thread waking it	26 22 90 1	
+      list item		2 23 114 1	
+        group		2 23 114 1	
+          column		2 23 8 1	
+            text	21	2 23 8 1	mono
+          column		12 23 12 1	
+            text	0.736 s	12 23 12 1	mono
+          column		26 23 90 1	
+            text	a key	26 23 90 1	
+      list item		2 24 114 1	
+        group		2 24 114 1	
+          column		2 24 8 1	
+            text	20	2 24 8 1	mono
+          column		12 24 12 1	
+            text	0.720 s	12 24 12 1	mono
+          column		26 24 90 1	
+            text	the pointer moving	26 24 90 1	
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Look for running apps	2 28 19 1	
+    button	Detach	23 28 8 1	
+    button	Running apps	33 28 13 1	
+    button	Time	48 28 6 1	
+    button	Why it redrew	56 28 13 1	unavailable (It is showing)
+    button	Undo	71 28 13 1	unavailable (Nothing to undo)
+    button	Redo	86 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

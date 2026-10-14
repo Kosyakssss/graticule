@@ -95,6 +95,8 @@ Export… asks where to save the list, the way every app on the computer does, a
 
 `cargo run -p todo -- --render <folder>` draws every named state of the app, light and dark, at its normal size and at the smallest window it allows, into pictures in that folder. The smallest window is worked out from the layout itself, so nothing is ever cut off by making the window small.
 
+`cargo run -p scope` opens Scope. It lists the Graticule apps running on this computer; attach to one and Scope shows, live, how long each of its pictures took and what it spent the time on, whether the slowest one in a hundred stays inside the millisecond, how long the app took to start, and why each picture was drawn at all (a key, the pointer moving, a background job finishing). An app can only be reached from the same computer, and sends nothing until Scope asks.
+
 ## How speed is measured
 
 A screen refreshes 60 to 1000 times a second; at 1000, there is one millisecond per picture. Graticule's goal is to finish its work for an ordinary interaction in a tenth of that, and to do nothing at all when nothing is happening, which is what saves battery. Times are measured automatically and judged by the slowest frames, not the average, because the slow ones are the ones you notice.

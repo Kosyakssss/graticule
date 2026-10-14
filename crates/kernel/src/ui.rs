@@ -286,10 +286,10 @@ impl<'a, C, S> Ui<'a, C, S> {
     #[track_caller]
     pub fn empty<M>(&mut self, message: Message, cmd: impl Bind<C, S, M>) {
         let i = self.add(Kind::Empty, Location::caller());
-        let r = self.tree.put(message.as_str());
-        self.tree.nodes[i as usize].text = r;
         let subject = self.subject;
-        self.child::<S>(i, subject).button(cmd);
+        let mut inside = self.child::<S>(i, subject);
+        inside.muted(message.as_str());
+        inside.button(cmd);
     }
 }
 

@@ -21,7 +21,7 @@ Nobody paints the board by hand. Someone presses "goal for home", the facts chan
 - **Undo** is going back to older facts.
 - **Rewind** in Scope is scrolling through the facts over time.
 - **Specimen** can show any screen in any situation, because a situation is just a set of facts.
-- **Sync** between your devices is sending commands, so the facts match.
+- **Sync** between your devices sends what each command actually changed ("added this item here"), not the command itself ("clear the finished ones"), because the same command can mean different things on two devices. So the lists on your laptop and your phone always end up the same, and nothing gets lost when both change at once.
 - **Speed**: when one fact changes, only the part of the screen that shows it is redrawn.
 
 ## The tree
@@ -41,7 +41,7 @@ The same list lets scripts and AI tools drive any Graticule app completely, whic
 Graticule is made of named parts, each with a model code. Every one is two things: a piece that apps build in, and something of its own you can open or run. So every unit also shows Graticule working.
 
 - **DK-01 Kernel.** Graticule itself: the grid, drawing, keys and mouse, the window. On its own: a new empty app.
-- **LD-01 Ledger.** The app's memory. Every command is written down in order, and from that one record come saving, undo, rewind, crash replays and syncing between your devices. On its own: a command that shows any app's history.
+- **LD-01 Ledger.** The app's memory. Every command is written down in order, along with exactly what it changed; from those come saving, undo, rewind, crash replays and syncing between your devices. On its own: a command that shows any app's history.
 - **GA-01 Galley.** Text: huge files, many cursors, spelling, good typesetting, Helix-style keys. On its own: a text editor. Named for the tray typesetters set lines of type in.
 - **PL-01 Plotter.** The canvas, modelled on tldraw: shapes, arrows that stay attached, snapping, endless boards, maps. On its own: a whiteboard. Named for the pen plotters that draw lines on paper.
 - **SP-01 Specimen.** The catalog. Every component, live; every screen of every app in every state; the style editor; and the Changes page, where you see what looks different since you last approved it and say yes or no. This is where you review work without reading code.

@@ -44,38 +44,58 @@ The seven in `AGENTS.md`, in order: the grid is law and inside a box is freedom;
 ## 3. The model: facts, commands, a view
 
 ### 3.1 What the app writes and what Graticule owns
-- The app supplies **facts** (plain data and enums), **commands** (the only way facts change), a **view** (the screen described from the facts), **states** (named sets of facts for Specimen) and **effects** as data.
-- Graticule owns everything else: the shell (windows, the event loop, input, focus, hover, dragging, scrolling, text input, clipboard, menus, web views, file dialogs, accessibility), the per-component interaction state kept by stable id (scroll positions, hover, pressed, selection), the components, styles and themes, layout, painting, undo, the tools and the budgets.
+- The app supplies **facts**, **commands** (the only way facts change), a **view** (the screen described from the facts), **states** (named sets of facts for Specimen) and **effects** as data.
+- Graticule owns everything else: the shell (windows, the event loop, input, focus, hover, dragging, scrolling, text input, clipboard, menus, web views, file dialogs, accessibility), the components' own interaction state, the components, styles and themes, layout, painting, the tools and the budgets.
 - The view is a pure function of the facts. Painting never writes into the app's facts.
 
-### 3.2 The tree
-- The view builds a tree of components each time; building it is cheap and allocates nothing in steady state (reused flat storage, integer ids).
-- Ids are automatic, from position and from the key of each item in a list, so the app never names a component to keep its state.
+### 3.2 Four kinds of state
+Facts hold four kinds of state, marked on each field, and Ledger (§13.2) treats each differently:
+
+| Kind | Mark | What it is | Undo | Sync | Saved |
+|---|---|---|---|---|---|
+| **document** | none (the default) | what the user is making: items, text, shapes | yes | yes | yes |
+| **session** | `#[session]` | where the user is: a half-typed field, the open file, the filter, the selection | typing only (§13.2) | no | on this device |
+| **live** | `#[live]` | values written by other threads (§3.5) | no | no | no |
+| **resource** | `#[resource]` | large loaded things: a scan, a shader | no | no | by reference |
+
+- The document part is built from Ledger's types (`List`, `Map`, `Text` and plain values, which are registers), so every app is ready to sync. A `Vec` in the document part is a compile error that points at `List`: a list synced as a whole loses one of two concurrent additions without a word.
+- State that only a component needs (a scroll offset, a split's width, hover) is the kernel's, kept by the component's id. State the app reads in `update` is facts. Both are saved in one session snapshot by Ledger; they differ only in who owns them.
+- Windows: the facts are shared by all of an app's windows; each window has its own session state. Places and back and forward are the kernel's.
+
+### 3.3 Commands
+- Commands are an enum with typed arguments. Each has a name and a label; labels can take values from their subject and depend on its state ("Mark 'milk' done", "Mark 'milk' not done"). Messages and labels are written in English in the source and translated through ids (§7.5).
+- `available(&self, &Cmd) -> Available` answers `Yes` or `No(reason)` before a command runs; a disabled control says why in the status line. The `match` is exhaustive, with no catch-all, so a new command can't become available by accident. The kernel asks only for commands on screen, and for the palette and which-key only while they are open; `available` has a time budget that Assay measures.
+- `update(&mut self, Cmd, &mut Cx) -> Outcome` runs only after `available` said `Yes`. It is total: a command that can no longer apply (its item is gone) returns `Outcome::Nothing`, which Ledger doesn't record. Everything non-deterministic (new keys, the time, randomness) comes from `cx` and is logged, so replaying the log gives the same facts.
+- **Subjects.** A list row, a table row or a shape declares its key as its subject. A command argument marked `#[subject]` is filled from the subject under the pointer or with focus, and the bulk version runs over the selection. So the same `Remove` works from a link in a row, a keymap sequence, the palette and a context menu.
+- **Selection** that the app reads is session state, a `Selection<K>` from the kernel. Keys of items that no longer exist are pruned whenever the document changes, locally or through sync.
+- **Edits.** Typing into a field and moving a slider are commands too: the kernel sends `Edit(edit)` over a path into the facts, and the app's `update` handles it, by default with `edit.apply(self)`, so the app can validate a value or keep an invariant (set `edited` when `title` changes) in one place. A gesture (dragging a slider, typing a word) is one transaction and one undo step.
+- **Effects** are data, asked for through `cx`: open a dialog, write a file, send a request. Their results come back as commands marked `#[internal]`, which never appear in the palette, menus, keys or undo. Specimen intercepts effects and shows them instead of running them.
+- The registry is generated from the commands and feeds the action bar, which-key, the help page, the palette, the menu bar, context menus, automation and the OS adapters (§9).
+
+### 3.4 Keys
+- Keys for app commands live in **keymap files**, not in code: chords, sequences (`g g`), counts (`3w`), operator and motion (`d w`) and modes (normal, insert, select), enough to build a modal editor. Edits to a keymap file apply live. Graticule assigns no keys to app commands; the platform's conventions (text editing, copy and paste, Tab between fields, Escape) belong to the system.
+- At runtime the registry builds the tree of what is reachable from here by key; after a prefix, the action bar shows the next branch (which-key).
+
+### 3.5 The tree, the main thread and derived values
+- The view builds a tree of components each time; building it is cheap and allocates nothing in steady state (reused flat storage, integer ids). Ids are automatic, from position and from the key of each item in a list.
 - The kernel compares each part with last time and reuses what didn't change, lays out only what is visible and repaints only the regions that changed. A cursor move repaints two rows.
 - Every component records where in the source it was created, in development builds.
-- One tree, read by everything: painting, hit testing, the accessibility tree, Specimen, Scope, the taste laws, automation, structural diffs, print. There is no second tree to keep in sync.
-
-### 3.3 Commands, the registry and keys
-- Commands are an enum with typed arguments. Each has a name, a label and availability. Availability is `Yes` or `No(reason)`: a disabled control says why in the status line.
-- The registry is generated from the commands and feeds the action bar, which-key, the help page, the palette, the menu bar, context menus, automation and the OS adapters (§9).
-- Keys live in **keymap files**, not in code: chords, sequences (`g g`), counts (`3w`), operator and motion (`d w`) and modes (normal, insert, select), enough to build a modal editor. Edits to a keymap file apply live. Graticule ships no keys of its own.
-- At runtime the registry builds the tree of what is reachable from here by key; after a prefix, the action bar shows the next branch (which-key).
-- Every command is undoable by default. Undo is a tree, kept by Ledger (§13.2).
-
-### 3.4 Effects, jobs and the main thread
+- One tree, read by everything: painting, hit testing, the accessibility tree, Specimen, Scope, the taste laws, automation, structural diffs, print.
 - The main thread only turns input into commands, updates the facts, builds the tree, paints and submits. It never does work that grows with the data.
 - Anything that grows with the data (filtering, shaping long text, placing labels, decoding images, network, disk) runs as a **job** in the background. While it runs the screen shows what it has and says that more is coming; every running job is visible.
-- **Live values**: a value written by another thread (an audio callback, a market feed, a download) without locks and read once per frame, coalesced to at most one frame per display refresh.
+- **Derived values** (`Derived<T>`): a value computed by a job from named fields of the facts, recomputed only when those fields change. Facts keep a version per path, so typing in a field never recomputes a histogram of a scan. The view reads the latest finished value and shows that a new one is coming.
+- **Live values** (`Live<T>`): a value written by another thread (an audio callback, a market feed, a download) without locks; the view reads a snapshot once per frame, coalesced to at most one frame per display refresh.
 
-### 3.5 States
-- A named state is a set of facts. Specimen shows every app's states (§13.5); "send this view" saves the current facts to a file that opens in the same state on another machine.
+### 3.6 States
+- A named state is a set of facts, listed by the app's `states()`. Specimen shows every app's states (§13.5); "send this view" saves the current facts to a file that opens in the same state on another machine.
 - Saving, migrations, history and sync belong to Ledger (§13.2).
 
 ## 4. The grid and its freedoms
 
 ### 4.1 The grid
-- The screen is paper ruled in cells. The cell comes from the monospace font: its width is the advance of IBM Plex Mono, its height the line, both whole device pixels; the font size is derived from the cell, not the other way around.
-- Layout is in whole cells and the layout API can only express cells: rows, columns, splits, weights, minimums and maximums. Pixel coordinates exist only inside a canvas, a picture or a component's own drawing. Narrow and wide are column counts.
+- The screen is paper ruled in cells. The cell comes from the monospace font: its width is the advance of IBM Plex Mono, its height the line, both whole points, so a cell is whole device pixels at every integer scale and an app keeps its column count when a window moves between a 1x and a 2x display; the font size is derived from the cell, not the other way around.
+- Layout is in whole cells and the layout API can only express cells: rows, columns, fixed widths, `Fill`, weights, minimums and maximums, scroll areas and splits the user can resize. Pixel coordinates exist only inside a canvas, a picture or a component's own drawing.
+- Narrow and wide are column counts. A layout states what happens when its minimums don't fit (it switches to its narrow form); nothing is cut off silently.
 - Proportional text, pictures and canvases live inside boxes; only the box sits on the grid. Mono and Sans share a baseline on a row.
 - Character graphics (box drawing, blocks) are drawn by Graticule, so they meet exactly at cell edges.
 - Chinese, Japanese and Korean characters are two cells wide in mono, as in a terminal. Right-to-left layouts mirror the grid.
@@ -151,8 +171,8 @@ Every rung renders off the main thread into its own texture, which the main thre
 
 ### 7.2 Selection and fields
 - Selection is on by default for all text, in reading order across components; controls opt out. Drag, double-click a word, triple-click a line, Shift-click to extend, Cmd-C to copy.
-- Fields are Graticule's own, built to native behavior: the platform's input methods, dictation and emoji picker; the macOS text key bindings as the system's own table defines them; Tab and Shift-Tab between fields; undo per field; single- and multi-line.
-- **Typing is a command.** The kernel sends field edits as commands, so they are undoable and visible like any other.
+- Fields are Graticule's own, built to native behavior: the platform's input methods, dictation and emoji picker; the macOS text key bindings as the system's own table defines them; Tab and Shift-Tab between fields; single- and multi-line.
+- **Typing is a command.** The kernel sends field edits as `Edit` commands through the app's `update` (§3.3), grouped by word, so they are undoable and visible like any other. Undo has one history, not one per field (§13.2).
 - Number fields evaluate expressions (`12*4+3`, `3 h 20 min`); date fields accept natural input (`next tue 3pm`).
 
 ### 7.3 Documents
@@ -165,12 +185,12 @@ Fields cover single lines and short text. Documents (large files, multiple selec
 - Search follows the language: accents fold (`e` finds `é`), words split correctly in Japanese and Thai, names sort as each language expects. **Proposed:** ICU4X.
 
 ### 7.5 Language
-Every label and message is translatable data, with plurals and grammar handled by Fluent. Numbers, dates and currencies are formatted per language. Mixed directions are laid out correctly.
+Every label and message is translatable data, with plurals and grammar handled by Fluent. Labels and messages are written in English in the source; their ids come from the command or the call site, and a tool extracts them and reports ids that lost their source (after a rename) and texts that have no translation. Numbers, dates and currencies are formatted per language. Mixed directions are laid out correctly.
 
 ## 8. Interaction
 
 ### 8.1 Input
-- Keys through the keymap (§3.3); the mouse and trackpad with the system's own momentum; pinch and rotate; pen pressure and tilt.
+- Keys through the keymap (§3.4); the mouse and trackpad with the system's own momentum; pinch and rotate; pen pressure and tilt.
 - Any input can drive any command or value: the registry makes every command and value bindable, so an app or a crate it adds can bind a MIDI knob, a gamepad or a hardware button to them. Device drivers are not part of Graticule.
 - What you can act on looks actionable on sight, without hovering.
 
@@ -249,7 +269,7 @@ Each unit has a model code, a library that apps build in, a face of its own that
 | Unit | Library | Face |
 |---|---|---|
 | DK-01 Kernel | the framework | `bindery new` gives a running empty app |
-| LD-01 Ledger | the command log: saving, undo, history, replays, sync | `ledger`: show, replay, verify, compare and export an app's history |
+| LD-01 Ledger | the command log and the document's types: saving, undo, history, replays, sync | `ledger`: show, replay, verify, compare and export an app's history |
 | GA-01 Galley | the text engine | `galley`, a text editor |
 | PL-01 Plotter | the canvas engine | `plotter`, a whiteboard |
 | SP-01 Specimen | the Specimen mode in every app | the catalog of Graticule's components |
@@ -264,14 +284,20 @@ Each unit has a model code, a library that apps build in, a face of its own that
 - **Laws.** The frame is on the grid; frames stay within budget; no allocation per frame; idle is zero; the view never writes into the facts.
 
 ### 13.2 LD-01 Ledger
-One log of commands underlies saving, undo, rewind, crash replays and sync; Ledger is that log.
-- **Library.** Facts save themselves, safe against crashes, and an app reopens where it was; the first frame after launch is drawn from the last snapshot before anything else answers. Undo is a tree, not a line: after undoing and making a new change the old branch is still there, and history can be browsed. Facts saved by an older version load in a newer one through declared migrations. A crash becomes a replay that the next launch can show; nothing is sent anywhere. Sync sends commands between the user's own devices, local-first and transport-agnostic: plain IP with TLS, pairing once, every address that ever worked tried in turn, devices on the local network found by Bonjour; the same network, Tailscale, Headscale, NetBird, ZeroTier, Nebula and the like are all just addresses. Encrypted between devices. Live collaboration through CRDTs (**Open**: Loro or Automerge). The core needs no screen; any Rust program can keep a ledger.
+Ledger keeps two records. The **command log** is local history: what the user did, for display, replay, rewind and crash replays. The **operations** are what those commands did to the document's types: they are what undo reverses and what sync sends.
+- **Library.**
+  - **Types.** The document part of facts is built from Ledger's types: `List` (ordered by fractional indexes, so concurrent insertions both survive), `Map`, `Text` (a CRDT for text) and plain values as last-writer-wins registers on hybrid logical clocks. `update` changes them, and each change becomes an operation. **Open:** the CRDT library underneath (Loro or Automerge).
+  - **Saving.** Facts save themselves, safe against crashes, and an app reopens where it was; the first frame after launch is drawn from the last snapshot before anything else answers. Session state is saved on the device in the same snapshot as the kernel's interaction state (§3.2). Facts saved by an older version load in a newer one through declared migrations.
+  - **Undo.** One history per document, a tree rather than a line: after undoing and making a new change the old branch is still there, and history can be browsed. A step is any command that changes the document, or any edit typed into a field (grouped by word); commands that only move around (opening a file, selecting, scrolling, switching places) are not steps. A step records every change its command made, in the document and in session fields alike, and carries the selection and focus as they were, so undoing restores them too. Cmd-Z always undoes the newest step of the current branch, whatever has focus: typing "milk", adding it and pressing Cmd-Z takes the item back out and puts "milk" back in the field. Effects (printing, requests, writing files) are not changes to facts and are never steps; irreversible ones ask first.
+  - **Replays.** A crash becomes a replay of the command log that the next launch can show; nothing is sent anywhere.
+  - **Sync.** Operations travel between the user's own devices, never commands: a command's meaning depends on the facts where it runs, an operation's doesn't. Local-first and transport-agnostic: plain IP with TLS, pairing once, every address that ever worked tried in turn, devices on the local network found by Bonjour; the same network, Tailscale, Headscale, NetBird, ZeroTier, Nebula and the like are all just addresses. Encrypted between devices. Live collaboration is the same operations with authors attached.
+  - The core needs no screen; any Rust program can keep a ledger.
 - **Face.** `ledger` on the command line: show an app's history, replay it to any point, verify it, compare two devices, export it.
-- **Laws.** Replaying the log gives the same facts; undo returns to where you were and redo to where you left; devices that have seen the same commands agree, in any order of arrival; every named state of every older version loads.
+- **Laws.** Replaying the command log gives the same facts; undo returns to where you were and redo to where you left, selection included; devices that have received the same operations hold the same document, in any order of arrival; two concurrent additions to a `List` both survive; a selection never holds a key that no longer exists; every named state of every older version loads.
 
 ### 13.3 GA-01 Galley
 Named for the tray where typesetters set lines of type.
-- **Library.** Enough to build an editor like Helix or Neovim: rope storage for very large files, multiple selections, history through Ledger, a hook for tree-sitter syntax trees, folding, the keymap grammar of §3.3, a command line in the status line with completion from the picker, splits and buffers, macros recorded from the registry, find and replace. Language servers are the app's, run as jobs. Spelling is a hook: Galley asks it about words and ranges and gets back mistakes and suggestions; the default answers through the macOS spellchecker, and an app can plug in anything else. Typesetting is good by default: proper quotes and dashes, hyphenation, paragraph breaking that avoids ugly gaps, any font a document asks for. Print and PDF at real size. The editing core (storage, edits, the keymap grammar) needs no screen.
+- **Library.** Enough to build an editor like Helix or Neovim: rope storage for very large files, multiple selections, history through Ledger, a hook for tree-sitter syntax trees, folding, the keymap grammar of §3.4, a command line in the status line with completion from the picker, splits and buffers, macros recorded from the registry, find and replace. Language servers are the app's, run as jobs. Spelling is a hook: Galley asks it about words and ranges and gets back mistakes and suggestions; the default answers through the macOS spellchecker, and an app can plug in anything else. Typesetting is good by default: proper quotes and dashes, hyphenation, paragraph breaking that avoids ugly gaps, any font a document asks for. Print and PDF at real size. The editing core (storage, edits, the keymap grammar) needs no screen.
 - **Face.** `galley`, a TextEdit-class editor with an optional modal mode. It is also the text demo (§14).
 - **Laws.** Any sequence of edits undoes to the start and redoes to the end; selections stay valid through every edit; a keymap sequence means the same thing however it is typed; large files open and scroll within budget.
 
@@ -308,8 +334,8 @@ Named for pen plotters, which draw vectors.
 ### 13.7 AS-01 Assay
 Named for the test of what something is made of.
 - **Library.** The checks every Graticule app is held to, callable from an app's own laws:
-  - **Universal laws**: given any app, Assay generates command sequences and checks that it never crashes, undo returns, every command is reachable, saved facts load, and every frame stays within budget.
-  - **Taste laws**, over every state of every app at every size and in every style: every edge on the grid; contrast; at most a set number of type sizes and inks per screen; nothing clipped; no text overflowing; hit targets at least one cell; every screen also judged as it looks with each kind of color blindness.
+  - **Universal laws**: given any app, Assay generates command sequences and checks that it never crashes; undo returns; every command is reachable; a command `available` says `Yes` to neither panics nor does nothing; `available` stays within its time budget; no internal command is reachable by the user; saved facts load; and every frame stays within budget.
+  - **Taste laws**, over every state of every app at every size and in every style: every edge on the grid; contrast; at most a set number of type sizes and inks per screen; nothing clipped; no text overflowing; hit targets at least one cell; no two items in one list share an accessible name; no component's part of the view exceeds its budget; every screen also judged as it looks with each kind of color blindness.
   - **Budgets**: frame time, allocation, idle, energy, binary size.
 - **Face.** `assay` runs every check over an app and prints a report, like Clippy for Graticule apps; Specimen and Scope draw its findings on the screen.
 - **Laws.** Assay's own: a check that passes on an app keeps passing when nothing that check reads has changed.
@@ -340,13 +366,16 @@ The faces of Galley, Plotter, Specimen and Scope are apps too. Beside them, six 
 Order, by difficulty, because each forces new pieces into the kernel: Galley's editor and Twin; Ticker; Plotter's whiteboard, Atlas and Patchbay; Lightbox; Four-track.
 
 ## 15. Open questions
-1. License: AGPL-3.0 or MIT.
+1. License, decided once the first slice stands. MPL-2.0 is favored: changes to Graticule stay open, apps built on it may use any license.
 2. Windows support, and when.
 3. The Linux story (§10), after testing on a real machine.
 4. Whether the macOS spellchecker can be reached without `unsafe` through the AppKit bindings; if not, whether it becomes a second exception.
 5. Proofs kept as images, as text descriptions of the tree, or both.
-6. The CRDT for live collaboration (§13.2).
+6. The CRDT library under Ledger's types (§13.2).
 7. Budgets for energy, binary size and memory (§12.3).
+8. The syntax for labels that depend on their subject's state.
+9. The four kinds of state as marks on fields or as separate structs (§3.2); marks for now.
+10. Fractional display scales (Linux), where a cell can't be whole pixels and whole points at once.
 
 ## 16. Later
 - Every Graticule app also running in a terminal or a browser tab, from the same tree. Parked until the framework stands on its own.
@@ -357,9 +386,11 @@ Order, by difficulty, because each forces new pieces into the kernel: Galley's e
 ## 17. Build plan
 Status: done, partial, open, paused or later. Each step is committed when it works and adds to the guide when it changes what the owner sees.
 
+**The first slice** comes before anything else and cuts across items 3–6, 11 and 12: the kernel, Ledger with saving and undo, the to-do app from `docs/api.md` and a minimal Specimen. It is done when the to-do app runs in a window on the grid; undo works, field typing included; the app reopens where it was left; `Remove` works from a row, from a keymap sequence and from the palette through its subject; one effect (export to a file) brings its result back as a command; and Specimen shows the app's named states. The laws for the grid, the frame budget, no allocation per frame and idle start with it.
+
 ### 17.1 Foundations
 1. **Partial.** The documents: `AGENTS.md`, this spec, the guide's first page and `docs/api.md`. Open: the owner's reading and adjustment.
-2. **Open.** The code we want to write (`docs/api.md`) approved by the owner: a to-do app, Galley's editor screen and Ticker's main screen, readable top to bottom.
+2. **Partial.** The code we want to write (`docs/api.md`): a to-do app, Galley's editor screen, Ticker's main screen and Lightbox's GPU box, revised after two rounds of review. Open: the owner's approval.
 3. **Open.** The workspace: a crate per unit (a core crate without the kernel where the unit has one), `apps/`, the lints (no `unsafe`), and the recipes for recurring jobs.
 
 ### 17.2 DK-01 Kernel

@@ -45,6 +45,7 @@ struct Palette {
 /// A command named by a key, the palette or the bar, once its subjects are filled in.
 enum Target<C> {
     Builtin(Builtin),
+    Host(usize),
     One(C),
     Many(Vec<C>),
     Refused(Option<C>, Message),
@@ -112,6 +113,14 @@ struct Job<C> {
     reply: fn(Result<Path, Failure>) -> C,
 }
 
+/// A command the host around the app adds to its window, such as Specimen's "Show “Empty”". It shows in the bar and the palette beside the app's own; the host learns it was chosen through `Runner::asked`.
+#[derive(Clone, Debug)]
+pub struct Extra {
+    pub name: String,
+    pub label: String,
+    pub available: Available,
+}
+
 /// Runs an app in a window: builds its tree from the facts, lays it out, keeps its quads and turns input into commands.
 pub struct Runner<A: App> {
     pub facts: A,
@@ -152,6 +161,9 @@ pub struct Runner<A: App> {
     replaying: bool,
     effects: Vec<Effect<A::Cmd>>,
     jobs: Vec<Job<A::Cmd>>,
+    extras: Vec<Extra>,
+    asked: Option<usize>,
+    hold: bool,
 }
 
 impl<A: App> Runner<A> {
@@ -197,6 +209,9 @@ impl<A: App> Runner<A> {
             replaying: false,
             effects: Vec::new(),
             jobs: Vec::new(),
+            extras: Vec::new(),
+            asked: None,
+            hold: false,
         }
     }
 
@@ -269,6 +284,10 @@ impl<A: App> Runner<A> {
             self.tree.nodes[a as usize].keys = self.tree.put(&keys);
             self.put_target(a, target, entry.name);
         }
+        for e in 0..self.extras.len() {
+            let a = self.tree.add(bar, Kind::Action, Some(Id::ROOT.mix(9).mix(e as u64)), std::panic::Location::caller());
+            self.put_target(a, Target::Host(e), "");
+        }
         for b in [Builtin::Undo, Builtin::Redo, Builtin::Palette] {
             let a = self.tree.add(bar, Kind::Action, Some(Id::ROOT.mix(5).mix(b as u64)), std::panic::Location::caller());
             let keys = self.builtin_keys(b);
@@ -318,10 +337,13 @@ impl<A: App> Runner<A> {
             let label = match &target {
                 Target::One(c) | Target::Refused(Some(c), _) => c.label_string(&self.facts, Form::Long),
                 Target::Many(cs) => cs.first().map(|c| c.label_string(&self.facts, Form::Many(cs.len()))).unwrap_or_default(),
-                Target::Refused(None, _) | Target::Builtin(_) => title(entry.name),
+                Target::Refused(None, _) | Target::Builtin(_) | Target::Host(_) => title(entry.name),
             };
             let keys = self.keymap.keys_for(entry.name).map(keys::label).unwrap_or_default();
             found.push((label, target, keys));
+        }
+        for (e, extra) in self.extras.iter().enumerate() {
+            found.push((extra.label.clone(), Target::Host(e), String::new()));
         }
         for b in Builtin::ALL {
             if b != Builtin::Palette {
@@ -346,6 +368,18 @@ impl<A: App> Runner<A> {
     fn put_target(&mut self, node: u32, target: Target<A::Cmd>, fallback: &str) {
         match target {
             Target::Builtin(b) => self.tree.nodes[node as usize].builtin = Some(b),
+            Target::Host(e) => {
+                let extra = &self.extras[e];
+                let (label, available) = (extra.label.clone(), extra.available.clone());
+                let r = self.tree.put(&label);
+                let n = &mut self.tree.nodes[node as usize];
+                (n.host, n.text, n.name) = (e as u32, r, r);
+                if let Available::No(reason) = available {
+                    let r = self.tree.put(reason.as_str());
+                    let n = &mut self.tree.nodes[node as usize];
+                    (n.reason, n.enabled) = (r, false);
+                }
+            }
             Target::One(cmd) => self.push_command(node, cmd),
             Target::Many(mut cmds) => {
                 self.tree.nodes[node as usize].many = cmds.len() as u32;
@@ -571,6 +605,9 @@ impl<A: App> Runner<A> {
         if let Some(b) = Builtin::find(name) {
             return Target::Builtin(b);
         }
+        if let Some(e) = self.extras.iter().position(|x| x.name == name) {
+            return Target::Host(e);
+        }
         match A::Cmd::entries().iter().position(|e| e.name == name && !e.internal) {
             Some(e) => self.target(e, here),
             None => Target::Refused(None, Message::plain(format!("No command is called “{name}”"))),
@@ -687,7 +724,10 @@ impl<A: App> Runner<A> {
         }
         self.counter = cx.counter;
         self.said = cx.said.pop();
-        if !self.replaying {
+        if self.hold && !cx.effects.is_empty() {
+            let asked: Vec<String> = cx.effects.iter().map(|e| format!("{e:?}")).collect();
+            self.said = Some(Said::Note(Message::plain(format!("Specimen didn't run what the app asked for: {}", asked.join(", then ")))));
+        } else if !self.replaying {
             self.effects.append(&mut cx.effects);
         }
         if cfg!(debug_assertions) && !changed && !ops.is_empty() {
@@ -1040,6 +1080,33 @@ impl<A: App> Runner<A> {
         }
     }
 
+    /// Adds the host's own commands to the window.
+    pub fn host(&mut self, extras: Vec<Extra>) {
+        self.extras = extras;
+        self.stale = true;
+    }
+
+    /// Which of the host's commands was chosen since the last call.
+    pub fn asked(&mut self) -> Option<usize> {
+        self.asked.take()
+    }
+
+    /// Keeps effects instead of running them: Specimen shows what the app asked for, and no panel opens.
+    pub fn hold_effects(&mut self) {
+        self.hold = true;
+    }
+
+    fn ask(&mut self, e: usize) -> bool {
+        match self.extras.get(e).map(|x| x.available.clone()) {
+            Some(Available::No(reason)) => self.say(reason),
+            Some(Available::Yes) => {
+                self.asked = Some(e);
+                true
+            }
+            None => false,
+        }
+    }
+
     fn marks(&self) -> Vec<(Id, u128, u32)> {
         self.tree.lists.iter().filter_map(|l| Some((self.tree.nodes[l.node as usize].id, l.focused?, l.focus_index?))).collect()
     }
@@ -1075,6 +1142,7 @@ impl<A: App> Runner<A> {
         let here = self.here();
         match self.named(name, &here) {
             Target::Builtin(b) => self.builtin(b),
+            Target::Host(e) => self.ask(e),
             Target::One(cmd) => {
                 self.run(cmd);
                 true
@@ -1092,6 +1160,9 @@ impl<A: App> Runner<A> {
         }
         if let Some(b) = n.builtin {
             return self.builtin(b);
+        }
+        if n.host != NONE {
+            return self.ask(n.host as usize);
         }
         if n.cmd == NONE {
             return false;

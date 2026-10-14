@@ -171,6 +171,7 @@ pub struct Node {
     pub hash: u64,
     pub keys: Range32,
     pub builtin: Option<Builtin>,
+    pub host: u32,
     pub list: u32,
     pub many: u32,
     pub at: &'static Location<'static>,
@@ -198,6 +199,7 @@ impl Node {
             hash: 0,
             keys: Range32::default(),
             builtin: None,
+            host: NONE,
             list: NONE,
             many: 0,
             at,
@@ -344,6 +346,7 @@ impl<C> Tree<C> {
         n.span.hash(&mut h);
         n.enabled.hash(&mut h);
         n.builtin.hash(&mut h);
+        n.host.hash(&mut h);
         n.many.hash(&mut h);
         self.text[n.keys.start as usize..n.keys.end as usize].hash(&mut h);
         self.text[n.reason.start as usize..n.reason.end as usize].hash(&mut h);

@@ -246,6 +246,14 @@ impl<A: App> Face for Specimen<A> {
         }
     }
 
+    fn changes(&self) -> Option<kernel::Moment> {
+        match self.showing() {
+            Showing::Screen => self.screens[self.state].changes(),
+            Showing::Changes => self.changes.changes(),
+            Showing::Catalog => self.catalog.changes(),
+        }
+    }
+
     fn kept(&mut self) -> Option<&mut Kept> {
         self.face().kept()
     }

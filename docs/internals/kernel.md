@@ -63,7 +63,7 @@ The app's facts are plain Rust values that live on the main thread. A command re
 
 A frame that only changes how something looks (the pointer moved onto a button, a press, focus moving) skips steps 6–8: the tree is the same, so only the nodes whose interaction state changed are repainted.
 
-Frames come only from input, a commit, a live value, a finished job or derived value, a resize, or a change of appearance. There is no timer anywhere in the loop. The caret does not blink (spec §4.5: no time-based animation; idle is zero).
+Frames come only from input, a commit, a live value, a finished job or derived value, a resize, or a change of appearance. The only timer in the loop is for dates written as how long ago, and it fires only when one would read differently (`docs/internals/shell.md`). The caret does not blink (spec §4.5: no time-based animation; idle is zero).
 
 ## 4. Facts
 

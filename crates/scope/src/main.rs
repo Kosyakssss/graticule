@@ -164,6 +164,10 @@ impl Face for Window {
         self.runner.minimum()
     }
 
+    fn changes(&self) -> Option<kernel::Moment> {
+        self.runner.changes()
+    }
+
     fn kept(&mut self) -> Option<&mut Kept> {
         self.runner.kept()
     }

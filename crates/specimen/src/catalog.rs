@@ -160,6 +160,7 @@ pub enum Component {
     Empty,
     Swatch,
     Picture,
+    Value,
     Row,
     Columns,
     Bar,
@@ -169,7 +170,7 @@ pub enum Component {
 }
 
 impl Component {
-    const ALL: [Component; 16] = [
+    const ALL: [Component; 17] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -182,6 +183,7 @@ impl Component {
         Component::Empty,
         Component::Swatch,
         Component::Picture,
+        Component::Value,
         Component::Bar,
         Component::Status,
         Component::Message,
@@ -200,6 +202,7 @@ impl Component {
             Component::Empty => "Empty",
             Component::Swatch => "Swatch",
             Component::Picture => "Picture",
+            Component::Value => "Values",
             Component::Row => "Row",
             Component::Columns => "Columns",
             Component::Bar => "Action bar",
@@ -221,6 +224,7 @@ impl Component {
             Component::Empty => include_str!("../../../docs/components/empty.md"),
             Component::Swatch => include_str!("../../../docs/components/swatch.md"),
             Component::Picture => include_str!("../../../docs/components/picture.md"),
+            Component::Value => include_str!("../../../docs/components/value.md"),
             Component::Row => include_str!("../../../docs/components/row.md"),
             Component::Columns => include_str!("../../../docs/components/columns.md"),
             Component::Bar => include_str!("../../../docs/components/bar.md"),
@@ -231,7 +235,7 @@ impl Component {
     }
 
     fn awkward(self) -> bool {
-        matches!(self, Component::Text | Component::Button | Component::Link | Component::Check)
+        matches!(self, Component::Text | Component::Button | Component::Link | Component::Check | Component::Value)
     }
 }
 
@@ -596,6 +600,20 @@ impl Catalog {
                 ui.text("One row tall, beside text");
                 ui.picture(&kernel::icons::STAR).height(3);
             }),
+            Component::Value => {
+                ui.row(|ui| {
+                    ui.count(1284);
+                    ui.date(kernel::Moment(1_780_308_000_000));
+                    ui.version("0.4.1");
+                    ui.state("offline", Ink::Danger);
+                });
+                ui.row(|ui| {
+                    ui.product("DK-01");
+                    ui.code("is:unread");
+                    ui.mode("rows");
+                });
+                ui.error("Couldn't reach the server");
+            }
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);
@@ -618,6 +636,10 @@ fn awkward<S: Copy + 'static>(ui: &mut Ui<Cmd, S>, component: Component, sample:
         Component::Check => {
             ui.check(&sample.text, false, Cmd::Echo(sample.id));
         }
+        Component::Value => ui.row(|ui| {
+            ui.state(&sample.text, Ink::Ok);
+            ui.code(&sample.text);
+        }),
         _ => {}
     }
 }

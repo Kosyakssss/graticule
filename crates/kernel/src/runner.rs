@@ -24,6 +24,7 @@ use crate::shell::{Button, Face, Frame, Input, Mods, Seen, Waker};
 use crate::text::Text;
 use crate::tree::{Id, Kind, ListInfo, NONE, Range32, Tree};
 use crate::ui::{Scroll, Scrolls, Ui};
+use crate::value::{Calendar, Dates};
 
 const CHOICES: usize = 12;
 const PALETTE: Id = Id(0x9a1e_77e5_0000_0001);
@@ -175,6 +176,7 @@ pub struct Runner<A: App> {
     switch: Option<Switch>,
     offered: Offered,
     offered_problem: Option<String>,
+    calendar: Calendar,
 }
 
 impl<A: App> Runner<A> {
@@ -229,6 +231,7 @@ impl<A: App> Runner<A> {
             switch: None,
             offered: Offered::default(),
             offered_problem: None,
+            calendar: Calendar::default(),
         }
     }
 
@@ -256,6 +259,10 @@ impl<A: App> Runner<A> {
 
     /// Builds the tree from the facts: the app's view, the palette when it is open, then the window's own lines, then every label and availability filled in.
     pub fn build(&mut self) {
+        if self.calendar.live {
+            self.calendar.now = Moment::now();
+        }
+        self.tree.calendar = self.calendar.clone();
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
@@ -659,6 +666,8 @@ impl<A: App> Runner<A> {
             Builtin::SystemAppearance if self.offered.appearance == Choice::System => Available::No(Message::from("The system's appearance is followed already")),
             Builtin::NextTheme if self.offered.themes < 2 => Available::No(Message::from("There is only one theme")),
             Builtin::NextStyle if self.offered.styles < 2 => Available::No(Message::from("There is only one style")),
+            Builtin::AbsoluteDates if self.offered.dates == Dates::Absolute => Available::No(Message::from("Dates are written as the day and time already")),
+            Builtin::RelativeDates if self.offered.dates == Dates::Relative => Available::No(Message::from("Dates are written as how long ago already")),
             _ => Available::Yes,
         }
     }
@@ -1250,7 +1259,7 @@ impl<A: App> Runner<A> {
             Builtin::Undo | Builtin::Redo => self.undo(b == Builtin::Undo),
             Builtin::Next | Builtin::Previous => self.cycle(b == Builtin::Next),
             Builtin::Cancel => self.cancel(),
-            Builtin::LightAppearance | Builtin::DarkAppearance | Builtin::SystemAppearance | Builtin::NextTheme | Builtin::NextStyle => {
+            Builtin::LightAppearance | Builtin::DarkAppearance | Builtin::SystemAppearance | Builtin::NextTheme | Builtin::NextStyle | Builtin::AbsoluteDates | Builtin::RelativeDates => {
                 self.switch = b.switch();
                 true
             }
@@ -1776,6 +1785,10 @@ impl<A: App> Face for Runner<A> {
     }
 
     fn offered(&mut self, looks: &Looks) {
+        if !self.calendar.live || self.calendar.dates != looks.dates {
+            self.calendar = Calendar::live(looks.dates);
+            self.stale = true;
+        }
         let offered = looks.offered();
         if offered != self.offered {
             self.offered = offered;
@@ -1793,6 +1806,10 @@ impl<A: App> Face for Runner<A> {
 
     fn minimum(&self) -> Option<(i32, i32)> {
         self.minimum
+    }
+
+    fn changes(&self) -> Option<Moment> {
+        self.tree.changes.filter(|_| self.calendar.live)
     }
 
     fn access(&mut self, m: Metrics, title: &str) -> Option<accesskit::TreeUpdate> {
@@ -1894,6 +1911,10 @@ impl<A: App> Face for Runner<A> {
             Input::Woken => {
                 self.collect();
                 self.slice(Slice::Time(SLICE));
+                true
+            }
+            Input::Clock => {
+                self.stale = true;
                 true
             }
             Input::Resized => true,

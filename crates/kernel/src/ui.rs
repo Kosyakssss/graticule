@@ -5,10 +5,12 @@ use std::panic::Location;
 
 use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
+use crate::app::Moment;
 use crate::ink::Ink;
 use crate::message::Message;
 use crate::picture::Picture;
 use crate::tree::{Id, Kind, ListInfo, NONE, Span, Tone, Tree};
+use crate::value::{Integer, Value, grouped};
 
 const CHECK_MIN: i32 = 12;
 
@@ -197,6 +199,65 @@ impl<'a, C, S> Ui<'a, C, S> {
         let r = self.tree.put(picture.label);
         self.tree.nodes[i as usize].text = r;
         Placed { ui: self, node: i }
+    }
+
+    /// A count, in the monospace face with its thousands grouped: 1,284.
+    #[track_caller]
+    pub fn count(&mut self, n: impl Integer) {
+        self.value(Value::Count, &grouped(n), Location::caller());
+    }
+
+    /// A moment, written the one way every date is written: as the day and time, or as how long ago, by the user's one setting.
+    #[track_caller]
+    pub fn date(&mut self, at: Moment) {
+        let (text, changes) = self.tree.calendar.write(at);
+        if let Some(c) = changes {
+            self.tree.changes = Some(self.tree.changes.map_or(c, |t| t.min(c)));
+        }
+        self.value(Value::Date, &text, Location::caller());
+    }
+
+    /// A version, like `0.4.1`, in a dotted box.
+    #[track_caller]
+    pub fn version(&mut self, version: impl AsRef<str>) {
+        self.value(Value::Version, version.as_ref(), Location::caller());
+    }
+
+    /// What state something is in, like `draft` or `offline`, filled with `ink`: one of the inks text is written in, such as `Ink::Ok`, `Ink::Warn` or `Ink::Danger`. A badge: it says what something is, never what to do.
+    #[track_caller]
+    pub fn state(&mut self, state: impl AsRef<str>, ink: Ink) {
+        let ink = if ink.needs().is_some() { ink } else { Ink::Ink };
+        self.value(Value::State(ink), &state.as_ref().to_uppercase(), Location::caller());
+    }
+
+    /// A product's code, like `DK-01`, in a heavy box.
+    #[track_caller]
+    pub fn product(&mut self, code: impl AsRef<str>) {
+        self.value(Value::Product, &code.as_ref().to_uppercase(), Location::caller());
+    }
+
+    /// A piece of code or a query, like `is:unread`, on the field's surface.
+    #[track_caller]
+    pub fn code(&mut self, code: impl AsRef<str>) {
+        self.value(Value::Code, code.as_ref(), Location::caller());
+    }
+
+    /// The mode something is in, like `rows`, muted and underlined.
+    #[track_caller]
+    pub fn mode(&mut self, mode: impl AsRef<str>) {
+        self.value(Value::Mode, mode.as_ref(), Location::caller());
+    }
+
+    /// What went wrong, in the danger ink.
+    #[track_caller]
+    pub fn error(&mut self, text: impl AsRef<str>) {
+        self.value(Value::Error, text.as_ref(), Location::caller());
+    }
+
+    fn value(&mut self, value: Value, text: &str, at: &'static Location<'static>) {
+        let i = self.add(Kind::Value { value }, at);
+        let r = self.tree.put(text);
+        self.tree.nodes[i as usize].text = r;
     }
 
     fn text_as(&mut self, text: &str, mono: bool, tone: Tone, at: &'static Location<'static>) {

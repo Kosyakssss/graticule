@@ -1,0 +1,23 @@
+window		0 0 55 15	
+  page	Values	0 0 55 7	
+    list		2 3 51 3	29 items
+      list item		2 3 49 3	
+        text	Each kind of value has one look, used everywhere, so a reader knows what a thing is before reading it. A count and a date are data, in the monospace face. A version, a state, a product code, a piece of code and a mode each sit in a box one column wider than the text. These boxed values are badges: they say what something is and never what to do, so clicking one does nothing. What you can act on is a button or a link.	2 3 49 3	
+  alert		2 7 51 1	
+  status		2 8 51 1	
+  toolbar		2 9 51 6	
+    button	Press	2 9 7 1	
+    button	Follow the link	11 9 13 1	
+    button	Tick or untick the box	26 9 18 1	
+    button	Say it	46 9 7 1	unavailable (Type something first)
+    button	Back to all components	2 10 20 1	
+    button	Change the light appearance	24 10 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	2 11 24 1	
+    button	Use the next weight of lines	28 11 23 1	
+    button	Deepen the shadow	2 12 17 1	
+    button	Make the shadow shallower	21 12 23 1	
+    button	Use the other check mark	2 13 22 1	
+    button	Save the theme and the style	26 13 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	2 14 13 1	unavailable (Nothing to undo)
+    button	Redo	17 14 19 1	unavailable (Nothing to redo)
+    button	Open the palette	38 14 15 1	

@@ -4,6 +4,7 @@ use std::sync::LazyLock;
 
 use crate::ink::{Appearance, Ink, Theme, contrast, oklch};
 use crate::metrics::Metrics;
+use crate::value::Dates;
 
 /// A color as OKLCH: lightness from 0 to 1, chroma, and hue in degrees.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -331,6 +332,7 @@ pub enum Switch {
     Appearance(Choice),
     NextTheme,
     NextStyle,
+    Dates(Dates),
 }
 
 /// Every theme and style there is, the built-in ones and the user's own files, and which of them the user chose.
@@ -341,13 +343,15 @@ pub struct Looks {
     pub theme: usize,
     pub style: usize,
     pub appearance: Choice,
+    /// How every app writes dates.
+    pub dates: Dates,
     /// Files that couldn't be read, each with what is wrong.
     pub problems: Vec<String>,
 }
 
 impl Default for Looks {
     fn default() -> Looks {
-        Looks { themes: THEMES.clone(), styles: STYLES.clone(), theme: 0, style: 0, appearance: Choice::System, problems: Vec::new() }
+        Looks { themes: THEMES.clone(), styles: STYLES.clone(), theme: 0, style: 0, appearance: Choice::System, dates: Dates::Absolute, problems: Vec::new() }
     }
 }
 
@@ -397,6 +401,7 @@ impl Looks {
                         _ => Choice::System,
                     }
                 }
+                "dates" => self.dates = if value == "relative" { Dates::Relative } else { Dates::Absolute },
                 _ => {}
             }
         }
@@ -409,7 +414,8 @@ impl Looks {
             Choice::Light => "light",
             Choice::Dark => "dark",
         };
-        format!("theme = {}\nstyle = {}\nappearance = {appearance}\n", self.themes[self.theme].name, self.styles[self.style].name)
+        let dates = if self.dates == Dates::Relative { "relative" } else { "absolute" };
+        format!("theme = {}\nstyle = {}\nappearance = {appearance}\ndates = {dates}\n", self.themes[self.theme].name, self.styles[self.style].name)
     }
 
     /// The look to draw in, given the system's appearance.
@@ -427,6 +433,7 @@ impl Looks {
             Switch::Appearance(c) => self.appearance = c,
             Switch::NextTheme => self.theme = (self.theme + 1) % self.themes.len(),
             Switch::NextStyle => self.style = (self.style + 1) % self.styles.len(),
+            Switch::Dates(d) => self.dates = d,
         }
     }
 }
@@ -437,11 +444,12 @@ pub struct Offered {
     pub appearance: Choice,
     pub themes: usize,
     pub styles: usize,
+    pub dates: Dates,
 }
 
 impl Looks {
     pub fn offered(&self) -> Offered {
-        Offered { appearance: self.appearance, themes: self.themes.len(), styles: self.styles.len() }
+        Offered { appearance: self.appearance, themes: self.themes.len(), styles: self.styles.len(), dates: self.dates }
     }
 }
 

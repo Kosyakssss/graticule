@@ -1,6 +1,7 @@
 use crate::keys::{Chord, Key};
 use crate::look::{Choice, Switch};
 use crate::shell::Mods;
+use crate::value::Dates;
 
 /// The kernel's own commands. They sit in the registry beside the app's, so they show in the palette and which-key with labels and reasons; the platform's conventions bind them, and a keymap file can bind them too, by name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -23,10 +24,12 @@ pub enum Builtin {
     SystemAppearance,
     NextTheme,
     NextStyle,
+    AbsoluteDates,
+    RelativeDates,
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 18] = [
+    pub const ALL: [Builtin; 20] = [
         Builtin::Palette,
         Builtin::Undo,
         Builtin::Redo,
@@ -45,6 +48,8 @@ impl Builtin {
         Builtin::SystemAppearance,
         Builtin::NextTheme,
         Builtin::NextStyle,
+        Builtin::AbsoluteDates,
+        Builtin::RelativeDates,
     ];
 
     pub fn name(self) -> &'static str {
@@ -67,6 +72,8 @@ impl Builtin {
             Builtin::SystemAppearance => "system-appearance",
             Builtin::NextTheme => "next-theme",
             Builtin::NextStyle => "next-style",
+            Builtin::AbsoluteDates => "absolute-dates",
+            Builtin::RelativeDates => "relative-dates",
         }
     }
 
@@ -90,6 +97,8 @@ impl Builtin {
             Builtin::SystemAppearance => "Follow the system's appearance",
             Builtin::NextTheme => "Use the next theme",
             Builtin::NextStyle => "Use the next style",
+            Builtin::AbsoluteDates => "Write dates as the day and time",
+            Builtin::RelativeDates => "Write dates as how long ago",
         }
     }
 
@@ -152,7 +161,14 @@ impl Builtin {
                 const K: &[Chord] = &[c(Key::Escape, false, false)];
                 K
             }
-            Builtin::Palette | Builtin::LightAppearance | Builtin::DarkAppearance | Builtin::SystemAppearance | Builtin::NextTheme | Builtin::NextStyle => &[],
+            Builtin::Palette
+            | Builtin::LightAppearance
+            | Builtin::DarkAppearance
+            | Builtin::SystemAppearance
+            | Builtin::NextTheme
+            | Builtin::NextStyle
+            | Builtin::AbsoluteDates
+            | Builtin::RelativeDates => &[],
         }
     }
 
@@ -169,6 +185,8 @@ impl Builtin {
             Builtin::SystemAppearance => Some(Switch::Appearance(Choice::System)),
             Builtin::NextTheme => Some(Switch::NextTheme),
             Builtin::NextStyle => Some(Switch::NextStyle),
+            Builtin::AbsoluteDates => Some(Switch::Dates(Dates::Absolute)),
+            Builtin::RelativeDates => Some(Switch::Dates(Dates::Relative)),
             _ => None,
         }
     }

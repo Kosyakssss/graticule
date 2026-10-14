@@ -9,6 +9,7 @@ use crate::picture::Picture;
 use crate::px::Rect;
 use crate::text::{Block, Data, Outline, Paint, SpanStyle};
 use crate::tree::{Kind, Node, Tone, Tree};
+use crate::value::Value;
 
 /// How the pointer and the keyboard are touching a node right now. Changing it repaints the node without building the tree again.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -336,6 +337,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             border(p, r, t, rule);
         }
         (Layer::Over, Kind::Picture { picture, .. }) => draw_picture(p, p.rect(n.area), picture, None),
+        (Layer::Over, Kind::Value { value }) => typed(p, &n, value, text),
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);
@@ -376,4 +378,70 @@ pub fn draw_picture(p: &mut Painter, r: Rect, picture: &'static Picture, tint: O
         let outline = Outline { path: Data::Svg(layer.path), stroke: None, even_odd: layer.even_odd, scale };
         p.text.shape(p.quads, key, outline, Paint { origin, limit: None, colors: &[color], clip });
     }
+}
+
+fn dotted(p: &mut Painter, r: Rect, t: f32, color: Color) {
+    let step = t * 4.0;
+    let mut x = r.x;
+    while x < r.right() {
+        let w = (t * 2.0).min(r.right() - x);
+        p.fill(Rect::new(x, r.y, w, t), color);
+        p.fill(Rect::new(x, r.bottom() - t, w, t), color);
+        x += step;
+    }
+    let mut y = r.y;
+    while y < r.bottom() {
+        let h = (t * 2.0).min(r.bottom() - y);
+        p.fill(Rect::new(r.x, y, t, h), color);
+        p.fill(Rect::new(r.right() - t, y, t, h), color);
+        y += step;
+    }
+}
+
+/// Draws a typed value in its one look: plain for a count and an error, in a box one column wider than its text for the rest.
+fn typed(p: &mut Painter, n: &Node, value: Value, text: &str) {
+    let theme = p.theme;
+    if !value.boxed() {
+        let (mono, color) = if value == Value::Count { (true, theme.ink) } else { (false, theme.danger) };
+        wrapped(p, n.area, text, mono, 400.0, color);
+        return;
+    }
+    let cell = p.rect(n.area);
+    let inset = (p.m.cell_h * 0.1).round();
+    let cols = n.area.cols.min(text.chars().count() as i32 + 1);
+    let r = Rect::new(cell.x, cell.y + inset, cols as f32 * p.m.cell_w, p.m.cell_h - inset * 2.0);
+    let t = p.style.line(p.m);
+    let mono = p.m.mono();
+    let strong = crate::text::TextStyle { weight: 600.0, ..mono };
+    let (style, color) = match value {
+        Value::Date => {
+            p.fill(r, theme.link);
+            (mono, theme.bg)
+        }
+        Value::State(ink) => {
+            p.fill(r, theme.get(ink));
+            (strong, theme.bg)
+        }
+        Value::Version => {
+            dotted(p, r, t, theme.muted);
+            (mono, theme.ink)
+        }
+        Value::Product => {
+            border(p, r, t * 2.0, theme.ink);
+            (strong, theme.ink)
+        }
+        Value::Code => {
+            p.fill(r, theme.field);
+            (mono, theme.ink)
+        }
+        Value::Mode => {
+            p.fill(Rect::new(r.x, r.bottom() - t, r.w, t), theme.muted);
+            (mono, theme.muted)
+        }
+        Value::Count | Value::Error => (mono, theme.ink),
+    };
+    let w = p.measure(text, style);
+    let room = r.w - p.m.cell_w;
+    let x = if w > room { r.x + p.m.cell_w / 2.0 } else { (r.x + (r.w - w) / 2.0).round() };
+    p.text(text, style, (x, cell.y), Some(room.max(0.0)), color);
 }

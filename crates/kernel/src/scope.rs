@@ -25,11 +25,12 @@ pub enum Cause {
     Woken,
     Assistive,
     Uncovered,
+    Clock,
 }
 
 impl Cause {
-    pub const ALL: [Cause; 11] =
-        [Cause::Launch, Cause::Key, Cause::Typing, Cause::Pointer, Cause::Click, Cause::Wheel, Cause::Resize, Cause::Appearance, Cause::Woken, Cause::Assistive, Cause::Uncovered];
+    pub const ALL: [Cause; 12] =
+        [Cause::Launch, Cause::Key, Cause::Typing, Cause::Pointer, Cause::Click, Cause::Wheel, Cause::Resize, Cause::Appearance, Cause::Woken, Cause::Assistive, Cause::Uncovered, Cause::Clock];
 
     /// The cause in words, as Scope shows it.
     pub fn name(self) -> &'static str {
@@ -41,10 +42,11 @@ impl Cause {
             Cause::Click => "a click",
             Cause::Wheel => "scrolling",
             Cause::Resize => "a resize",
-            Cause::Appearance => "the look changing: the appearance, the theme or the style",
+            Cause::Appearance => "the look changing: the appearance, the theme, the style or how dates are written",
             Cause::Woken => "a thread waking it",
             Cause::Assistive => "an assistive tool",
             Cause::Uncovered => "the window being uncovered",
+            Cause::Clock => "a date written as how long ago changing",
         }
     }
 

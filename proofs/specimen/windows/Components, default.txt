@@ -1,7 +1,7 @@
 window		0 0 120 30	
   page	Components	0 0 120 25	
     text	Every component in its default form, live: click it, type into it, use it from the keyboard. Open one for its page.	2 3 116 1	muted
-    list		2 5 116 19	16 items
+    list		2 5 116 19	17 items
       list item		2 5 114 1	
         group		2 5 114 1	
           column		2 5 14 1	
@@ -117,38 +117,39 @@ window		0 0 120 30
               image	Star	44 16 8 3	
           column		110 16 6 1	
             link	Open	110 16 4 1	
-      list item		2 19 114 1	
-        group		2 19 114 1	
+      list item		2 19 114 3	
+        group		2 19 114 3	
           column		2 19 14 1	
-            text	Action bar	2 19 14 1	
-          column		18 19 90 1	
-            text	At the bottom of this window	18 19 90 1	muted
+            text	Values	2 19 14 1	
+          column		18 19 90 3	
+            group		18 19 90 1	
+              value	1,284	18 19 5 1	
+              value	2026-06-01 10:00	25 19 17 1	
+              value	0.4.1	44 19 6 1	
+              value	OFFLINE	52 19 8 1	
+            group		18 20 90 1	
+              value	DK-01	18 20 6 1	
+              value	is:unread	26 20 10 1	
+              value	rows	38 20 5 1	
+            value	Couldn't reach the server	18 21 90 1	
           column		110 19 6 1	
             link	Open	110 19 4 1	
-      list item		2 20 114 1	
-        group		2 20 114 1	
-          column		2 20 14 1	
-            text	Status line	2 20 14 1	
-          column		18 20 90 1	
-            text	Just above the bar: hover over something	18 20 90 1	muted
-          column		110 20 6 1	
-            link	Open	110 20 4 1	
-      list item		2 21 114 1	
-        group		2 21 114 1	
-          column		2 21 14 1	
-            text	Message line	2 21 14 1	
-          column		18 21 90 1	
-            text	Under the page: press the button above	18 21 90 1	muted
-          column		110 21 6 1	
-            link	Open	110 21 4 1	
       list item		2 22 114 1	
         group		2 22 114 1	
           column		2 22 14 1	
-            text	Palette	2 22 14 1	
+            text	Action bar	2 22 14 1	
           column		18 22 90 1	
-            text	Open it from the bar	18 22 90 1	muted
+            text	At the bottom of this window	18 22 90 1	muted
           column		110 22 6 1	
             link	Open	110 22 4 1	
+      list item		2 23 114 1	
+        group		2 23 114 1	
+          column		2 23 14 1	
+            text	Status line	2 23 14 1	
+          column		18 23 90 1	
+            text	Just above the bar: hover over something	18 23 90 1	muted
+          column		110 23 6 1	
+            link	Open	110 23 4 1	
   alert		2 25 116 1	
   status		2 26 116 1	
   toolbar		2 27 116 3	

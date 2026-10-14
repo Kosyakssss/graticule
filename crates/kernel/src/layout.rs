@@ -3,6 +3,7 @@ use crate::metrics::Metrics;
 use crate::picture::Picture;
 use crate::text::{SpanStyle, Text, TextStyle};
 use crate::tree::{Kind, NONE, Tree, Width};
+use crate::value::Value;
 
 pub const GAP: i32 = 2;
 pub const MARGIN: i32 = 2;
@@ -128,6 +129,14 @@ impl<'t> Layout<'t> {
             Kind::Check { .. } => {
                 let label = self.cols(tree.str(n.text), false);
                 (CHECK + 1 + label.min(8), CHECK + 1 + label)
+            }
+            Kind::Value { value: Value::Error } => {
+                let pref = self.cols(tree.str(n.text), false);
+                (pref.min(8), pref)
+            }
+            Kind::Value { value } => {
+                let c = self.cols(tree.str(n.text), true) + i32::from(value.boxed());
+                (c.min(8), c)
             }
             Kind::Field => (16, 32),
             Kind::Swatch { .. } => (SWATCH, SWATCH),
@@ -261,6 +270,8 @@ impl<'t> Layout<'t> {
                 self.wrapped_as(tree.str(n.text), style, cols)
             }
             Kind::Check { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
+            Kind::Value { value: Value::Error } => self.wrapped(tree.str(n.text), false, cols),
+            Kind::Value { .. } => 1,
             Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Link | Kind::Field | Kind::Status | Kind::Note | Kind::Swatch { .. } => 1,
             Kind::Picture { rows, .. } => rows,
             Kind::List { .. } => 3,

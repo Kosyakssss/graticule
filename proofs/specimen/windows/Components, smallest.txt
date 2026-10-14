@@ -1,29 +1,41 @@
-window		0 0 57 18	
-  page	Components	0 0 57 10	
-    text	Every component in its default form, live: click it, type into it, use it from the keyboard. Open one for its page.	2 3 53 2	muted
-    list		2 6 53 3	16 items
-      list item		2 6 51 1	
-        group		2 6 51 1	
+window		0 0 63 18	
+  page	Components	0 0 63 10	
+    text	Every component in its default form, live: click it, type into it, use it from the keyboard. Open one for its page.	2 3 59 2	muted
+    list		2 6 59 3	17 items
+      list item		2 6 57 1	
+        group		2 6 57 1	
           column		2 6 14 1	
             text	Page	2 6 14 1	
-          column		18 6 27 1	
-            text	This whole place is one	18 6 27 1	muted
-          column		47 6 6 1	
-            link	Open	47 6 4 1	
-      list item		2 7 51 1	
-        group		2 7 51 1	
+          column		18 6 33 1	
+            text	This whole place is one	18 6 33 1	muted
+          column		53 6 6 1	
+            link	Open	53 6 4 1	
+      list item		2 7 57 1	
+        group		2 7 57 1	
           column		2 7 14 1	
             text	Row	2 7 14 1	
-          column		18 7 27 1	
-            group		18 7 27 1	
+          column		18 7 33 1	
+            group		18 7 33 1	
               text	Side	18 7 4 1	
               text	by	24 7 2 1	
               text	side	28 7 4 1	
-          column		47 7 6 1	
-            link	Open	47 7 4 1	
-  alert		2 10 53 1	
-  status		2 11 53 1	
-  toolbar		2 12 53 6	
+          column		53 7 6 1	
+            link	Open	53 7 4 1	
+      list item		2 8 57 1	
+        group		2 8 57 1	
+          column		2 8 14 1	
+            text	Columns	2 8 14 1	
+          column		18 8 33 1	
+            group		18 8 33 1	
+              column		18 8 10 1	
+                text	A column	18 8 10 1	
+              column		30 8 21 1	
+                text	and one that fills the rest	30 8 21 1	muted
+          column		53 8 6 1	
+            link	Open	53 8 4 1	
+  alert		2 10 59 1	
+  status		2 11 59 1	
+  toolbar		2 12 59 6	
     button	Press	2 12 7 1	
     button	Follow the link	11 12 13 1	
     button	Tick or untick the box	26 12 18 1	

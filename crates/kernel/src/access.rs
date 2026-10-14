@@ -14,7 +14,7 @@ fn role(kind: Kind) -> Role {
         Kind::Check { .. } => Role::CheckBox,
         Kind::Link => Role::Link,
         Kind::Button | Kind::Action => Role::Button,
-        Kind::Text { .. } => Role::Label,
+        Kind::Text { .. } | Kind::Value { .. } => Role::Label,
         Kind::Bar => Role::Toolbar,
         Kind::Status => Role::Status,
         Kind::Note => Role::Alert,

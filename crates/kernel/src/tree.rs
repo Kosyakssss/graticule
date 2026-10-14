@@ -8,6 +8,7 @@ use crate::builtin::Builtin;
 use crate::grid::Area;
 use crate::ink::Ink;
 use crate::picture::Picture;
+use crate::value::{Calendar, Value};
 
 pub const NONE: u32 = u32::MAX;
 
@@ -107,6 +108,7 @@ pub enum Kind {
     Choice { chosen: bool },
     Swatch { ink: Ink },
     Picture { picture: &'static Picture, rows: i32 },
+    Value { value: Value },
 }
 
 impl Kind {
@@ -140,6 +142,7 @@ impl Kind {
             Kind::Choice { .. } => "option",
             Kind::Swatch { .. } => "swatch",
             Kind::Picture { .. } => "image",
+            Kind::Value { .. } => "value",
         }
     }
 }
@@ -247,11 +250,15 @@ pub struct Tree<C> {
     counts: HashMap<(u64, u32), u32>,
     pub index: HashMap<Id, u32>,
     pub lists: Vec<ListInfo>,
+    /// How dates are written in this tree.
+    pub calendar: Calendar,
+    /// The first moment a date written relative to now would read differently.
+    pub changes: Option<crate::app::Moment>,
 }
 
 impl<C> Default for Tree<C> {
     fn default() -> Self {
-        Self { nodes: Vec::new(), text: String::new(), commands: Vec::new(), counts: HashMap::new(), index: HashMap::new(), lists: Vec::new() }
+        Self { nodes: Vec::new(), text: String::new(), commands: Vec::new(), counts: HashMap::new(), index: HashMap::new(), lists: Vec::new(), calendar: Calendar::default(), changes: None }
     }
 }
 
@@ -263,6 +270,7 @@ impl<C> Tree<C> {
         self.commands.clear();
         self.counts.clear();
         self.index.clear();
+        self.changes = None;
     }
 
     pub fn root(&mut self) -> u32 {

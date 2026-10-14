@@ -64,6 +64,7 @@ pub enum Input {
     Appearance(Appearance),
     Resized,
     Woken,
+    Clock,
 }
 
 pub struct Frame<'a> {
@@ -97,6 +98,10 @@ pub trait Face: 'static {
     fn paint(&mut self, painter: &mut Painter, seen: Seen);
     fn input(&mut self, input: Input, frame: &mut Frame) -> bool;
     fn painted(&mut self, _: &mut Frame) {}
+    /// The moment this face would look different with no input at all: when a date written as how long ago next reads differently. The shell sleeps until then and not a moment sooner.
+    fn changes(&self) -> Option<crate::app::Moment> {
+        None
+    }
     /// The smallest window this face fits in, in cells, once it knows.
     fn minimum(&self) -> Option<(i32, i32)> {
         None
@@ -138,6 +143,7 @@ fn cause(input: &Input) -> Cause {
         Input::Appearance(_) => Cause::Appearance,
         Input::Resized => Cause::Resize,
         Input::Woken => Cause::Woken,
+        Input::Clock => Cause::Clock,
     }
 }
 
@@ -336,6 +342,21 @@ impl<F: Face> Running<F> {
 }
 
 impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
+    fn new_events(&mut self, _: &ActiveEventLoop, cause: winit::event::StartCause) {
+        if let (winit::event::StartCause::ResumeTimeReached { .. }, Some(r)) = (cause, self.running.as_mut()) {
+            r.input(Input::Clock);
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(r) = self.running.as_ref() else { return };
+        let flow = match r.face.changes() {
+            Some(at) => ControlFlow::WaitUntil(Instant::now() + std::time::Duration::from_millis((at.0 - crate::app::Moment::now().0).max(0) as u64)),
+            None => ControlFlow::Wait,
+        };
+        event_loop.set_control_flow(flow);
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.running.is_some() {
             return;

@@ -31,6 +31,7 @@ pub mod shell;
 pub mod text;
 pub mod tree;
 pub mod ui;
+pub mod value;
 
 pub use accesskit;
 pub use app::{App, Cx, Effect, Failure, Moment, Path, Said, States};
@@ -40,6 +41,7 @@ pub use message::Message;
 pub use picture::{Layer, Picture, icons};
 pub use tree::{Fill, Span, cols};
 pub use ui::{Bind, Ui};
+pub use value::{Dates, Integer};
 
 #[cfg(test)]
 mod laws;

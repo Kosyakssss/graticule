@@ -30,6 +30,7 @@ Several names on either side are the same component. They are merged into one ro
 | Empty | EmptyState | NonIdealState | |
 | Swatch | ColorSwatch | | |
 | Picture | Avatar (image part) | Icon | Engraver's pictures and the built-in icons |
+| Values | Badge | | count, date, version, state, product code, code, mode, error (§5.2); a state is the badge |
 | Action bar | Toolbar | | the registry along the bottom |
 | Status line | Tooltip | Tooltip | grounded: a hint, never a floating tip |
 | Message line | Toast | Toast, Toaster | grounded |
@@ -55,7 +56,6 @@ These are drawn from what exists now: boxes, text, pictures, the registry and fo
 | Progress | ProgressBar, ProgressCircle | ProgressBar | a job's progress |
 | Meter | Meter | | a value within a range |
 | Placeholder | Skeleton | Skeleton | rows reserved while data arrives late |
-| Badge | Badge | | says what something is, never what to do (§5.2) |
 | Tag | Chip, Tag, TagGroup | Tag | removable tags are wave 2 |
 | Avatar | Avatar, AvatarGroup | | a person's initials or picture |
 | Callout | Alert | Callout | a boxed message in the page |

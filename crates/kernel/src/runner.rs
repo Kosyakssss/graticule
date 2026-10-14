@@ -1,6 +1,8 @@
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Write as _;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use ledger::{Change, Choose, Edit, ErasedPath, History, Op, Store, Transaction, Value};
 use winit::event::{Ime, KeyEvent};
@@ -17,7 +19,7 @@ use crate::layout::Layout;
 use crate::message::Message;
 use crate::metrics::Metrics;
 use crate::paint::Painter;
-use crate::shell::{Button, Face, Frame, Input, Mods, Seen};
+use crate::shell::{Button, Face, Frame, Input, Mods, Seen, Waker};
 use crate::text::Text;
 use crate::tree::{Id, Kind, ListInfo, NONE, Range32, Tree};
 use crate::ui::{Scroll, Scrolls, Ui};
@@ -74,6 +76,35 @@ enum Keep {
     Store(Store),
 }
 
+/// A command whose bulk changes are still landing: its operations so far, kept as one undo step when the last slice lands.
+struct Background {
+    label: String,
+    gesture: u64,
+    place: Place,
+    ops: Vec<Op>,
+    parts: VecDeque<Part>,
+}
+
+struct Part {
+    bulk: ledger::Bulk,
+    found: Found,
+    next: usize,
+}
+
+enum Found {
+    Searching(mpsc::Receiver<Vec<u128>>),
+    Ready(Vec<u128>),
+}
+
+/// How much of a bulk change one slice applies: as much as fits in a time, or a set number of items, as replays and laws do.
+#[derive(Clone, Copy, Debug)]
+pub enum Slice {
+    Time(Duration),
+    Items(usize),
+}
+
+const SLICE: Duration = Duration::from_micros(300);
+
 /// Runs an app in a window: builds its tree from the facts, lays it out, keeps its quads and turns input into commands.
 pub struct Runner<A: App> {
     pub facts: A,
@@ -109,6 +140,9 @@ pub struct Runner<A: App> {
     ime: bool,
     repairing: bool,
     keep: Keep,
+    background: VecDeque<Background>,
+    waker: Option<Waker>,
+    replaying: bool,
 }
 
 impl<A: App> Runner<A> {
@@ -149,6 +183,9 @@ impl<A: App> Runner<A> {
             ime: false,
             repairing: false,
             keep: Keep::Nothing,
+            background: VecDeque::new(),
+            waker: None,
+            replaying: false,
         }
     }
 
@@ -334,7 +371,7 @@ impl<A: App> Runner<A> {
         for i in 0..self.tree.nodes.len() {
             let n = self.tree.nodes[i];
             if let Some(b) = n.builtin {
-                let label = match (b, self.history.undo_label(), self.history.redo_label()) {
+                let label = match (b, self.undo_label(), self.history.redo_label()) {
                     (Builtin::Undo, Some(step), _) => format!("Undo {step}"),
                     (Builtin::Redo, _, Some(step)) => format!("Redo {step}"),
                     _ => b.label().to_string(),
@@ -399,6 +436,15 @@ impl<A: App> Runner<A> {
                 }
                 _ => Range32::default(),
             }
+        };
+        let range = match self.progress() {
+            Some(progress) => {
+                let start = self.tree.text.len() as u32;
+                let after = self.tree.str(range).to_string();
+                let _ = if after.is_empty() { write!(self.tree.text, "{progress}") } else { write!(self.tree.text, "{progress} · {after}") };
+                Range32 { start, end: self.tree.text.len() as u32 }
+            }
+            None => range,
         };
         self.tree.nodes[self.status as usize].text = range;
         self.tree.hash_node(self.status as usize);
@@ -532,7 +578,8 @@ impl<A: App> Runner<A> {
 
     fn builtin_available(&self, b: Builtin) -> Available {
         match b {
-            Builtin::Undo if self.history.undo_label().is_none() => Available::No(Message::from("Nothing to undo")),
+            Builtin::Undo if self.undo_label().is_none() => Available::No(Message::from("Nothing to undo")),
+            Builtin::Redo if !self.background.is_empty() => Available::No(Message::from("Wait for the change in progress to finish")),
             Builtin::Redo if self.history.redo_label().is_none() => Available::No(Message::from("Nothing to redo")),
             Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::First | Builtin::Last | Builtin::SelectAll if self.tree.lists.is_empty() => {
                 Available::No(Message::from("There is no list here"))
@@ -617,6 +664,7 @@ impl<A: App> Runner<A> {
                 changed |= self.facts.update(cmd, &mut cx).changed();
             }
         }));
+        let deferred = ledger::deferred();
         let mut ops = tx.end();
         self.facts.diff(&before, ErasedPath::ROOT, &mut ops);
         self.stale = true;
@@ -636,8 +684,13 @@ impl<A: App> Runner<A> {
         }
         let pruned = self.prune(&ops);
         ops.extend(pruned);
-        if !ops.is_empty() {
+        if !ops.is_empty() || !deferred.is_empty() {
             self.record(entry, &ops);
+        }
+        if !deferred.is_empty() {
+            let parts = deferred.into_iter().map(|bulk| self.search(bulk)).collect();
+            self.background.push_back(Background { label, gesture, place, ops, parts });
+            return;
         }
         self.history.commit(ops, || label, gesture, place);
         self.repair(marks);
@@ -672,10 +725,16 @@ impl<A: App> Runner<A> {
     /// Runs a command log again, entry by entry, with the keys, times and random numbers each command was given the first time.
     pub fn replay(&mut self, entries: &[Value]) -> bool {
         let repairing = std::mem::replace(&mut self.repairing, true);
+        let replaying = std::mem::replace(&mut self.replaying, true);
         let mut whole = true;
         for entry in entries {
             match entry.field("do") {
                 Some(Value::Str(what)) if what == "undo" || what == "redo" => whole &= self.undo(what == "undo"),
+                Some(Value::Str(what)) if what == "stop" => whole &= self.stop(),
+                Some(Value::Str(what)) if what == "slice" => match entry.field("count") {
+                    Some(Value::UInt(count)) => whole &= self.slice(Slice::Items(*count as usize)),
+                    _ => whole = false,
+                },
                 Some(Value::Str(what)) if what == "command" => {
                     let clock = Clock::of(entry);
                     let cmds = match entry.field("commands") {
@@ -691,6 +750,7 @@ impl<A: App> Runner<A> {
             }
         }
         self.repairing = repairing;
+        self.replaying = replaying;
         whole
     }
 
@@ -707,8 +767,11 @@ impl<A: App> Runner<A> {
     }
 
     fn prune(&mut self, ops: &[Op]) -> Vec<Op> {
-        let mut deleted: Vec<u128> = ops.iter().filter_map(Op::deleted).collect();
-        deleted.retain(|k| !ops.iter().any(|op| matches!(op, Op::Insert { key, .. } if key == k)));
+        let inserted: std::collections::HashSet<u128> = ops.iter().filter_map(|op| match op {
+            Op::Insert { key, .. } => Some(*key),
+            _ => None,
+        }).collect();
+        let deleted: Vec<u128> = ops.iter().filter_map(Op::deleted).filter(|k| !inserted.contains(k)).collect();
         if deleted.is_empty() {
             return Vec::new();
         }
@@ -718,6 +781,12 @@ impl<A: App> Runner<A> {
     }
 
     fn undo(&mut self, back: bool) -> bool {
+        if back && !self.background.is_empty() {
+            return self.stop();
+        }
+        if !back && !self.background.is_empty() {
+            return false;
+        }
         let place = self.place();
         let moved = if back { self.history.undo(&mut self.facts, place) } else { self.history.redo(&mut self.facts) };
         let Some(moved) = moved else { return false };
@@ -769,6 +838,129 @@ impl<A: App> Runner<A> {
         self.replica = store.replica;
         self.counter = self.counter.max(counter);
         self.keep = Keep::Store(store);
+    }
+
+    fn search(&self, mut bulk: ledger::Bulk) -> Part {
+        let Some(search) = bulk.search() else { return Part { bulk, found: Found::Ready(Vec::new()), next: 0 } };
+        if self.replaying {
+            return Part { bulk, found: Found::Ready(search()), next: 0 };
+        }
+        let (send, receive) = mpsc::channel();
+        let waker = self.waker.clone();
+        let started = std::thread::Builder::new().name("graticule job".into()).spawn(move || {
+            let _ = send.send(search());
+            if let Some(waker) = waker {
+                waker.wake();
+            }
+        });
+        match started {
+            Ok(_) => Part { bulk, found: Found::Searching(receive), next: 0 },
+            Err(_) => Part { bulk, found: Found::Ready(Vec::new()), next: 0 },
+        }
+    }
+
+    /// Applies the next slice of the oldest bulk change still landing, and returns whether anything moved. When its last slice lands, the whole change becomes one undo step.
+    pub fn slice(&mut self, slice: Slice) -> bool {
+        let Some(background) = self.background.front_mut() else { return false };
+        let Some(part) = background.parts.front_mut() else { return false };
+        if let Found::Searching(receive) = &part.found {
+            let got = match slice {
+                Slice::Time(_) => receive.try_recv().map_err(|e| e == mpsc::TryRecvError::Disconnected),
+                Slice::Items(_) => receive.recv().map_err(|_| true),
+            };
+            match got {
+                Ok(keys) => part.found = Found::Ready(keys),
+                Err(false) => return false,
+                Err(true) => {
+                    part.found = Found::Ready(Vec::new());
+                    self.said = Some(Said::Failure("A bulk change couldn't search the list, so it changed nothing more".into()));
+                }
+            }
+        }
+        let Found::Ready(keys) = &part.found else { return false };
+        if part.next == 0 {
+            background.ops.reserve(keys.len());
+        }
+        let started = Instant::now();
+        let tx = Transaction::begin();
+        let mut count = 0;
+        match ledger::Field::reach_mut(&mut self.facts, part.bulk.list.steps()) {
+            Some(list) => {
+                while part.next < keys.len() {
+                    match slice {
+                        Slice::Time(budget) if started.elapsed() >= budget => break,
+                        Slice::Items(most) if count >= most => break,
+                        _ => {}
+                    }
+                    part.bulk.change(list, keys[part.next]);
+                    part.next += 1;
+                    count += 1;
+                }
+            }
+            None => part.next = keys.len(),
+        }
+        let finished = part.next >= keys.len();
+        let mut ops = tx.end();
+        if count == 0 && !finished {
+            return false;
+        }
+        let pruned = self.prune(&ops);
+        ops.extend(pruned);
+        self.record(Value::Map(vec![("do".into(), Value::Str("slice".into())), ("count".into(), Value::UInt(count as u64))]), &ops);
+        self.stale = true;
+        let Some(background) = self.background.front_mut() else { return true };
+        background.ops.extend(ops);
+        if finished {
+            background.parts.pop_front();
+        }
+        if background.parts.is_empty()
+            && let Some(done) = self.background.pop_front()
+        {
+            self.history.commit(done.ops, || done.label, done.gesture, done.place);
+        }
+        true
+    }
+
+    /// Lands every bulk change still running, waiting for their searches.
+    pub fn finish(&mut self) {
+        while self.slice(Slice::Items(usize::MAX)) {}
+    }
+
+    fn stop(&mut self) -> bool {
+        let Some(background) = self.background.pop_back() else { return false };
+        let tx = Transaction::begin();
+        for op in background.ops.iter().rev() {
+            let inverse = op.inverse();
+            self.facts.apply(inverse.path().steps(), &inverse);
+        }
+        let ops = tx.end();
+        self.record(Value::Map(vec![("do".into(), Value::Str("stop".into()))]), &ops);
+        self.restore(background.place);
+        self.said = Some(Said::Note(Message::plain(format!("{} was stopped, and nothing changed", background.label))));
+        self.stale = true;
+        true
+    }
+
+    fn undo_label(&self) -> Option<&str> {
+        match self.background.back() {
+            Some(background) => Some(&background.label),
+            None => self.history.undo_label(),
+        }
+    }
+
+    fn progress(&self) -> Option<String> {
+        let background = self.background.front()?;
+        let part = background.parts.front()?;
+        Some(match &part.found {
+            Found::Searching(_) => format!("{}: searching", background.label),
+            Found::Ready(keys) => format!("{}: {} of {}", background.label, part.next, keys.len()),
+        })
+    }
+
+    /// Lets jobs wake the window when their results are ready.
+    pub fn wake_with(mut self, waker: Waker) -> Self {
+        self.waker = Some(waker);
+        self
     }
 
     fn marks(&self) -> Vec<(Id, u128, u32)> {
@@ -1280,6 +1472,9 @@ impl<A: App> Runner<A> {
 
 impl<A: App> Drop for Runner<A> {
     fn drop(&mut self) {
+        if let Keep::Store(_) = &self.keep {
+            self.finish();
+        }
         if let Keep::Store(store) = &self.keep {
             store.place(self.whereabouts());
         }
@@ -1306,6 +1501,11 @@ impl<A: App> Face for Runner<A> {
     }
 
     fn painted(&mut self, frame: &mut Frame) {
+        if self.background.front().and_then(|b| b.parts.front()).is_some_and(|p| matches!(p.found, Found::Ready(_)))
+            && let Some(waker) = &self.waker
+        {
+            waker.wake();
+        }
         let field = if self.palette.is_some() { self.tree.find(PALETTE) } else { self.focused_field() };
         let want = field.is_some();
         if want != self.ime {
@@ -1422,7 +1622,11 @@ impl<A: App> Face for Runner<A> {
                 self.kept.reset();
                 true
             }
-            Input::Resized | Input::Woken => true,
+            Input::Woken => {
+                self.slice(Slice::Time(SLICE));
+                true
+            }
+            Input::Resized => true,
             _ => false,
         }
     }

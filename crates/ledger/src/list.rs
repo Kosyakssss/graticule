@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::bulk::{self, Bulk};
 use crate::journal;
 use crate::key::Key;
 use crate::op::Op;
@@ -12,6 +13,8 @@ use crate::plain::Document;
 use crate::value::Value;
 
 const CHUNK: usize = 512;
+const SEARCH_AT_ONCE: usize = 20_000;
+const REMOVE_AT_ONCE: usize = 200;
 
 /// An ordered list of records, found by key. Its storage is shared in chunks, so a copy for a background job costs about the number of chunks, not the number of items, and it keeps a count of each yes-or-no field of its records, so asking whether any item is done is instant at any size.
 pub struct List<T: Record> {
@@ -214,40 +217,60 @@ impl<T: Record> List<T> {
         Outcome::Changed
     }
 
-    /// Keeps only the records for which `keep` says yes, as one change.
-    pub fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) -> Outcome {
-        let gone: Vec<Key<T>> = self.iter().filter(|r| !keep(r)).map(Record::key).collect();
-        if gone.is_empty() {
-            return Outcome::Nothing;
-        }
-        if gone.len() * 8 < self.len || journal::recording() {
-            for key in gone {
-                let _ = self.remove(key);
+    /// Keeps only the records for which `keep` says yes, as one change. On a list too large to change inside one frame, the search runs in the background and the removals a slice per frame, each record checked again as it goes; the app's code is the same either way.
+    pub fn retain(&mut self, keep: impl Fn(&T) -> bool + Send + Sync + 'static) -> Outcome
+    where
+        T: Send + Sync,
+    {
+        if !journal::recording() {
+            if !self.iter().any(|r| !keep(r)) {
+                return Outcome::Nothing;
             }
+            let kept: Vec<T> = self.iter().filter(|r| keep(r)).cloned().collect();
+            let at = self.at;
+            *self = kept.into_iter().collect();
+            self.at = at;
             return Outcome::Changed;
         }
-        let kept: Vec<T> = self.iter().filter(|r| !gone.contains(&r.key())).cloned().collect();
-        let at = self.at;
-        *self = kept.into_iter().collect();
-        self.at = at;
+        let keep = Arc::new(keep);
+        let gone = if self.len <= SEARCH_AT_ONCE {
+            let gone: Vec<u128> = self.iter().filter(|r| !keep(r)).map(|r| r.key().raw()).collect();
+            if gone.is_empty() {
+                return Outcome::Nothing;
+            }
+            if gone.len() <= REMOVE_AT_ONCE {
+                for key in gone {
+                    let _ = self.remove(Key::from_raw(key));
+                }
+                return Outcome::Changed;
+            }
+            Some(gone)
+        } else {
+            None
+        };
+        let chunks = self.chunks.clone();
+        let check = keep.clone();
+        let search: crate::bulk::Search = match gone {
+            Some(gone) => Box::new(move || gone),
+            None => Box::new(move || chunks.iter().flat_map(|c| c.iter()).filter(|r| !check(r)).map(|r| r.key().raw()).collect()),
+        };
+        bulk::defer(Bulk::new(self.at, search, move |list, key| {
+            let Some(list) = list.downcast_mut::<List<T>>() else { return false };
+            let key = Key::from_raw(key);
+            list.find(key).is_some_and(|r| !keep(r)) && list.remove(key).changed()
+        }));
         Outcome::Changed
     }
 
-    pub fn clear(&mut self) -> Outcome {
+    /// Removes every record, as one change; on a large list, a slice per frame like `retain`.
+    pub fn clear(&mut self) -> Outcome
+    where
+        T: Send + Sync,
+    {
         if self.is_empty() {
             return Outcome::Nothing;
         }
-        if journal::recording() {
-            let keys: Vec<Key<T>> = self.keys().rev().collect();
-            for key in keys {
-                let _ = self.remove(key);
-            }
-        } else {
-            let at = self.at;
-            *self = List::default();
-            self.at = at;
-        }
-        Outcome::Changed
+        self.retain(|_| false)
     }
 
     fn record_path(&self, key: Key<T>) -> ErasedPath {

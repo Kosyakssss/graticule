@@ -23,7 +23,7 @@ pub fn run<A: kernel::App + Default + Send>(title: kernel::Message) {
         return;
     }
     let config = kernel::shell::Config::new(title.as_str());
-    if let Err(e) = kernel::shell::run(config, |_| kernel::runner::Runner::open(&kernel::runner::folder(), A::default)) {
+    if let Err(e) = kernel::shell::run(config, |waker| kernel::runner::Runner::open(&kernel::runner::folder(), A::default).wake_with(waker)) {
         eprintln!("{e}");
         std::process::exit(1);
     }

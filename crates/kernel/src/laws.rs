@@ -339,7 +339,7 @@ mod commands {
     use crate::field::{self, Action, Caret};
     use crate::keys::{Chord, Key as Pressed};
     use crate::message::Message;
-    use crate::runner::Runner;
+    use crate::runner::{Runner, Slice};
     use crate::ui::Ui;
 
     #[derive(Facts, Default)]
@@ -367,6 +367,8 @@ mod commands {
         Finish(#[subject] Key<Item>),
         #[label("Remove “{title}”", many: "Remove {count} items")]
         Remove(#[subject] Key<Item>),
+        #[label("Clear finished")]
+        ClearDone,
         #[internal]
         Edit(Edit),
         #[internal]
@@ -383,6 +385,7 @@ mod commands {
                 Cmd::Finish(item) | Cmd::Remove(item) if !self.items.has(*item) => Available::No(Message::from("That item is gone")),
                 Cmd::Finish(item) => no_if(done(item), Message::from("It is finished already")),
                 Cmd::Remove(item) => no_if(done(item), Message::from("Finished items stay")),
+                Cmd::ClearDone => no_if(!self.items.any(Item::done), Message::from("Nothing is finished")),
                 Cmd::Edit(_) | Cmd::Explode => Available::Yes,
             }
         }
@@ -396,6 +399,7 @@ mod commands {
                 }
                 Cmd::Finish(item) => self.items.change(item, |item| item.done = true),
                 Cmd::Remove(item) => self.items.remove(item),
+                Cmd::ClearDone => self.items.retain(|item| !item.done),
                 Cmd::Edit(edit) => edit.apply(self),
                 Cmd::Explode => {
                     let _ = self.items.push(Item { id: cx.key(), title: "half done".into(), done: false });
@@ -428,6 +432,7 @@ mod commands {
         Press(&'static str),
         Type(char),
         Run(&'static str),
+        Slice(usize),
     }
 
     const KEYS: &[&str] =
@@ -448,6 +453,9 @@ mod commands {
             }
             Step::Run(name) => {
                 runner.run_named(name);
+            }
+            Step::Slice(most) => {
+                runner.slice(Slice::Items(*most));
             }
         }
     }
@@ -522,7 +530,7 @@ mod commands {
                         }
                         field::key(&text, caret, chord.key, chord.mods, &mut kill)
                     }
-                    Step::Run(_) => continue,
+                    Step::Run(_) | Step::Slice(_) => continue,
                 };
                 match action {
                     Action::Splice { range, text: inserted, caret: at, .. } => {
@@ -570,7 +578,7 @@ mod commands {
 
     proptest! {
         #[test]
-        fn replaying_the_command_log_gives_the_same_facts(done in prop::collection::vec(any::<bool>(), 0..8), steps in prop::collection::vec(step(), 0..60)) {
+        fn replaying_the_command_log_gives_the_same_facts(done in prop_oneof![prop::collection::vec(any::<bool>(), 0..8), prop::collection::vec(any::<bool>(), 250..700)], steps in prop::collection::vec(bulk_step(), 0..60)) {
             let mut runner = Runner::new(shelf(&done));
             runner.remember();
             for step in &steps {
@@ -643,6 +651,36 @@ mod commands {
             let _ = std::fs::remove_dir_all(&folder);
             prop_assert_eq!(reopened, kept);
         }
+    }
+
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn a_bulk_change_applied_in_slices_gives_the_same_facts_as_one_applied_at_once(done in prop::collection::vec(any::<bool>(), 0..1500), slices in prop::collection::vec(1usize..400, 1..40), stop in any::<bool>()) {
+            let mut runner = Runner::new(shelf(&done));
+            let before = ledger::Field::value(&runner.facts);
+            let mut at_once = shelf(&done);
+            let _ = at_once.items.retain(|item| !item.done);
+            runner.run(Cmd::ClearDone);
+            for most in &slices {
+                runner.slice(Slice::Items(*most));
+            }
+            if stop {
+                runner.run_named("undo");
+                prop_assert_eq!(ledger::Field::value(&runner.facts), before);
+            } else {
+                runner.finish();
+                prop_assert_eq!(runner.facts.items.keys().collect::<Vec<_>>(), at_once.items.keys().collect::<Vec<_>>());
+                runner.run_named("undo");
+                prop_assert_eq!(ledger::Field::value(&runner.facts), before);
+            }
+        }
+    }
+
+    fn bulk_step() -> impl Strategy<Value = Step> {
+        prop_oneof![4 => step(), 1 => Just(Step::Run("clear-done")), 1 => (1usize..300).prop_map(Step::Slice)]
     }
 
     fn undoes_after(step: &Step) -> bool {

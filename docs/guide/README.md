@@ -87,6 +87,8 @@ The keyboard works too. Tab moves between the field, the buttons and the list; t
 
 The app keeps what you did. Every change is saved as it happens, so closing the window loses nothing and a crash loses at most the change being written at that moment; the next launch opens with the same list, the same item chosen and the list scrolled where it was. Each app keeps its things in its own folder in the computer's place for app data (on Windows, `AppData\Roaming\Graticule\todo`). If something there can't be read, it is moved aside rather than deleted, and the app says so.
 
+Clearing the finished items of a very long list doesn't freeze the window. The search happens in the background, the items go a few hundred at a time between frames, and the line above the bar counts them down ("“Clear finished”: 10000 of 33333"). Undo while it runs stops it and puts everything back; once it's done, it is one step like any other.
+
 `cargo run -p todo -- --render <folder>` draws every named state of the app, light and dark, at its normal size and at the smallest window it allows, into pictures in that folder. The smallest window is worked out from the layout itself, so nothing is ever cut off by making the window small.
 
 ## How speed is measured

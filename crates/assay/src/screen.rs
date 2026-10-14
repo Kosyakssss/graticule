@@ -37,8 +37,8 @@ impl Screen {
         let started = Instant::now();
         self.text.begin_frame();
         self.quads.clear();
-        let theme = face.theme(Appearance::Light);
-        let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, theme);
+        let look = face.look(kernel::look::Look::of(Appearance::Light));
+        let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, look);
         face.paint(&mut painter, Seen::default());
         started.elapsed().as_micros().min(u32::MAX as u128) as u32
     }

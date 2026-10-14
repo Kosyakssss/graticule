@@ -1,4 +1,5 @@
 use crate::keys::{Chord, Key};
+use crate::look::{Choice, Switch};
 use crate::shell::Mods;
 
 /// The kernel's own commands. They sit in the registry beside the app's, so they show in the palette and which-key with labels and reasons; the platform's conventions bind them, and a keymap file can bind them too, by name.
@@ -17,10 +18,15 @@ pub enum Builtin {
     Last,
     SelectAll,
     Cancel,
+    LightAppearance,
+    DarkAppearance,
+    SystemAppearance,
+    NextTheme,
+    NextStyle,
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 13] = [
+    pub const ALL: [Builtin; 18] = [
         Builtin::Palette,
         Builtin::Undo,
         Builtin::Redo,
@@ -34,6 +40,11 @@ impl Builtin {
         Builtin::Last,
         Builtin::SelectAll,
         Builtin::Cancel,
+        Builtin::LightAppearance,
+        Builtin::DarkAppearance,
+        Builtin::SystemAppearance,
+        Builtin::NextTheme,
+        Builtin::NextStyle,
     ];
 
     pub fn name(self) -> &'static str {
@@ -51,6 +62,11 @@ impl Builtin {
             Builtin::Last => "last",
             Builtin::SelectAll => "select-all",
             Builtin::Cancel => "cancel",
+            Builtin::LightAppearance => "light-appearance",
+            Builtin::DarkAppearance => "dark-appearance",
+            Builtin::SystemAppearance => "system-appearance",
+            Builtin::NextTheme => "next-theme",
+            Builtin::NextStyle => "next-style",
         }
     }
 
@@ -69,6 +85,11 @@ impl Builtin {
             Builtin::Last => "Go to the bottom of the list",
             Builtin::SelectAll => "Choose everything in the list",
             Builtin::Cancel => "Cancel",
+            Builtin::LightAppearance => "Use the light appearance",
+            Builtin::DarkAppearance => "Use the dark appearance",
+            Builtin::SystemAppearance => "Follow the system's appearance",
+            Builtin::NextTheme => "Use the next theme",
+            Builtin::NextStyle => "Use the next style",
         }
     }
 
@@ -131,13 +152,25 @@ impl Builtin {
                 const K: &[Chord] = &[c(Key::Escape, false, false)];
                 K
             }
-            Builtin::Palette => &[],
+            Builtin::Palette | Builtin::LightAppearance | Builtin::DarkAppearance | Builtin::SystemAppearance | Builtin::NextTheme | Builtin::NextStyle => &[],
         }
     }
 
-    /// Commands that move around rather than change anything; they never become undo steps and aren't offered in the action bar.
+    /// Commands that move around or change only how everything looks, rather than the facts; they never become undo steps and aren't offered in the action bar.
     pub fn moves(self) -> bool {
         !matches!(self, Builtin::Palette | Builtin::Undo | Builtin::Redo)
+    }
+
+    /// The change to the look it asks for, if it is one of the commands that switch it.
+    pub fn switch(self) -> Option<Switch> {
+        match self {
+            Builtin::LightAppearance => Some(Switch::Appearance(Choice::Light)),
+            Builtin::DarkAppearance => Some(Switch::Appearance(Choice::Dark)),
+            Builtin::SystemAppearance => Some(Switch::Appearance(Choice::System)),
+            Builtin::NextTheme => Some(Switch::NextTheme),
+            Builtin::NextStyle => Some(Switch::NextStyle),
+            _ => None,
+        }
     }
 }
 

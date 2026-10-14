@@ -2,6 +2,7 @@ use crate::chars::{self, Pen, Shape};
 use crate::gpu::Quad;
 use crate::grid::Area;
 use crate::ink::{Color, Theme};
+use crate::look::{Look, Style};
 use crate::metrics::Metrics;
 use crate::px::Rect;
 use crate::text::{Block, Data, Drawn, Face, Outline, Paint, SpanStyle, Text, TextStyle};
@@ -11,12 +12,13 @@ pub struct Painter<'a> {
     pub text: &'a mut Text,
     pub m: Metrics,
     pub theme: Theme,
+    pub style: Style,
     clip: [f32; 4],
 }
 
 impl<'a> Painter<'a> {
-    pub fn new(quads: &'a mut Vec<Quad>, text: &'a mut Text, m: Metrics, theme: Theme) -> Self {
-        Self { quads, text, m, theme, clip: [0.0, 0.0, m.width, m.height] }
+    pub fn new(quads: &'a mut Vec<Quad>, text: &'a mut Text, m: Metrics, look: Look) -> Self {
+        Self { quads, text, m, theme: look.theme, style: look.style, clip: [0.0, 0.0, m.width, m.height] }
     }
 
     pub fn clip(&self) -> [f32; 4] {

@@ -15,6 +15,7 @@ pub mod ink;
 pub mod kept;
 pub mod keys;
 pub mod layout;
+pub mod look;
 pub mod message;
 pub mod metrics;
 pub mod offscreen;

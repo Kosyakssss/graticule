@@ -9,7 +9,8 @@ use winit::keyboard::ModifiersState;
 use winit::window::{Window, WindowId};
 
 use crate::gpu::{Gpu, Quad};
-use crate::ink::{Appearance, Theme};
+use crate::ink::Appearance;
+use crate::look::{Look, Looks, Switch};
 use crate::metrics::Metrics;
 use crate::pace::Pace;
 use crate::scope::{Cause, Recorder, Stages};
@@ -83,9 +84,16 @@ pub struct Seen {
 
 /// What the shell runs: something that paints a frame and answers input. The kernel's app runner is one; Specimen's offscreen pages are another.
 pub trait Face: 'static {
-    fn theme(&self, appearance: Appearance) -> Theme {
-        *Theme::of(appearance)
+    /// The look this face is drawn in, given the one the user chose; Specimen's style editor draws in the look being edited.
+    fn look(&self, look: Look) -> Look {
+        look
     }
+    /// A change to the look that a command asked for since the shell last asked.
+    fn switch(&mut self) -> Option<Switch> {
+        None
+    }
+    /// The looks there are and which is chosen, given at the start and whenever they change.
+    fn offered(&mut self, _: &Looks) {}
     fn paint(&mut self, painter: &mut Painter, seen: Seen);
     fn input(&mut self, input: Input, frame: &mut Frame) -> bool;
     fn painted(&mut self, _: &mut Frame) {}
@@ -215,6 +223,7 @@ struct Running<F: Face> {
     minimum: Option<(i32, i32)>,
     access: accesskit_winit::Adapter,
     title: String,
+    looks: Looks,
 }
 
 #[derive(Default)]
@@ -245,10 +254,11 @@ impl<F: Face> Running<F> {
         let started = Instant::now();
         self.pace.drawn();
         self.text.begin_frame();
-        let theme = self.face.theme(self.appearance);
+        let look = self.face.look(self.looks.look(self.appearance));
+        let theme = look.theme;
         self.quads.clear();
         let seen = Seen { mods: Mods::of(self.modifiers), pointer: self.pointer, appearance: self.appearance };
-        let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, theme);
+        let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, look);
         self.face.paint(&mut painter, seen);
         let mut stages = self.face.stages();
         if stages == Stages::default() {
@@ -305,7 +315,17 @@ impl<F: Face> Running<F> {
         let since = Instant::now();
         let why = cause(&input);
         let mut frame = frame!(self);
-        if self.face.input(input, &mut frame) {
+        let mut changed = self.face.input(input, &mut frame);
+        if let Some(switch) = self.face.switch() {
+            self.looks.switch(switch);
+            let folder = crate::look::folder();
+            if let Err(e) = std::fs::create_dir_all(&folder).and_then(|_| std::fs::write(folder.join("look.txt"), self.looks.chosen())) {
+                eprintln!("The choice of look couldn't be saved in {}: {e}", folder.display());
+            }
+            self.face.offered(&self.looks);
+            changed = true;
+        }
+        if changed {
             self.wants(why, since);
         } else {
             self.recorder.spent(micros(since));
@@ -358,6 +378,8 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             Some(winit::window::Theme::Dark) => Appearance::Dark,
             _ => Appearance::Light,
         };
+        let looks = Looks::load(&crate::look::folder());
+        face.offered(&looks);
         let scope = std::env::var_os("GRATICULE_SCOPE").is_some_and(|v| v != "0");
         let mut running = Running {
             face,
@@ -377,6 +399,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             minimum: None,
             access,
             title: self.config.title.clone(),
+            looks,
         };
         running.render();
         running.window.set_visible(true);

@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use crate::grid::Area;
 use crate::ink::Color;
 use crate::layout::{CHECK, MARGIN};
+use crate::look::CheckMark;
 use crate::paint::Painter;
 use crate::px::Rect;
 use crate::picture::Picture;
@@ -27,7 +28,7 @@ pub enum Layer {
 }
 
 pub fn shadow(p: &Painter) -> f32 {
-    (p.m.cell_h * 0.12).round().max(p.m.hair() * 2.0)
+    p.style.shadow(p.m)
 }
 
 pub fn border(p: &mut Painter, r: Rect, t: f32, color: Color) {
@@ -67,7 +68,7 @@ fn tone(p: &Painter, t: Tone) -> Color {
 }
 
 pub fn checkbox(p: &mut Painter, x: f32, y: f32, on: bool, enabled: bool) {
-    let t = p.m.hair();
+    let t = p.style.line(p.m);
     let side = (p.m.cell_h * 0.55).round();
     let bx = (x + (p.m.cell_w * CHECK as f32 - side) / 2.0).floor();
     let by = (y + (p.m.cell_h - side) / 2.0).floor();
@@ -80,9 +81,13 @@ pub fn checkbox(p: &mut Painter, x: f32, y: f32, on: bool, enabled: bool) {
         p.theme.faint
     };
     border(p, Rect::new(bx, by, side, side), t, frame);
-    if on {
-        let inset = (side * 0.25).round();
-        p.fill(Rect::new(bx + inset, by + inset, side - inset * 2.0, side - inset * 2.0), ink);
+    match (on, p.style.check) {
+        (false, _) => {}
+        (true, CheckMark::Box) => {
+            let inset = (side * 0.25).round();
+            p.fill(Rect::new(bx + inset, by + inset, side - inset * 2.0, side - inset * 2.0), ink);
+        }
+        (true, CheckMark::Tick) => draw_picture(p, Rect::new(bx, by, side, side), &crate::picture::icons::CHECK, Some(ink)),
     }
 }
 
@@ -98,7 +103,7 @@ fn button(p: &mut Painter, n: &Node, label: &str, look: Look) {
         p.fill(Rect::new(body.x + d, body.y + d, body.w, body.h), edge);
     }
     p.fill(r, fill);
-    let t = p.m.hair();
+    let t = p.style.line(p.m);
     border(p, r, t, edge);
     if look.focused {
         border(p, Rect::new(r.x + t * 2.0, r.y + t * 2.0, r.w - t * 4.0, r.h - t * 4.0), t, theme.cursor);
@@ -129,7 +134,7 @@ fn action(p: &mut Painter, n: &Node, label: &str, keys: &str, look: Look) {
     if n.enabled && look.hovered {
         p.fill(r, theme.hover);
     }
-    let t = p.m.hair();
+    let t = p.style.line(p.m);
     let i = (p.m.cell_h * 0.1).round();
     let chip = Rect::new(r.x, r.y + i, r.w, r.h - i * 2.0);
     border(p, chip, t, if n.enabled { theme.muted } else { theme.rule });
@@ -190,7 +195,7 @@ fn link(p: &mut Painter, n: &Node, label: &str, look: Look, ink: Color) {
     };
     let w = p.text(label, style, (r.x, r.y), Some(r.w), ink).width.min(r.w);
     if n.enabled {
-        let t = if look.hovered || look.focused { p.m.hair() * 2.0 } else { p.m.hair() };
+        let t = if look.hovered || look.focused { p.style.line(p.m) * 2.0 } else { p.style.line(p.m) };
         let y = (r.y + p.m.cell_h * 0.82).round();
         p.fill(Rect::new(r.x, y, w, t), ink);
     }
@@ -228,7 +233,7 @@ fn field(p: &mut Painter, n: &Node, value: &str, placeholder: &str, look: Look) 
         }
     }
     p.set_clip(clip);
-    let t = p.m.hair();
+    let t = p.style.line(p.m);
     let line = if look.focused {
         theme.ink
     } else if look.hovered {
@@ -243,7 +248,7 @@ fn scrollbar(p: &mut Painter, track: Rect, first: u32, shown: u32, count: u32) {
     if count <= shown || track.h <= 0.0 {
         return;
     }
-    let t = p.m.hair();
+    let t = p.style.line(p.m);
     let mid = (track.x + track.w / 2.0).floor();
     let rule = p.theme.rule;
     p.fill(Rect::new(mid, track.y, t, track.h), rule);
@@ -278,7 +283,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         (Layer::Over, Kind::Choice { chosen }) => choice(p, &n, chosen, text, tree.str(n.keys), tree.str(n.reason), look),
         (Layer::Under, Kind::Palette) => {
             let r = p.rect(n.area);
-            let t = p.m.hair();
+            let t = p.style.line(p.m);
             let rule = p.theme.rule;
             let width = p.m.width;
             p.fill(Rect::new(0.0, r.y, width, t), rule);
@@ -298,7 +303,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let a = Area::new(n.area.col + CHECK + 1, n.area.row, n.area.cols - CHECK - 1, n.area.rows);
             wrapped(p, a, text, false, 400.0, ink);
             if look.focused {
-                let t = p.m.hair();
+                let t = p.style.line(p.m);
                 let cursor = p.theme.cursor;
                 border(p, r, t, cursor);
             }
@@ -313,7 +318,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             }
             if focused {
                 let r = p.rect(n.area);
-                let t = p.m.hair();
+                let t = p.style.line(p.m);
                 p.fill(Rect::new(r.x, r.y, t * 2.0, r.h), theme.ink);
             }
         }
@@ -327,10 +332,10 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let r = p.rect(n.area);
             let (color, rule) = (p.theme.get(ink), p.theme.rule);
             p.fill(r, color);
-            let t = p.m.hair();
+            let t = p.style.line(p.m);
             border(p, r, t, rule);
         }
-        (Layer::Over, Kind::Picture { picture, .. }) => draw_picture(p, p.rect(n.area), picture),
+        (Layer::Over, Kind::Picture { picture, .. }) => draw_picture(p, p.rect(n.area), picture, None),
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);
@@ -338,7 +343,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         }
         (Layer::Under, Kind::Note) => {
             let r = p.rect(n.area);
-            let t = p.m.hair();
+            let t = p.style.line(p.m);
             let rule = p.theme.rule;
             let width = p.m.width;
             p.fill(Rect::new(0.0, r.y, width, t), rule);
@@ -352,8 +357,8 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
     }
 }
 
-/// Draws a picture scaled to fit `r` and centred in it, each layer in its ink, from the atlas once it has been drawn at this size.
-pub fn draw_picture(p: &mut Painter, r: Rect, picture: &'static Picture) {
+/// Draws a picture scaled to fit `r` and centred in it, each layer in its ink or all of them in `tint`, from the atlas once it has been drawn at this size.
+pub fn draw_picture(p: &mut Painter, r: Rect, picture: &'static Picture, tint: Option<Color>) {
     let scale = (r.w / picture.width).min(r.h / picture.height);
     if scale.is_nan() || scale <= 0.0 {
         return;
@@ -367,7 +372,7 @@ pub fn draw_picture(p: &mut Painter, r: Rect, picture: &'static Picture) {
             (std::ptr::from_ref(picture) as usize, i, scale.to_bits()).hash(&mut h);
             h.finish()
         };
-        let color = p.theme.get(layer.ink);
+        let color = tint.unwrap_or_else(|| p.theme.get(layer.ink));
         let outline = Outline { path: Data::Svg(layer.path), stroke: None, even_odd: layer.even_odd, scale };
         p.text.shape(p.quads, key, outline, Paint { origin, limit: None, colors: &[color], clip });
     }

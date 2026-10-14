@@ -2,7 +2,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::gpu::{Gpu, Quad};
-use crate::ink::{Appearance, Theme};
+use crate::look::Look;
 use crate::metrics::Metrics;
 use crate::paint::Painter;
 use crate::shell::{Face, Seen};
@@ -41,14 +41,14 @@ impl Offscreen {
         (self.width, self.height) = (width, height);
     }
 
-    pub fn render(&mut self, theme: Theme, paint: impl Fn(&mut Painter)) -> Picture {
+    pub fn render(&mut self, look: Look, paint: impl Fn(&mut Painter)) -> Picture {
         let mut paint_ms = 0.0;
         for _ in 0..2 {
             let started = Instant::now();
             self.text.wait_for_fallback();
             self.text.begin_frame();
             self.quads.clear();
-            let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, theme);
+            let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, look);
             paint(&mut painter);
             paint_ms = started.elapsed().as_secs_f32() * 1000.0;
             if !self.text.fallback_pending() {
@@ -58,7 +58,7 @@ impl Offscreen {
         for u in self.text.uploads.drain(..) {
             self.gpu.upload(u.x, u.y, u.w, u.h, &u.data);
         }
-        let rgba = self.gpu.snapshot(&self.quads, theme.bg);
+        let rgba = self.gpu.snapshot(&self.quads, look.theme.bg);
         Picture { width: self.width, height: self.height, rgba, paint_ms }
     }
 }
@@ -75,15 +75,16 @@ impl Picture {
 
 impl Offscreen {
     /// Renders one frame of a face, from its kept quads when it keeps them.
-    pub fn render_face<F: Face>(&mut self, appearance: Appearance, face: &mut F) -> Picture {
-        let theme = face.theme(appearance);
+    pub fn render_face<F: Face>(&mut self, look: Look, face: &mut F) -> Picture {
+        let look = face.look(look);
+        let appearance = look.appearance;
         let mut paint_ms = 0.0;
         for _ in 0..2 {
             let started = Instant::now();
             self.text.wait_for_fallback();
             self.text.begin_frame();
             self.quads.clear();
-            let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, theme);
+            let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, look);
             face.paint(&mut painter, Seen { appearance, ..Seen::default() });
             paint_ms = started.elapsed().as_secs_f32() * 1000.0;
             if !self.text.fallback_pending() {
@@ -97,7 +98,7 @@ impl Offscreen {
         for u in self.text.uploads.drain(..) {
             self.gpu.upload(u.x, u.y, u.w, u.h, &u.data);
         }
-        let rgba = self.gpu.snapshot(&self.quads, theme.bg);
+        let rgba = self.gpu.snapshot(&self.quads, look.theme.bg);
         Picture { width: self.width, height: self.height, rgba, paint_ms }
     }
 }

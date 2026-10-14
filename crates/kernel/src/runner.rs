@@ -16,6 +16,7 @@ use crate::hit::Hits;
 use crate::kept::Kept;
 use crate::keys::{self, Chord, Key, Keymap, Lookup};
 use crate::layout::Layout;
+use crate::look::{Choice, Looks, Offered, Style, Switch};
 use crate::message::Message;
 use crate::metrics::Metrics;
 use crate::paint::Painter;
@@ -166,6 +167,9 @@ pub struct Runner<A: App> {
     hold: bool,
     fonts: u64,
     stages: crate::scope::Stages,
+    drawn_in: Option<(crate::ink::Theme, Style)>,
+    switch: Option<Switch>,
+    offered: Offered,
 }
 
 impl<A: App> Runner<A> {
@@ -216,6 +220,9 @@ impl<A: App> Runner<A> {
             hold: false,
             fonts: 0,
             stages: crate::scope::Stages::default(),
+            drawn_in: None,
+            switch: None,
+            offered: Offered::default(),
         }
     }
 
@@ -641,6 +648,11 @@ impl<A: App> Runner<A> {
             Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::First | Builtin::Last | Builtin::SelectAll if self.tree.lists.is_empty() => {
                 Available::No(Message::from("There is no list here"))
             }
+            Builtin::LightAppearance if self.offered.appearance == Choice::Light => Available::No(Message::from("The light appearance is in use already")),
+            Builtin::DarkAppearance if self.offered.appearance == Choice::Dark => Available::No(Message::from("The dark appearance is in use already")),
+            Builtin::SystemAppearance if self.offered.appearance == Choice::System => Available::No(Message::from("The system's appearance is followed already")),
+            Builtin::NextTheme if self.offered.themes < 2 => Available::No(Message::from("There is only one theme")),
+            Builtin::NextStyle if self.offered.styles < 2 => Available::No(Message::from("There is only one style")),
             _ => Available::Yes,
         }
     }
@@ -1228,6 +1240,10 @@ impl<A: App> Runner<A> {
             Builtin::Undo | Builtin::Redo => self.undo(b == Builtin::Undo),
             Builtin::Next | Builtin::Previous => self.cycle(b == Builtin::Next),
             Builtin::Cancel => self.cancel(),
+            Builtin::LightAppearance | Builtin::DarkAppearance | Builtin::SystemAppearance | Builtin::NextTheme | Builtin::NextStyle => {
+                self.switch = b.switch();
+                true
+            }
             _ => {
                 let Some(list) = self.current_list() else { return false };
                 let keys = |span| (list.keys)(&self.facts as &dyn Any, list.items, list.selection, Some(span));
@@ -1667,9 +1683,10 @@ impl<A: App> Drop for Runner<A> {
 
 impl<A: App> Face for Runner<A> {
     fn paint(&mut self, p: &mut Painter, _: Seen) {
-        if self.metrics != Some(p.m) || self.fonts != p.text.atlas {
+        if self.metrics != Some(p.m) || self.fonts != p.text.atlas || self.drawn_in != Some((p.theme, p.style)) {
             self.metrics = Some(p.m);
             self.fonts = p.text.atlas;
+            self.drawn_in = Some((p.theme, p.style));
             self.kept.reset();
             self.laid = false;
         }
@@ -1742,6 +1759,21 @@ impl<A: App> Face for Runner<A> {
 
     fn kept(&mut self) -> Option<&mut Kept> {
         Some(&mut self.kept)
+    }
+
+    fn switch(&mut self) -> Option<Switch> {
+        self.switch.take()
+    }
+
+    fn offered(&mut self, looks: &Looks) {
+        let offered = looks.offered();
+        if offered != self.offered {
+            self.offered = offered;
+            self.stale = true;
+        }
+        if let Some(problem) = looks.problems.first() {
+            self.said = Some(Said::Note(Message::plain(format!("A look in the looks folder can't be used: {problem}"))));
+        }
     }
 
     fn minimum(&self) -> Option<(i32, i32)> {

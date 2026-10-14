@@ -168,13 +168,13 @@ pub fn survey<A: App>(folder: &FilePath) -> Vec<Sheet> {
     for (name, facts) in A::states().list.iter() {
         screen.resize(1920, 1280);
         let mut runner = Runner::new(facts.clone());
-        screen.render_face(Appearance::Light, &mut runner);
+        screen.render_face(kernel::look::Look::of(Appearance::Light), &mut runner);
         sheets.push(sheet(folder, &format!("{name}, default"), &runner.tree));
         let Some((cols, rows)) = runner.minimum() else { continue };
         let m = screen.metrics;
         screen.resize((cols as f32 * m.cell_w) as u32, (rows as f32 * m.cell_h) as u32);
         let mut runner = Runner::new(facts.clone());
-        screen.render_face(Appearance::Light, &mut runner);
+        screen.render_face(kernel::look::Look::of(Appearance::Light), &mut runner);
         sheets.push(sheet(folder, &format!("{name}, smallest"), &runner.tree));
     }
     sheets

@@ -10,7 +10,6 @@ use std::sync::mpsc::{Receiver, channel};
 
 use app::{Cmd, Frame, Running, Scope, Stage};
 use kernel::accesskit;
-use kernel::ink::{Appearance, Theme};
 use kernel::kept::Kept;
 use kernel::metrics::Metrics;
 use kernel::paint::Painter;
@@ -42,11 +41,11 @@ struct Window {
 impl Window {
     fn new() -> Window {
         let mut window = Window { runner: Runner::new(Scope::default()), line: None, waker: None, looks: 0 };
-        window.look();
+        window.look_around();
         window
     }
 
-    fn look(&mut self) {
+    fn look_around(&mut self) {
         let mut found = Vec::new();
         if let Some(entries) = kernel::scope::folder().and_then(|f| std::fs::read_dir(f).ok()) {
             for entry in entries.flatten() {
@@ -71,7 +70,7 @@ impl Window {
     fn follow(&mut self) -> bool {
         if self.runner.facts.looks != self.looks {
             self.looks = self.runner.facts.looks;
-            self.look();
+            self.look_around();
         }
         let wanted = self.runner.facts.attached;
         if self.line.as_ref().map(|l| l.to) == wanted {
@@ -140,17 +139,13 @@ impl Window {
         if closed {
             self.line = None;
             self.runner.run(Cmd::Lost);
-            self.look();
+            self.look_around();
         }
         changed
     }
 }
 
 impl Face for Window {
-    fn theme(&self, appearance: Appearance) -> Theme {
-        self.runner.theme(appearance)
-    }
-
     fn paint(&mut self, painter: &mut Painter, seen: Seen) {
         self.runner.paint(painter, seen);
     }
@@ -171,6 +166,14 @@ impl Face for Window {
 
     fn kept(&mut self) -> Option<&mut Kept> {
         self.runner.kept()
+    }
+
+    fn switch(&mut self) -> Option<kernel::look::Switch> {
+        self.runner.switch()
+    }
+
+    fn offered(&mut self, looks: &kernel::look::Looks) {
+        self.runner.offered(looks);
     }
 
     fn quit(&self) -> bool {

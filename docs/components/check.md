@@ -1,6 +1,6 @@
 # Check
 
-A checkbox: a yes-or-no fact and its label. Clicking it runs a command, which changes the fact; the box only shows what the facts say.
+A checkbox: a yes-or-no fact and its label. Clicking it runs a command, which changes the fact; the box only shows what the facts say. What a ticked box shows comes from the style: a filled square, or a tick.
 
 ## Use it for
 

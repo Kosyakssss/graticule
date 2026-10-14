@@ -10,7 +10,7 @@ pub use catalog::{Catalog, Place};
 pub use changes::Changes;
 use kernel::Available::{No, Yes};
 use kernel::accesskit;
-use kernel::ink::{Appearance, Theme};
+use kernel::ink::Appearance;
 use kernel::kept::Kept;
 use kernel::metrics::Metrics;
 use kernel::paint::Painter;
@@ -136,7 +136,7 @@ impl<A: App> Specimen<A> {
         }
     }
 
-    fn look(&mut self) {
+    fn survey(&mut self) {
         if self.place() != Place::Changes || !matches!(self.looked, Looked::NotYet) {
             return;
         }
@@ -183,7 +183,7 @@ impl<A: App> Specimen<A> {
             None => self.state = asked - Place::ALL.len(),
         }
         self.offer();
-        self.look();
+        self.survey();
         if let Some(kept) = self.face().kept() {
             kept.reset();
         }
@@ -192,10 +192,6 @@ impl<A: App> Specimen<A> {
 }
 
 impl<A: App> Face for Specimen<A> {
-    fn theme(&self, appearance: Appearance) -> Theme {
-        self.catalog.theme(appearance)
-    }
-
     fn paint(&mut self, painter: &mut Painter, seen: Seen) {
         self.face().paint(painter, seen);
     }
@@ -220,6 +216,18 @@ impl<A: App> Face for Specimen<A> {
 
     fn kept(&mut self) -> Option<&mut Kept> {
         self.face().kept()
+    }
+
+    fn switch(&mut self) -> Option<kernel::look::Switch> {
+        self.face().switch()
+    }
+
+    fn offered(&mut self, looks: &kernel::look::Looks) {
+        self.catalog.offered(looks);
+        self.changes.offered(looks);
+        for screen in &mut self.screens {
+            screen.offered(looks);
+        }
     }
 
     fn quit(&self) -> bool {
@@ -276,14 +284,14 @@ pub fn render<A: App>(folder: &std::path::Path, references: Option<&std::path::P
         for (look, appearance) in [("light", Appearance::Light), ("dark", Appearance::Dark)] {
             screen.resize(1920, 1280);
             let mut runner = Runner::new(facts.clone());
-            let picture = screen.render_face(appearance, &mut runner);
+            let picture = screen.render_face(kernel::look::Look::of(appearance), &mut runner);
             picture.save_png(&folder.join(format!("{name}, default, {look}.png")))?;
             println!("{name}, default, {look}: painted in {:.2} ms", picture.paint_ms);
             let Some((cols, rows)) = runner.minimum() else { continue };
             let m = screen.metrics;
             screen.resize((cols as f32 * m.cell_w) as u32, (rows as f32 * m.cell_h) as u32);
             let mut runner = Runner::new(facts.clone());
-            let picture = screen.render_face(appearance, &mut runner);
+            let picture = screen.render_face(kernel::look::Look::of(appearance), &mut runner);
             picture.save_png(&folder.join(format!("{name}, smallest, {look}.png")))?;
             println!("{name}, smallest ({cols} by {rows} cells), {look}: painted in {:.2} ms", picture.paint_ms);
         }
@@ -291,7 +299,7 @@ pub fn render<A: App>(folder: &std::path::Path, references: Option<&std::path::P
     screen.resize(1920, 1280);
     let sheets = changes::survey::<A>(&changes::folder());
     let mut runner = Runner::new(Changes::found(sheets.clone()));
-    let picture = screen.render_face(Appearance::Light, &mut runner);
+    let picture = screen.render_face(kernel::look::Look::of(Appearance::Light), &mut runner);
     picture.save_png(&folder.join("Changes.png"))?;
     println!("Changes: painted in {:.2} ms", picture.paint_ms);
     let app = std::env::current_exe().ok().and_then(|exe| exe.file_stem().map(|s| s.to_string_lossy().into_owned())).unwrap_or_default();

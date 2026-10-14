@@ -1,6 +1,5 @@
 use proptest::prelude::*;
 
-use crate::ink::LIGHT;
 use crate::metrics::Metrics;
 use crate::pace::Pace;
 use crate::paint::Painter;
@@ -51,7 +50,7 @@ proptest! {
 fn paint(quads: &mut Vec<crate::gpu::Quad>, text: &mut Text, m: Metrics) {
     quads.clear();
     text.begin_frame();
-    let mut p = Painter::new(quads, text, m, *LIGHT);
+    let mut p = Painter::new(quads, text, m, crate::look::Look::of(crate::ink::Appearance::Light));
     p.grid();
     let mono = p.m.mono();
     let sans = p.m.sans(400.0);
@@ -80,7 +79,6 @@ mod tree {
     use crate::components::Look;
     use crate::grid::Area;
     use crate::hit::Hits;
-    use crate::ink::LIGHT;
     use crate::kept::Kept;
     use crate::layout::Layout;
     use crate::metrics::Metrics;
@@ -298,15 +296,15 @@ mod tree {
             for shapes in [&first, &then] {
                 build(&mut tree, shapes, &board, &scrolls);
                 lay(&mut tree, &mut text, m);
-                let mut p = Painter::new(&mut quads, &mut text, m, *LIGHT);
+                let mut p = Painter::new(&mut quads, &mut text, m, crate::look::Look::of(crate::ink::Appearance::Light));
                 kept.update(&mut p, &tree, |_| Look::default());
             }
             let hover = tree.nodes.get(hovered).map(|n| n.id);
             let look = move |id| Look { hovered: Some(id) == hover, ..Look::default() };
-            let mut p = Painter::new(&mut quads, &mut text, m, *LIGHT);
+            let mut p = Painter::new(&mut quads, &mut text, m, crate::look::Look::of(crate::ink::Appearance::Light));
             kept.update(&mut p, &tree, look);
             let mut fresh = Kept::default();
-            let mut p = Painter::new(&mut quads, &mut text, m, *LIGHT);
+            let mut p = Painter::new(&mut quads, &mut text, m, crate::look::Look::of(crate::ink::Appearance::Light));
             fresh.update(&mut p, &tree, look);
             for k in 0..2 {
                 prop_assert_eq!(drawn(&kept.layers[k].quads), drawn(&fresh.layers[k].quads));
@@ -714,5 +712,72 @@ mod commands {
 
     fn undoes_after(step: &Step) -> bool {
         matches!(step, Step::Type('a' | 'c') | Step::Press("delete" | "space"))
+    }
+}
+
+mod looks {
+    use proptest::prelude::*;
+
+    use crate::ink::{Appearance, Ink, contrast};
+    use crate::look::{Oklch, ThemeFile};
+
+    fn color() -> impl Strategy<Value = Oklch> {
+        (0u32..=1000, 0u32..=300, 0u32..3600).prop_map(|(l, c, h)| Oklch { l: l as f32 / 1000.0, c: c as f32 / 1000.0, h: h as f32 / 10.0 })
+    }
+
+    fn inks() -> impl Strategy<Value = [Oklch; 14]> {
+        prop::array::uniform14(color())
+    }
+
+    fn near(theme: [Oklch; 14]) -> impl Strategy<Value = [Oklch; 14]> {
+        prop::array::uniform14(-60i32..=60).prop_map(move |nudges| {
+            let mut out = theme;
+            for (o, n) in out.iter_mut().zip(nudges) {
+                o.l = ((o.l * 1000.0).round() as i32 + n).clamp(0, 1000) as f32 / 1000.0;
+            }
+            out
+        })
+    }
+
+    fn file(light: &[Oklch; 14], dark: &[Oklch; 14]) -> String {
+        let mut out = String::from("# generated\nname = Generated\n");
+        for (header, inks) in [("[light]", light), ("[dark]", dark)] {
+            out.push_str(&format!("\n{header}\n"));
+            for (ink, o) in Ink::ALL.iter().zip(inks) {
+                out.push_str(&format!("{} = oklch({} {} {})\n", ink.name(), o.l, o.c, o.h));
+            }
+        }
+        out
+    }
+
+    fn reaches(file: &ThemeFile) -> bool {
+        [Appearance::Light, Appearance::Dark].into_iter().all(|a| {
+            let theme = file.theme(a);
+            Ink::ALL.into_iter().all(|ink| ink.needs().is_none_or(|needs| contrast(theme.get(ink), theme.bg) >= needs))
+        })
+    }
+
+    proptest! {
+        #[test]
+        fn a_theme_is_refused_exactly_when_an_ink_misses_its_contrast(
+            (light, dark) in prop_oneof![
+                (inks(), inks()),
+                (near(crate::look::THEMES[0].light), near(crate::look::THEMES[0].dark)),
+            ]
+        ) {
+            let text = file(&light, &dark);
+            let whole = ThemeFile { name: "Generated".into(), light, dark };
+            match ThemeFile::parse(&text) {
+                Ok(read) => {
+                    prop_assert!(reaches(&read), "a theme that misses its contrast was let through");
+                    prop_assert_eq!(&read, &whole);
+                    prop_assert_eq!(ThemeFile::parse(&read.print()), Ok(read));
+                }
+                Err(problem) => {
+                    prop_assert!(!reaches(&whole), "a theme that reaches its contrast was refused: {}", problem);
+                    prop_assert!(problem.says.contains(":1"), "the refusal doesn't say the contrast: {}", problem);
+                }
+            }
+        }
     }
 }

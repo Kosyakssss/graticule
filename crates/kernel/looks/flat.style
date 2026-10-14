@@ -1,0 +1,6 @@
+# A quieter style: thin lines, no shadows, ticks for ticked boxes.
+
+name = Flat
+lines = thin
+shadow = 0
+check = tick

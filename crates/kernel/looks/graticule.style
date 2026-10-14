@@ -1,0 +1,12 @@
+# Graticule's style: how things are drawn, never where. Every style keeps the same grid, spacing and inks.
+
+name = Graticule
+
+# The weight of rules and the edges of boxes: thin, regular or heavy.
+lines = regular
+
+# The hard shadow under what you can act on, as a share of a row's height; 0 draws none.
+shadow = 0.12
+
+# What a ticked box shows: box (a filled square) or tick.
+check = box

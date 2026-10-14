@@ -29,16 +29,15 @@ pub fn run<A: kernel::App>(starts: &[(String, A)]) -> Taste {
         screen.settle(&mut runner);
         grid(&runner.tree, screen.metrics.screen(), &format!("{name}, at its smallest size ({cols} by {rows} cells)"), &mut taste.findings);
     }
-    if let Some((_, facts)) = starts.first() {
-        let runner = Runner::new(facts.clone());
+    for file in kernel::look::THEMES.iter() {
         for appearance in [Appearance::Light, Appearance::Dark] {
-            let theme = runner.theme(appearance);
+            let theme = file.theme(appearance);
             for ink in Ink::ALL {
                 let Some(needs) = ink.needs() else { continue };
                 let ratio = contrast(theme.get(ink), theme.bg);
                 if ratio < needs {
                     let look = if appearance == Appearance::Light { "light" } else { "dark" };
-                    taste.findings.push(Finding { law: Law::Contrast, said: format!("{} on the background reaches {ratio:.2}:1 in the {look} appearance; it needs {needs}:1", ink.name()), from: String::new(), steps: Vec::new() });
+                    taste.findings.push(Finding { law: Law::Contrast, said: format!("{} on the background reaches {ratio:.2}:1 in {}'s {look} appearance; it needs {needs}:1", ink.name(), file.name), from: String::new(), steps: Vec::new() });
                 }
             }
         }

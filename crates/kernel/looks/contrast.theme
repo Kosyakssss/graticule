@@ -1,0 +1,35 @@
+# The most contrast the inks allow: black on white, white on black, every color darker or lighter to match.
+
+name = Contrast
+
+[light]
+background = oklch(1 0 0)
+field = oklch(0.95 0 0)
+hover = oklch(0.93 0 0)
+cursor = oklch(0.88 0 0)
+selection = oklch(0.86 0.06 262)
+ink = oklch(0 0 0)
+muted = oklch(0.35 0 0)
+faint = oklch(0.45 0 0)
+rule = oklch(0.5 0 0)
+link = oklch(0.4 0.2 262)
+visited = oklch(0.4 0.18 305)
+danger = oklch(0.42 0.17 28)
+warn = oklch(0.42 0.1 70)
+ok = oklch(0.4 0.12 150)
+
+[dark]
+background = oklch(0 0 0)
+field = oklch(0.17 0 0)
+hover = oklch(0.2 0 0)
+cursor = oklch(0.27 0 0)
+selection = oklch(0.32 0.07 262)
+ink = oklch(1 0 0)
+muted = oklch(0.85 0 0)
+faint = oklch(0.72 0 0)
+rule = oklch(0.6 0 0)
+link = oklch(0.84 0.11 260)
+visited = oklch(0.84 0.11 305)
+danger = oklch(0.82 0.12 26)
+warn = oklch(0.86 0.12 85)
+ok = oklch(0.84 0.13 151)

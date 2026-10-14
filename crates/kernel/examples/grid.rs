@@ -1,11 +1,11 @@
-use kernel::ink::{Appearance, Theme};
+use kernel::ink::Appearance;
 use kernel::offscreen::Offscreen;
 
 fn main() {
     let out = std::env::args().nth(1).unwrap_or_else(|| "grid.png".into());
     let mut offscreen = Offscreen::new(800, 500, 2.0);
     for (appearance, suffix) in [(Appearance::Light, "light"), (Appearance::Dark, "dark")] {
-        let picture = offscreen.render(*Theme::of(appearance), |p| {
+        let picture = offscreen.render(kernel::look::Look::of(appearance), |p| {
             p.grid();
             let (mono, sans) = (p.m.mono(), p.m.sans(400.0));
             let (ink, muted) = (p.theme.ink, p.theme.muted);

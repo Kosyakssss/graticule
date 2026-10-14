@@ -1,0 +1,36 @@
+# Graticule's theme. Each ink is a color in OKLCH: lightness from 0 to 1, chroma, and hue in degrees.
+# Text inks must reach 4.5:1 against the background, faint 3:1; a theme that doesn't is refused.
+
+name = Graticule
+
+[light]
+background = oklch(0.98 0.003 100)
+field = oklch(0.95 0.003 100)
+hover = oklch(0.955 0.003 100)
+cursor = oklch(0.925 0.003 100)
+selection = oklch(0.92 0.035 262)
+ink = oklch(0.22 0.005 285)
+muted = oklch(0.5 0.008 285)
+faint = oklch(0.6 0.008 285)
+rule = oklch(0.78 0.005 285)
+link = oklch(0.48 0.15 262)
+visited = oklch(0.48 0.15 305)
+danger = oklch(0.48 0.17 28)
+warn = oklch(0.48 0.11 70)
+ok = oklch(0.48 0.12 150)
+
+[dark]
+background = oklch(0.2 0.004 285)
+field = oklch(0.25 0.006 285)
+hover = oklch(0.25 0.006 285)
+cursor = oklch(0.285 0.007 285)
+selection = oklch(0.32 0.055 262)
+ink = oklch(0.925 0.004 100)
+muted = oklch(0.7 0.006 285)
+faint = oklch(0.58 0.008 285)
+rule = oklch(0.41 0.007 285)
+link = oklch(0.77 0.11 260)
+visited = oklch(0.77 0.12 305)
+danger = oklch(0.77 0.13 26)
+warn = oklch(0.77 0.12 80)
+ok = oklch(0.77 0.13 151)

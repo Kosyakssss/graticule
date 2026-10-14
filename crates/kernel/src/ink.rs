@@ -115,39 +115,9 @@ impl Ink {
     }
 }
 
-pub static LIGHT: LazyLock<Theme> = LazyLock::new(|| Theme {
-    bg: oklch(0.98, 0.003, 100.0),
-    ink: oklch(0.22, 0.005, 285.0),
-    muted: oklch(0.5, 0.008, 285.0),
-    faint: oklch(0.6, 0.008, 285.0),
-    rule: oklch(0.78, 0.005, 285.0),
-    cursor: oklch(0.925, 0.003, 100.0),
-    hover: oklch(0.955, 0.003, 100.0),
-    selection: oklch(0.92, 0.035, 262.0),
-    field: oklch(0.95, 0.003, 100.0),
-    link: oklch(0.48, 0.15, 262.0),
-    visited: oklch(0.48, 0.15, 305.0),
-    danger: oklch(0.48, 0.17, 28.0),
-    warn: oklch(0.48, 0.11, 70.0),
-    ok: oklch(0.48, 0.12, 150.0),
-});
+pub static LIGHT: LazyLock<Theme> = LazyLock::new(|| crate::look::THEMES[0].theme(Appearance::Light));
 
-pub static DARK: LazyLock<Theme> = LazyLock::new(|| Theme {
-    bg: oklch(0.2, 0.004, 285.0),
-    ink: oklch(0.925, 0.004, 100.0),
-    muted: oklch(0.7, 0.006, 285.0),
-    faint: oklch(0.58, 0.008, 285.0),
-    rule: oklch(0.41, 0.007, 285.0),
-    cursor: oklch(0.285, 0.007, 285.0),
-    hover: oklch(0.25, 0.006, 285.0),
-    selection: oklch(0.32, 0.055, 262.0),
-    field: oklch(0.25, 0.006, 285.0),
-    link: oklch(0.77, 0.11, 260.0),
-    visited: oklch(0.77, 0.12, 305.0),
-    danger: oklch(0.77, 0.13, 26.0),
-    warn: oklch(0.77, 0.12, 80.0),
-    ok: oklch(0.77, 0.13, 151.0),
-});
+pub static DARK: LazyLock<Theme> = LazyLock::new(|| crate::look::THEMES[0].theme(Appearance::Dark));
 
 fn oklab_to_linear(l: f32, a: f32, b: f32) -> [f32; 3] {
     let l_ = (l + 0.396_337_78 * a + 0.215_803_76 * b).powi(3);

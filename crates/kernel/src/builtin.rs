@@ -1,4 +1,4 @@
-use crate::keys::{Chord, Key};
+use crate::keys::{Chord, Key, Mode};
 use crate::look::{Choice, Switch};
 use crate::shell::Mods;
 use crate::value::Dates;
@@ -28,10 +28,13 @@ pub enum Builtin {
     AbsoluteDates,
     RelativeDates,
     EditKeys,
+    NormalMode,
+    InsertMode,
+    SelectMode,
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 22] = [
+    pub const ALL: [Builtin; 25] = [
         Builtin::Palette,
         Builtin::Undo,
         Builtin::Redo,
@@ -54,6 +57,9 @@ impl Builtin {
         Builtin::AbsoluteDates,
         Builtin::RelativeDates,
         Builtin::EditKeys,
+        Builtin::NormalMode,
+        Builtin::InsertMode,
+        Builtin::SelectMode,
     ];
 
     pub fn name(self) -> &'static str {
@@ -80,6 +86,9 @@ impl Builtin {
             Builtin::AbsoluteDates => "absolute-dates",
             Builtin::RelativeDates => "relative-dates",
             Builtin::EditKeys => "edit-keys",
+            Builtin::NormalMode => "normal-mode",
+            Builtin::InsertMode => "insert-mode",
+            Builtin::SelectMode => "select-mode",
         }
     }
 
@@ -107,6 +116,9 @@ impl Builtin {
             Builtin::AbsoluteDates => "Write dates as the day and time",
             Builtin::RelativeDates => "Write dates as how long ago",
             Builtin::EditKeys => "Edit the keys",
+            Builtin::NormalMode => "Go to normal mode",
+            Builtin::InsertMode => "Go to insert mode",
+            Builtin::SelectMode => "Go to select mode",
         }
     }
 
@@ -181,7 +193,20 @@ impl Builtin {
             | Builtin::NextStyle
             | Builtin::AbsoluteDates
             | Builtin::RelativeDates
-            | Builtin::EditKeys => &[],
+            | Builtin::EditKeys
+            | Builtin::NormalMode
+            | Builtin::InsertMode
+            | Builtin::SelectMode => &[],
+        }
+    }
+
+    /// The mode it switches to, if it is one of the commands that switch modes.
+    pub fn mode(self) -> Option<Mode> {
+        match self {
+            Builtin::NormalMode => Some(Mode::Normal),
+            Builtin::InsertMode => Some(Mode::Insert),
+            Builtin::SelectMode => Some(Mode::Select),
+            _ => None,
         }
     }
 

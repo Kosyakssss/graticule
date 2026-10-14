@@ -14,7 +14,7 @@ use crate::components::Look;
 use crate::field::{self, Action, Caret};
 use crate::hit::Hits;
 use crate::kept::Kept;
-use crate::keys::{self, Chord, Key, Keymap, Lookup};
+use crate::keys::{self, Chord, Key, Keymap, Lookup, Mode, Step};
 use crate::layout::Layout;
 use crate::look::{Choice, Looks, Offered, Style, Switch};
 use crate::message::Message;
@@ -168,6 +168,7 @@ pub struct Runner<A: App> {
     pending: Vec<Chord>,
     count: u32,
     keymap: Keymap,
+    mode: Mode,
     palette: Option<Palette>,
     clipboard: Option<arboard::Clipboard>,
     reveal: bool,
@@ -229,6 +230,7 @@ impl<A: App> Runner<A> {
             pending: Vec::new(),
             count: 0,
             keymap,
+            mode: Mode::Normal,
             palette: None,
             clipboard: None,
             reveal: false,
@@ -304,6 +306,10 @@ impl<A: App> Runner<A> {
         }
         self.status = self.tree.add(root, Kind::Status, Some(Id::ROOT.mix(2)), std::panic::Location::caller());
         let bar = self.tree.add(root, Kind::Bar, Some(Id::ROOT.mix(3)), std::panic::Location::caller());
+        if self.keymap.modal {
+            let m = self.tree.add(bar, Kind::Value { value: crate::value::Value::Mode }, Some(Id::ROOT.mix(10)), std::panic::Location::caller());
+            self.tree.nodes[m as usize].text = self.tree.put(self.mode.name());
+        }
         if self.pending.is_empty() && self.count == 0 {
             self.build_bar(bar, &here);
         } else {
@@ -327,7 +333,7 @@ impl<A: App> Runner<A> {
                 continue;
             }
             let a = self.tree.add(bar, Kind::Action, Some(Id::ROOT.mix(4).mix(e as u64)), std::panic::Location::caller());
-            let keys = self.keymap.keys_for(entry.name).map(keys::label).unwrap_or_default();
+            let keys = self.keymap.keys_for(self.mode, entry.name).unwrap_or_default();
             self.tree.nodes[a as usize].keys = self.tree.put(&keys);
             self.put_target(a, target, entry.name);
         }
@@ -344,8 +350,8 @@ impl<A: App> Runner<A> {
     }
 
     fn build_which(&mut self, bar: u32, here: &Here) {
-        let mut next: Vec<(Chord, Option<String>)> = Vec::new();
-        for (chord, name) in self.keymap.next(&self.pending) {
+        let mut next: Vec<(Step, Option<String>)> = Vec::new();
+        for (chord, name) in self.keymap.next(self.mode, &self.pending) {
             if !next.iter().any(|(c, _)| *c == chord) {
                 next.push((chord, name.map(str::to_string)));
             }
@@ -386,7 +392,7 @@ impl<A: App> Runner<A> {
                 Target::Many(cs, count) => cs.first().map(|c| c.label_string(&self.facts, Form::Many(*count))).unwrap_or_default(),
                 Target::Refused(None, _) | Target::Builtin(_) | Target::Host(_) => title(entry.name),
             };
-            let keys = self.keymap.keys_for(entry.name).map(keys::label).unwrap_or_default();
+            let keys = self.keymap.keys_for(self.mode, entry.name).unwrap_or_default();
             found.push((label, target, keys));
         }
         for (e, extra) in self.extras.iter().enumerate() {
@@ -683,8 +689,8 @@ impl<A: App> Runner<A> {
     }
 
     fn builtin_keys(&self, b: Builtin) -> String {
-        match self.keymap.keys_for(b.name()) {
-            Some(k) => keys::label(k),
+        match self.keymap.keys_for(self.mode, b.name()) {
+            Some(k) => k,
             None => b.convention().first().map(Chord::to_string).unwrap_or_default(),
         }
     }
@@ -706,6 +712,8 @@ impl<A: App> Runner<A> {
             Builtin::AbsoluteDates if self.offered.dates == Dates::Absolute => Available::No(Message::from("Dates are written as the day and time already")),
             Builtin::RelativeDates if self.offered.dates == Dates::Relative => Available::No(Message::from("Dates are written as how long ago already")),
             Builtin::EditKeys if self.keys_file.is_none() => Available::No(Message::from("This window keeps no files, so its keys can't be edited")),
+            Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode if !self.keymap.modal => Available::No(Message::from("These keys have no modes")),
+            Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode if b.mode() == Some(self.mode) => Available::No(Message::plain(format!("In {} mode already", self.mode.name()))),
             _ => Available::Yes,
         }
     }
@@ -1151,6 +1159,9 @@ impl<A: App> Runner<A> {
         match read {
             Ok((keymap, said)) => {
                 self.keymap = keymap;
+                if !self.keymap.modal {
+                    self.mode = Mode::Normal;
+                }
                 self.pending.clear();
                 if said.is_some() {
                     self.said = said;
@@ -1365,6 +1376,11 @@ impl<A: App> Runner<A> {
     }
 
     fn builtin(&mut self, b: Builtin) -> bool {
+        let b = match b {
+            Builtin::Up if self.selecting() => Builtin::ExtendUp,
+            Builtin::Down if self.selecting() => Builtin::ExtendDown,
+            b => b,
+        };
         if let Available::No(reason) = self.builtin_available(b) {
             return self.say(reason);
         }
@@ -1380,6 +1396,12 @@ impl<A: App> Runner<A> {
             Builtin::Next | Builtin::Previous => self.cycle(b == Builtin::Next),
             Builtin::Cancel => self.cancel(),
             Builtin::EditKeys => self.edit_keys(),
+            Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode => {
+                self.mode = b.mode().unwrap_or_default();
+                self.pending.clear();
+                self.stale = true;
+                true
+            }
             Builtin::Copy => {
                 let text = self.chosen_text();
                 self.copy(text);
@@ -1533,7 +1555,9 @@ impl<A: App> Runner<A> {
         if self.palette.is_some() {
             return self.palette_key(chord, text);
         }
+        let typing = !self.keymap.modal || self.mode == Mode::Insert;
         if self.pending.is_empty()
+            && typing
             && let Some(i) = self.focused_field()
         {
             if chord.types()
@@ -1547,11 +1571,8 @@ impl<A: App> Runner<A> {
                 return self.field_action(i, action);
             }
         }
-        if self.pending.is_empty()
-            && chord.mods == Mods::default()
-            && matches!(chord.key, Key::Enter | Key::Char(' '))
-            && let Some(i) = self.focused_control()
-        {
+        let control = if self.pending.is_empty() && self.count == 0 && chord.mods == Mods::default() && matches!(chord.key, Key::Enter | Key::Char(' ')) { self.focused_control() } else { None };
+        if typing && let Some(i) = control {
             return self.fire(i);
         }
         if (!self.pending.is_empty() || self.count > 0) && chord.key == Key::Escape {
@@ -1560,7 +1581,7 @@ impl<A: App> Runner<A> {
             self.stale = true;
             return true;
         }
-        let lookup = self.keymap.lookup(&self.pending, chord);
+        let lookup = self.keymap.lookup(self.mode, &self.pending, chord);
         if self.pending.is_empty()
             && matches!(lookup, Lookup::Nothing)
             && chord.mods == Mods::default()
@@ -1596,12 +1617,55 @@ impl<A: App> Runner<A> {
                 self.count = 0;
                 return self.say(Message::plain(format!("{typed} does nothing")));
             }
+            Lookup::Operator(name) => {
+                let name = name.to_string();
+                let typed = format!("{} {chord}", self.so_far());
+                self.pending.clear();
+                let times = std::mem::take(&mut self.count).max(1);
+                self.stale = true;
+                return self.operate(&name, chord, times, &typed);
+            }
             Lookup::Nothing => {}
         }
-        match Builtin::ALL.into_iter().find(|b| b.convention().contains(&chord)) {
-            Some(b) => self.builtin(b),
-            None => false,
+        match (Builtin::ALL.into_iter().find(|b| b.convention().contains(&chord)), control) {
+            (Some(b), _) => self.builtin(b),
+            (None, Some(i)) => self.fire(i),
+            (None, None) => false,
         }
+    }
+
+    fn operate(&mut self, name: &str, motion: Chord, times: u32, typed: &str) -> bool {
+        let movement = match self.keymap.lookup(self.mode, &[], motion) {
+            Lookup::Run(m) => Builtin::find(m),
+            _ => Builtin::ALL.into_iter().find(|b| b.convention().contains(&motion)),
+        };
+        let Some(movement) = movement.filter(|b| matches!(b, Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::First | Builtin::Last)) else {
+            return self.say(Message::plain(format!("{typed} does nothing: {motion} is not a movement")));
+        };
+        let Some(e) = A::Cmd::entries().iter().position(|e| e.name == name && !e.internal) else {
+            return self.say(Message::plain(format!("No command is called “{name}”")));
+        };
+        let entry = A::Cmd::entries()[e];
+        if !entry.subject || !entry.many {
+            return self.say(Message::plain(format!("{} takes one item at a time, so it can't act over a movement", title(name))));
+        }
+        let Some(list) = self.current_list().filter(|l| entry.subject_type.is_none_or(|t| t() == l.item)) else {
+            return self.say(Message::from("There is nothing here for it to act on"));
+        };
+        let Some(from) = list.focus_index else { return self.say(Message::from("Nothing is chosen")) };
+        let last = list.count.saturating_sub(1);
+        let to = match movement {
+            Builtin::Up | Builtin::ExtendUp => from.saturating_sub(times),
+            Builtin::Down | Builtin::ExtendDown => from.saturating_add(times).min(last),
+            Builtin::First => 0,
+            _ => last,
+        };
+        let cmds = (from.min(to)..=from.max(to)).filter_map(|i| (list.nth)(&self.facts as &dyn Any, list.items, i)).filter_map(|k| A::Cmd::make(e, Some(k))).collect();
+        self.run_many(cmds)
+    }
+
+    fn selecting(&self) -> bool {
+        self.keymap.modal && self.mode == Mode::Select
     }
 
     fn so_far(&self) -> String {
@@ -1890,7 +1954,7 @@ impl<A: App> Runner<A> {
             if entry.is_some_and(|e| e.subject) != on_row.is_some() {
                 continue;
             }
-            let keys = entry.and_then(|e| self.keymap.keys_for(e.name)).filter(|k| k.len() == 1).map(|k| k[0]);
+            let keys = entry.and_then(|e| self.keymap.chord_for(self.mode, e.name));
             let (name, why) = (self.tree.str(n.name), self.tree.str(n.reason));
             let label = if n.enabled || why.is_empty() { name.to_string() } else { format!("{name}: {why}") };
             items.push(crate::menu::MenuItem { id: n.id.0, label, keys, enabled: n.enabled });
@@ -2249,7 +2313,7 @@ impl<A: App> Face for Runner<A> {
 fn read_keymap<A: App>(source: &str, file: &str) -> Result<(Keymap, Option<Said>), Said> {
     let keymap = Keymap::parse(source).map_err(|e| Said::Failure(format!("{file} has a mistake on {e}")))?;
     let known = |name: &str| Builtin::find(name).is_some() || A::Cmd::entries().iter().any(|e| e.name == name && !e.internal);
-    let unknown = keymap.bindings.iter().find(|(_, c)| !known(c)).map(|(_, c)| c.clone());
+    let unknown = keymap.bindings.iter().find(|b| !known(&b.command)).map(|b| b.command.clone());
     let said = unknown.map(|c| Said::Failure(format!("{file} names “{c}”, which is not a command")));
     Ok((keymap, said))
 }

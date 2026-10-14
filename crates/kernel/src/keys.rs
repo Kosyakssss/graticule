@@ -153,27 +153,84 @@ impl fmt::Display for Chord {
     }
 }
 
+/// A mode of a modal keymap: which of its bindings apply, and whether typing reaches a field. Only insert lets typing through.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Mode {
+    #[default]
+    Normal,
+    Insert,
+    Select,
+}
+
+impl Mode {
+    pub fn name(self) -> &'static str {
+        match self {
+            Mode::Normal => "normal",
+            Mode::Insert => "insert",
+            Mode::Select => "select",
+        }
+    }
+
+    fn parse(name: &str) -> Option<Mode> {
+        [Mode::Normal, Mode::Insert, Mode::Select].into_iter().find(|m| m.name() == name)
+    }
+}
+
 /// What a press means, given the keys pressed before it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Lookup<'a> {
     Run(&'a str),
     More,
+    /// The keys before it were an operator, so this press is the movement it acts over.
+    Operator(&'a str),
     Nothing,
 }
 
-/// The keys of an app: a data file binding chords and sequences of chords to commands by name.
+/// One place in a sequence: a chord, or the movement an operator waits for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Step {
+    Chord(Chord),
+    Motion,
+}
+
+impl fmt::Display for Step {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Step::Chord(c) => c.fmt(f),
+            Step::Motion => f.write_str("motion"),
+        }
+    }
+}
+
+/// One line of a keymap file: keys, the command they run, the mode they belong to (every mode when `None`), and whether they end waiting for a movement.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Binding {
+    pub keys: Vec<Chord>,
+    pub command: String,
+    pub mode: Option<Mode>,
+    pub motion: bool,
+}
+
+/// The keys of an app: a data file binding chords and sequences of chords to commands by name, in every mode or in one.
 #[derive(Clone, Debug, Default)]
 pub struct Keymap {
-    pub bindings: Vec<(Vec<Chord>, String)>,
+    pub bindings: Vec<Binding>,
+    pub modal: bool,
 }
 
 impl Keymap {
-    /// Reads a keymap file: one binding a line, `keys: command`, keys separated by spaces for a sequence; `#` starts a comment.
+    /// Reads a keymap file: one binding a line, `keys: command`, keys separated by spaces for a sequence, `motion` last for an operator; `[normal]`, `[insert]` or `[select]` starts the bindings of that mode; `#` starts a comment.
     pub fn parse(source: &str) -> Result<Keymap, String> {
-        let mut bindings = Vec::new();
+        let mut keymap = Keymap::default();
+        let mut mode = None;
         for (n, line) in source.lines().enumerate() {
             let line = line.split('#').next().unwrap_or("").trim();
             if line.is_empty() {
+                continue;
+            }
+            if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+                mode = Some(Mode::parse(name.trim()).ok_or_else(|| format!("line {}: the modes are normal, insert and select", n + 1))?);
+                keymap.modal = true;
                 continue;
             }
             let Some((keys, command)) = line.rsplit_once(':') else { return Err(format!("line {}: write a binding as `keys: command`", n + 1)) };
@@ -181,39 +238,67 @@ impl Keymap {
             if command.is_empty() {
                 return Err(format!("line {}: no command after the colon", n + 1));
             }
-            let chords = keys.split_whitespace().map(Chord::parse).collect::<Result<Vec<_>, _>>().map_err(|e| format!("line {}: {e}", n + 1))?;
-            if chords.is_empty() {
-                return Err(format!("line {}: no keys before the colon", n + 1));
+            let mut words: Vec<&str> = keys.split_whitespace().collect();
+            let motion = words.last() == Some(&"motion");
+            if motion {
+                words.pop();
             }
-            bindings.push((chords, command.to_string()));
+            if words.contains(&"motion") {
+                return Err(format!("line {}: “motion” can only come last", n + 1));
+            }
+            let chords = words.into_iter().map(Chord::parse).collect::<Result<Vec<_>, _>>().map_err(|e| format!("line {}: {e}", n + 1))?;
+            if chords.is_empty() {
+                return Err(format!("line {}: no keys before {}", n + 1, if motion { "the motion" } else { "the colon" }));
+            }
+            keymap.bindings.push(Binding { keys: chords, command: command.to_string(), mode, motion });
         }
-        Ok(Keymap { bindings })
+        Ok(keymap)
     }
 
-    /// The command bound to `pending` followed by `chord`, or whether they begin a longer sequence.
-    pub fn lookup(&self, pending: &[Chord], chord: Chord) -> Lookup<'_> {
+    fn active(&self, mode: Mode) -> impl Iterator<Item = &Binding> {
+        self.bindings.iter().filter(move |b| b.mode.is_none_or(|m| m == mode))
+    }
+
+    /// The command bound to `pending` followed by `chord` in `mode`, whether they begin a longer sequence, or whether `pending` was an operator waiting for a movement.
+    pub fn lookup(&self, mode: Mode, pending: &[Chord], chord: Chord) -> Lookup<'_> {
         let n = pending.len();
         let mut more = false;
-        for (keys, command) in &self.bindings {
-            if keys.len() > n && keys[..n] == *pending && keys[n] == chord {
-                if keys.len() == n + 1 {
-                    return Lookup::Run(command);
+        let mut operator = None;
+        for b in self.active(mode) {
+            if b.keys.len() > n && b.keys[..n] == *pending && b.keys[n] == chord {
+                if b.keys.len() == n + 1 && !b.motion {
+                    return Lookup::Run(&b.command);
                 }
                 more = true;
+            } else if b.motion && b.keys == pending {
+                operator = Some(b.command.as_str());
             }
         }
-        if more { Lookup::More } else { Lookup::Nothing }
+        match operator {
+            _ if more => Lookup::More,
+            Some(command) => Lookup::Operator(command),
+            None => Lookup::Nothing,
+        }
     }
 
-    /// What can come after `pending`: each next chord with the command it runs, or `None` when it leads further.
-    pub fn next<'a>(&'a self, pending: &'a [Chord]) -> impl Iterator<Item = (Chord, Option<&'a str>)> + 'a {
+    /// What can come after `pending` in `mode`: each next step with the command it runs, or `None` when it leads further.
+    pub fn next<'a>(&'a self, mode: Mode, pending: &'a [Chord]) -> impl Iterator<Item = (Step, Option<&'a str>)> + 'a {
         let n = pending.len();
-        self.bindings.iter().filter(move |(keys, _)| keys.len() > n && keys[..n] == *pending).map(move |(keys, command)| (keys[n], (keys.len() == n + 1).then_some(command.as_str())))
+        self.active(mode).filter_map(move |b| match b.keys.len() {
+            len if len > n && b.keys[..n] == *pending => Some((Step::Chord(b.keys[n]), (len == n + 1 && !b.motion).then_some(b.command.as_str()))),
+            len if len == n && b.motion && b.keys == pending => Some((Step::Motion, Some(b.command.as_str()))),
+            _ => None,
+        })
     }
 
-    /// The first keys bound to a command, for showing beside it.
-    pub fn keys_for(&self, command: &str) -> Option<&[Chord]> {
-        self.bindings.iter().find(|(_, c)| c == command).map(|(k, _)| k.as_slice())
+    /// The first keys bound to a command in `mode`, for showing beside it.
+    pub fn keys_for(&self, mode: Mode, command: &str) -> Option<String> {
+        self.active(mode).find(|b| b.command == command).map(|b| if b.motion { format!("{} motion", label(&b.keys)) } else { label(&b.keys) })
+    }
+
+    /// The one chord that runs a command in `mode`, when a single chord does.
+    pub fn chord_for(&self, mode: Mode, command: &str) -> Option<Chord> {
+        self.active(mode).find(|b| b.command == command && !b.motion && b.keys.len() == 1).map(|b| b.keys[0])
     }
 }
 

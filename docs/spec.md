@@ -406,7 +406,7 @@ The first slice builds the first part of most items below: the kernel, Ledger wi
 ### 17.3 Tooling
 Tooling comes before the apps, by the owner's decision, so every later piece is reviewed as pictures, measured and checked from its first commit.
 
-4. **Open.** SP-01 Specimen properly (§13.5): Components (the live overview and component pages), Screens, Style, Changes, reference images, offscreen pages.
+4. **Taken.** SP-01 Specimen properly (§13.5): Components (the live overview and component pages), Screens, Style, Changes, reference images, offscreen pages. Built in parts: (a) the four places, always in the bar, and Specimen's own app with the live overview, done; (b) component pages; (c) Style; (d) Changes; (e) reference images and offscreen pages.
 5. **Open.** SC-01 Scope, small (§13.6): the ring buffer, its own window, why it redrew, time.
 6. **Open.** AS-01 Assay, small (§13.7): the universal laws over generated command sequences, the grid and contrast laws, the frame, allocation and idle budgets, the `assay` report.
 7. **Open.** BD-01 Bindery's development loop moved in: `bindery new` and `bindery dev` with the in-place reload.

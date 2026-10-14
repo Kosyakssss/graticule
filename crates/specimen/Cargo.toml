@@ -10,3 +10,5 @@ workspace = true
 
 [dependencies]
 kernel.workspace = true
+ledger.workspace = true
+graticule-macros.workspace = true

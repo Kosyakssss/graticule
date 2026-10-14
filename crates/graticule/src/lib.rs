@@ -18,7 +18,7 @@ pub fn run<A: kernel::App + Default>(title: kernel::Message) {
         Some("--render") => specimen::render::<A>(&std::path::PathBuf::from(args.next().unwrap_or_else(|| ".".into()))),
         Some("--specimen") => {
             let config = kernel::shell::Config::new(format!("{} — Specimen", title.as_str()));
-            kernel::shell::run(config, |waker| specimen::Screens::new(A::default()).wake_with(waker))
+            kernel::shell::run(config, |waker| specimen::Specimen::over(A::default()).wake_with(waker))
         }
         _ => {
             let config = kernel::shell::Config::new(title.as_str());

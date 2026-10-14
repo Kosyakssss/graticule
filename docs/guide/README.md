@@ -91,7 +91,7 @@ Clearing the finished items of a very long list doesn't freeze the window. The s
 
 Export… asks where to save the list, the way every app on the computer does, and then writes it in the background as a Markdown checklist. The line above the bar says "Saving “To do.md”" while it works and the message line says where it went. Calling off the save panel does nothing at all.
 
-`cargo run -p todo -- --specimen` opens Specimen over the to-do app instead: the same window, but showing the app's named states (empty, a few things, a very long list, long titles), each one live on its own copy, so you can click and type without touching your real list. The bar has a "Show …" command for each state. Export shows what it would have done instead of opening the save panel.
+`cargo run -p todo -- --specimen` opens Specimen over the to-do app instead: the same window, but showing the app's named states (empty, a few things, a very long list, long titles), each one live on its own copy, so you can click and type without touching your real list. The bar has a "Show …" command for each state. Export shows what it would have done instead of opening the save panel. Specimen's other places are in the bar too: Components, a live page of every piece Graticule draws with (the text, buttons, links, boxes, fields and lists), and Style and Changes, which come next. `cargo run -p specimen` opens Specimen on its own, on Components.
 
 `cargo run -p todo -- --render <folder>` draws every named state of the app, light and dark, at its normal size and at the smallest window it allows, into pictures in that folder. The smallest window is worked out from the layout itself, so nothing is ever cut off by making the window small.
 

@@ -1,5 +1,8 @@
 //! SP-01, Specimen: every component and every screen of every app, in every state.
 
+mod catalog;
+
+pub use catalog::{Catalog, Place};
 use kernel::Available::{No, Yes};
 use kernel::accesskit;
 use kernel::ink::{Appearance, Theme};
@@ -10,22 +13,34 @@ use kernel::runner::{Extra, Runner};
 use kernel::shell::{Face, Frame, Input, Seen, Waker};
 use kernel::{App, Message};
 
-/// Specimen's Screens place: every named state of an app, each live on its own copy of the facts, so clicks and keys run the app's real code without touching what it saved. Effects are shown, not run.
-pub struct Screens<A: App> {
+/// Specimen: its own places, run by its own app, and an app's named screens, each live on its own copy of the facts, so clicks and keys run the app's real code without touching what it saved. Effects are shown, not run. The places, and on Screens the named states, are commands in the bar wherever you are.
+pub struct Specimen<A: App> {
+    catalog: Runner<Catalog>,
     names: Vec<&'static str>,
-    runners: Vec<Runner<A>>,
-    chosen: usize,
+    screens: Vec<Runner<A>>,
+    state: usize,
 }
 
-impl<A: App> Screens<A> {
-    /// The app's named states, or `fallback` alone when it names none.
-    pub fn new(fallback: A) -> Self {
+impl Specimen<Catalog> {
+    /// Specimen on its own: Graticule's components, with no app's screens.
+    pub fn alone() -> Self {
+        Specimen::with(Vec::new(), Place::Components)
+    }
+}
+
+impl<A: App> Specimen<A> {
+    /// Specimen over an app: its named states, or `fallback` alone when it names none, opened on Screens.
+    pub fn over(fallback: A) -> Self {
         let mut states = A::states().list;
         if states.is_empty() {
             states.push(("Default", fallback));
         }
+        Specimen::with(states, Place::Screens)
+    }
+
+    fn with(states: Vec<(&'static str, A)>, place: Place) -> Self {
         let names = states.iter().map(|(name, _)| *name).collect();
-        let runners = states
+        let screens = states
             .into_iter()
             .map(|(_, facts)| {
                 let mut runner = Runner::new(facts);
@@ -33,82 +48,114 @@ impl<A: App> Screens<A> {
                 runner
             })
             .collect();
-        let mut screens = Screens { names, runners, chosen: 0 };
-        screens.offer();
-        screens
+        let mut catalog = Runner::new(Catalog::default());
+        catalog.hold_effects();
+        catalog.run(catalog::Cmd::Go(place));
+        let mut specimen = Specimen { catalog, names, screens, state: 0 };
+        specimen.offer();
+        specimen
     }
 
-    /// Lets the screens' jobs wake the window.
+    /// Lets every runner's jobs wake the window.
     pub fn wake_with(mut self, waker: Waker) -> Self {
-        self.runners = self.runners.into_iter().map(|r| r.wake_with(waker.clone())).collect();
+        self.catalog = self.catalog.wake_with(waker.clone());
+        self.screens = self.screens.into_iter().map(|r| r.wake_with(waker.clone())).collect();
         self
     }
 
+    fn place(&self) -> Place {
+        self.catalog.facts.place
+    }
+
+    fn on_screens(&self) -> bool {
+        self.place() == Place::Screens && !self.screens.is_empty()
+    }
+
     fn offer(&mut self) {
-        let extras: Vec<Extra> = self
-            .names
+        let here = self.place();
+        let places: Vec<Extra> = Place::ALL
             .iter()
-            .enumerate()
-            .map(|(i, name)| Extra {
-                name: format!("show-{}", name.to_lowercase().replace(' ', "-")),
-                label: format!("Show “{name}”"),
-                available: if i == self.chosen { No(Message::from("It is showing")) } else { Yes },
+            .map(|&place| Extra {
+                name: place.name().to_string(),
+                label: place.label().to_string(),
+                available: if place == here {
+                    No(Message::from("You are here"))
+                } else if place == Place::Screens && self.screens.is_empty() {
+                    No(Message::from("Specimen was opened on its own; run an app with --specimen to see its screens"))
+                } else {
+                    Yes
+                },
             })
             .collect();
-        for runner in &mut self.runners {
-            runner.host(extras.clone());
+        let states = self.names.iter().enumerate().map(|(i, name)| Extra {
+            name: format!("show-{}", name.to_lowercase().replace(' ', "-")),
+            label: format!("Show “{name}”"),
+            available: if i == self.state { No(Message::from("It is showing")) } else { Yes },
+        });
+        let with_states: Vec<Extra> = places.iter().cloned().chain(states).collect();
+        self.catalog.host(places);
+        for runner in &mut self.screens {
+            runner.host(with_states.clone());
         }
     }
 
-    fn runner(&mut self) -> &mut Runner<A> {
-        &mut self.runners[self.chosen]
+    fn face(&mut self) -> &mut dyn Face {
+        if self.on_screens() { &mut self.screens[self.state] } else { &mut self.catalog }
     }
 
     fn switch(&mut self) -> bool {
-        let Some(next) = self.runner().asked() else { return false };
-        self.chosen = next;
+        let asked = if self.on_screens() { self.screens[self.state].asked() } else { self.catalog.asked() };
+        let Some(asked) = asked else { return false };
+        match Place::ALL.get(asked) {
+            Some(&place) => {
+                self.catalog.run(catalog::Cmd::Go(place));
+            }
+            None => self.state = asked - Place::ALL.len(),
+        }
         self.offer();
-        self.runner().kept.reset();
+        if let Some(kept) = self.face().kept() {
+            kept.reset();
+        }
         true
     }
 }
 
-impl<A: App> Face for Screens<A> {
+impl<A: App> Face for Specimen<A> {
     fn theme(&self, appearance: Appearance) -> Theme {
-        self.runners[self.chosen].theme(appearance)
+        self.catalog.theme(appearance)
     }
 
     fn paint(&mut self, painter: &mut Painter, seen: Seen) {
-        self.runner().paint(painter, seen);
+        self.face().paint(painter, seen);
     }
 
     fn input(&mut self, input: Input, frame: &mut Frame) -> bool {
-        let redraw = self.runner().input(input, frame);
+        let redraw = self.face().input(input, frame);
         self.switch() || redraw
     }
 
     fn painted(&mut self, frame: &mut Frame) {
-        self.runner().painted(frame);
+        self.face().painted(frame);
     }
 
     fn minimum(&self) -> Option<(i32, i32)> {
-        self.runners[self.chosen].minimum()
+        if self.on_screens() { self.screens[self.state].minimum() } else { self.catalog.minimum() }
     }
 
     fn kept(&mut self) -> Option<&mut Kept> {
-        self.runner().kept()
+        self.face().kept()
     }
 
     fn quit(&self) -> bool {
-        self.runners[self.chosen].quit()
+        if self.on_screens() { self.screens[self.state].quit() } else { self.catalog.quit() }
     }
 
     fn access(&mut self, metrics: Metrics, title: &str) -> Option<accesskit::TreeUpdate> {
-        self.runner().access(metrics, title)
+        self.face().access(metrics, title)
     }
 
     fn act(&mut self, node: u64, action: accesskit::Action) -> bool {
-        let acted = self.runner().act(node, action);
+        let acted = self.face().act(node, action);
         self.switch() || acted
     }
 }

@@ -1,24 +1,25 @@
-window		0 0 42 21	
+window		0 0 42 22	
   page	Columns	0 0 42 7	
     list		2 3 38 3	14 items
       list item		2 3 36 3	
         text	Columns side by side, each made with column and given a width in cells: a number, Fill, or either with a smallest width (28.min(20), Fill.min(40)).	2 3 36 3	
   alert		2 7 38 1	
   status		2 8 38 1	
-  toolbar		2 9 38 12	
+  toolbar		2 9 38 13	
     button	Press	2 9 7 1	
     button	Follow the link	11 9 13 1	
     button	Tick or untick the box	2 10 18 1	
     button	Bold	22 10 6 1	
-    button	Say it	30 10 7 1	unavailable (Type something first)
-    button	Back to all components	2 11 20 1	
-    button	Change the light appearance	2 12 24 1	unavailable (The light appearance is being changed already)
-    button	Change the dark appearance	2 13 24 1	
-    button	Use the next weight of lines	2 14 23 1	
-    button	Deepen the shadow	2 15 17 1	
-    button	Make the shadow shallower	2 16 23 1	
-    button	Use the other check mark	2 17 22 1	
-    button	Save the theme and the style	2 18 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
-    button	Undo	2 19 13 1	unavailable (Nothing to undo)
-    button	Redo	17 19 19 1	unavailable (Nothing to redo)
-    button	Open the palette	2 20 15 1	
+    button	Go one level in	2 11 13 1	
+    button	Say it	17 11 7 1	unavailable (Type something first)
+    button	Back to all components	2 12 20 1	
+    button	Change the light appearance	2 13 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	2 14 24 1	
+    button	Use the next weight of lines	2 15 23 1	
+    button	Deepen the shadow	2 16 17 1	
+    button	Make the shadow shallower	2 17 23 1	
+    button	Use the other check mark	2 18 22 1	
+    button	Save the theme and the style	2 19 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	2 20 13 1	unavailable (Nothing to undo)
+    button	Redo	17 20 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 21 15 1	

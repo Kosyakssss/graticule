@@ -54,21 +54,14 @@ Several names on either side are the same component. They are merged into one ro
 | Callout | Alert | Callout | a boxed message in the page |
 | Card | Card, Surface | Card, CardList, Section, ControlCard | a boxed group with a heading |
 | Heading | Header | EntityTitle | strong text announced as a heading; with its icon and typed values, a row of them |
-
-## Wave 1: on the kernel as it stands
-
-These are drawn from what exists now: boxes, text, pictures, the registry and focus.
-
-| Graticule | HeroUI | Blueprint | Notes |
-|---|---|---|---|
-| Breadcrumbs | Breadcrumbs | Breadcrumbs | long paths shortened in the middle |
+| Tabs | Tabs | Tabs | the tabs are an enum fact; only the chosen page is described |
 | Navigation | | Navbar | places along the top, the current one marked |
 | Pagination | Pagination | | only where paging is the data's own shape |
 | Disclosure | Disclosure, DisclosureGroup, Accordion | Collapse, Section (collapsible) | sections that open in place |
-| Tabs | Tabs | Tabs | |
-| Panel stack | | PanelStack | drill in and back, in place |
+| Breadcrumbs | Breadcrumbs | Breadcrumbs | long paths shortened in the middle |
+| Panel stack | | PanelStack | drill in and back, in place: a fact for the depth and breadcrumbs, not a component of its own |
 | Overflow | | OverflowList | what doesn't fit goes into a "more" choice |
-| Scroll edges | ScrollShadow | | marks that more is above or below |
+| Scroll edges | ScrollShadow | | every list draws a rule at an edge with more beyond |
 
 ## Wave 2: fields in full
 

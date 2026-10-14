@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::grid::Area;
 use crate::ink::{Color, Ink};
-use crate::layout::{CHECK, MARGIN, SWITCH};
+use crate::layout::{CHECK, CRUMB, MARGIN, SWITCH};
 use crate::look::CheckMark;
 use crate::paint::Painter;
 use crate::picture::Picture;
@@ -519,6 +519,13 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let a = n.area;
             let track = p.rect(Area::new(a.right() - 1, a.row, 1, a.rows));
             scrollbar(p, track, first, shown, count);
+            let (r, t, rule) = (p.rect(Area::new(a.col, a.row, a.cols - 1, a.rows)), p.style.line(p.m) * 2.0, p.theme.rule);
+            if first > 0 {
+                p.fill(Rect::new(r.x, r.y, r.w, t), rule);
+            }
+            if first + shown < count {
+                p.fill(Rect::new(r.x, r.bottom() - t, r.w, t), rule);
+            }
         }
         (Layer::Over, Kind::Empty) => {}
         (Layer::Under, Kind::Text { .. } | Kind::Value { .. }) if look.chosen.0 < look.chosen.1 => chosen(p, &n, text, look.chosen.0 as usize..look.chosen.1 as usize),
@@ -593,6 +600,66 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let style = p.m.sans(600.0);
             p.write(Area::new(n.area.col + 2, n.area.row + 1, n.area.cols - 4, 1), text, style, theme.ink);
         }
+        (Layer::Under, Kind::Strip) if tree.nodes[n.parent as usize].kind == Kind::Tabs => {
+            let r = p.rect(n.area);
+            let (t, rule) = (p.style.line(p.m), p.theme.rule);
+            p.fill(Rect::new(r.x, r.bottom() - t, r.w, t), rule);
+        }
+        (Layer::Under, Kind::Tab { .. } | Kind::Place { .. } | Kind::Opener { .. } | Kind::PageLink { .. } | Kind::More) if n.enabled && look.hovered => {
+            let hover = p.theme.hover;
+            p.fill_area(n.area, hover);
+        }
+        (Layer::Under, Kind::Place { on: true } | Kind::PageLink { on: true }) => {
+            let selection = p.theme.selection;
+            p.fill_area(n.area, selection);
+        }
+        (Layer::Over, Kind::Tab { on }) => {
+            let theme = p.theme;
+            let ink = if !n.enabled {
+                theme.faint
+            } else if on || look.hovered {
+                theme.ink
+            } else {
+                theme.muted
+            };
+            let style = weight(p, on, false);
+            pick(p, &n, text, 1, style, ink, look);
+            if on {
+                let r = p.rect(n.area);
+                let t = p.style.line(p.m) * 2.0;
+                p.fill(Rect::new(r.x, r.bottom() - t, r.w, t), theme.ink);
+            }
+        }
+        (Layer::Over, Kind::Place { on }) => {
+            let ink = if n.enabled { p.theme.ink } else { p.theme.faint };
+            let style = weight(p, on, false);
+            pick(p, &n, text, 1, style, ink, look);
+        }
+        (Layer::Over, Kind::PageLink { on }) => {
+            let ink = if !n.enabled && !on {
+                p.theme.faint
+            } else if on {
+                p.theme.ink
+            } else {
+                p.theme.link
+            };
+            let style = weight(p, on, text.starts_with(|c: char| c.is_ascii_digit()));
+            pick(p, &n, text, 1, style, ink, look);
+        }
+        (Layer::Over, Kind::More) => {
+            let ink = p.theme.muted;
+            let style = weight(p, false, false);
+            pick(p, &n, text, 1, style, ink, look);
+        }
+        (Layer::Over, Kind::Opener { open }) => {
+            let r = p.rect(Area::new(n.area.col, n.area.row, 2, 1));
+            let ink = if n.enabled { p.theme.ink } else { p.theme.faint };
+            let chevron = if open { &crate::picture::icons::CHEVRON_DOWN } else { &crate::picture::icons::CHEVRON_RIGHT };
+            draw_picture(p, r, chevron, Some(ink));
+            let style = weight(p, false, false);
+            pick(p, &n, text, CHECK, style, ink, look);
+        }
+        (Layer::Over, Kind::Crumbs) => crumbs(p, tree, &n),
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);
@@ -611,6 +678,37 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             p.write(n.area, text, style, color);
         }
         _ => {}
+    }
+}
+
+fn weight(p: &Painter, on: bool, mono: bool) -> crate::text::TextStyle {
+    let weight = if on { 600.0 } else { 400.0 };
+    if mono { crate::text::TextStyle { weight, ..p.m.mono() } } else { p.m.sans(weight) }
+}
+
+fn pick(p: &mut Painter, n: &Node, label: &str, indent: i32, style: crate::text::TextStyle, ink: Color, look: Look) {
+    let a = Area::new(n.area.col + indent, n.area.row, n.area.cols - indent, 1);
+    p.write(a, label, style, ink);
+    if look.focused {
+        let (r, t, cursor) = (p.rect(n.area), p.style.line(p.m), p.theme.cursor);
+        border(p, r, t, cursor);
+    }
+}
+
+fn crumbs<C>(p: &mut Painter, tree: &Tree<C>, n: &Node) {
+    let (style, muted) = (p.m.mono(), p.theme.muted);
+    let mut k = n.first;
+    let mut end = None;
+    while k != NONE {
+        let c = &tree.nodes[k as usize];
+        if !c.area.is_empty() {
+            if let Some(end) = end {
+                let between = if c.area.col - end > CRUMB { " / … / " } else { " / " };
+                p.write(Area::new(end, n.area.row, c.area.col - end, 1), between, style, muted);
+            }
+            end = Some(c.area.right());
+        }
+        k = c.next;
     }
 }
 

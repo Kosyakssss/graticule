@@ -1,4 +1,4 @@
-window		0 0 114 12	
+window		0 0 114 13	
   page	Tag	0 0 114 7	
     list		2 3 110 3	19 items
       list item		2 3 108 2	
@@ -6,20 +6,21 @@ window		0 0 114 12
       list item		2 5 108 1	
   alert		2 7 110 1	
   status		2 8 110 1	
-  toolbar		2 9 110 3	
+  toolbar		2 9 110 4	
     button	Press	2 9 7 1	
     button	Follow the link	11 9 13 1	
     button	Tick or untick the box	26 9 18 1	
     button	Bold	46 9 6 1	
-    button	Say it	54 9 7 1	unavailable (Type something first)
-    button	Back to all components	63 9 20 1	
-    button	Change the light appearance	85 9 24 1	unavailable (The light appearance is being changed already)
-    button	Change the dark appearance	2 10 24 1	
-    button	Use the next weight of lines	28 10 23 1	
-    button	Deepen the shadow	53 10 17 1	
-    button	Make the shadow shallower	72 10 23 1	
-    button	Use the other check mark	2 11 22 1	
-    button	Save the theme and the style	26 11 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
-    button	Undo	52 11 13 1	unavailable (Nothing to undo)
-    button	Redo	67 11 19 1	unavailable (Nothing to redo)
-    button	Open the palette	88 11 15 1	
+    button	Go one level in	54 9 13 1	
+    button	Say it	69 9 7 1	unavailable (Type something first)
+    button	Back to all components	78 9 20 1	
+    button	Change the light appearance	2 10 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 10 24 1	
+    button	Use the next weight of lines	54 10 23 1	
+    button	Deepen the shadow	79 10 17 1	
+    button	Make the shadow shallower	2 11 23 1	
+    button	Use the other check mark	27 11 22 1	
+    button	Save the theme and the style	51 11 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 11 13 1	unavailable (Nothing to undo)
+    button	Redo	92 11 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 12 15 1	

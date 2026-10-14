@@ -170,6 +170,8 @@ When a `row` or `columns` can't fit its children's minimums plus the gaps, it st
 
 **Proposed:** long text in a row (the "Long titles" state) wraps onto more rows of the same row, rather than being shortened, because the taste laws forbid clipping. Paths are the exception: they shorten in the middle (spec §7.3).
 
+Two containers hide children instead of stacking them, and both say so. Breadcrumbs hide levels from the middle, keeping the top and the current one, and draw "…" where they were. An overflow row (and the places along the top, which are one) hides its actions from the end and shows its last child, "More…", only when something is hidden. Layout decides what is hidden by giving it an empty area; nothing else is told. Activating "More…" opens the drawn menu with an entry for each sibling whose area is empty, pointing at that sibling's id, so choosing an entry activates the hidden control as if it had been clicked: its command, its edit or its reason for being unavailable.
+
 ### 6.4 Reuse
 
 A subtree whose subtree hash and maximum width are the same as last frame keeps its layout; only its offset can change. A change in one row re-measures that row and its ancestors, not its siblings. A full layout happens on resize, theme or style change, and on the first frame.

@@ -25,6 +25,13 @@ fn role(kind: Kind) -> Role {
         Kind::Card | Kind::Group | Kind::Fieldset | Kind::Labelled => Role::Group,
         Kind::Toggle { .. } | Kind::IconButton { .. } => Role::Button,
         Kind::Radio { .. } => Role::RadioButton,
+        Kind::Tabs | Kind::Disclosure => Role::Group,
+        Kind::Strip => Role::TabList,
+        Kind::Tab { .. } => Role::Tab,
+        Kind::Place { .. } | Kind::PageLink { .. } => Role::Link,
+        Kind::Crumbs | Kind::Places => Role::Navigation,
+        Kind::Opener { .. } | Kind::More => Role::Button,
+        Kind::Overflow => Role::Toolbar,
         Kind::Switch { .. } => Role::Switch,
         Kind::Bar => Role::Toolbar,
         Kind::Status => Role::Status,
@@ -51,6 +58,14 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
             Kind::Field => {
                 node.set_value(text);
                 node.set_placeholder(name);
+            }
+            Kind::Tab { on } | Kind::Place { on } | Kind::PageLink { on } => {
+                node.set_label(if name.is_empty() { text } else { name });
+                node.set_selected(on);
+            }
+            Kind::Opener { open } => {
+                node.set_label(text);
+                node.set_expanded(open);
             }
             Kind::Toggle { on } | Kind::Radio { on } | Kind::Switch { on } => {
                 node.set_label(if name.is_empty() { text } else { name });

@@ -10,9 +10,10 @@ window		0 0 53 17
     button	Follow the link	11 9 13 1	
     button	Tick or untick the box	26 9 18 1	
     button	Bold	2 10 6 1	
-    button	Say it	10 10 7 1	unavailable (Type something first)
-    button	Back to all components	19 10 20 1	
-    button	Change the light appearance	2 11 24 1	unavailable (The light appearance is being changed already)
+    button	Go one level in	10 10 13 1	
+    button	Say it	25 10 7 1	unavailable (Type something first)
+    button	Back to all components	2 11 20 1	
+    button	Change the light appearance	24 11 24 1	unavailable (The light appearance is being changed already)
     button	Change the dark appearance	2 12 24 1	
     button	Use the next weight of lines	28 12 23 1	
     button	Deepen the shadow	2 13 17 1	

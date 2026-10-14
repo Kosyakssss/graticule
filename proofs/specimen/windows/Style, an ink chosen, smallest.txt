@@ -10,12 +10,13 @@ window		0 0 68 18
     button	Follow the link	11 9 13 1	
     button	Tick or untick the box	26 9 18 1	
     button	Bold	46 9 6 1	
-    button	Say it	54 9 7 1	unavailable (Type something first)
-    button	Back to all components	2 10 20 1	unavailable (All components are showing)
-    button	Make “link” lighter	24 10 16 1	
-    button	Make “link” darker	42 10 16 1	
-    button	Give “link” more color	2 11 19 1	
-    button	Give “link” less color	23 11 18 1	
+    button	Go one level in	2 10 13 1	
+    button	Say it	17 10 7 1	unavailable (Type something first)
+    button	Back to all components	26 10 20 1	unavailable (All components are showing)
+    button	Make “link” lighter	48 10 16 1	
+    button	Make “link” darker	2 11 16 1	
+    button	Give “link” more color	20 11 19 1	
+    button	Give “link” less color	41 11 18 1	
     button	Turn the hue of “link” forward	2 12 25 1	
     button	Turn the hue of “link” back	29 12 22 1	
     button	Change the light appearance	2 13 24 1	unavailable (The light appearance is being changed already)

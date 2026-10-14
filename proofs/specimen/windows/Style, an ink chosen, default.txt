@@ -192,9 +192,10 @@ window		0 0 120 30
     button	Follow the link	11 25 13 1	
     button	Tick or untick the box	26 25 18 1	
     button	Bold	46 25 6 1	
-    button	Say it	54 25 7 1	unavailable (Type something first)
-    button	Back to all components	63 25 20 1	unavailable (All components are showing)
-    button	Make “link” lighter	85 25 16 1	
+    button	Go one level in	54 25 13 1	
+    button	Say it	69 25 7 1	unavailable (Type something first)
+    button	Back to all components	78 25 20 1	unavailable (All components are showing)
+    button	Make “link” lighter	100 25 16 1	
     button	Make “link” darker	2 26 16 1	
     button	Give “link” more color	20 26 19 1	
     button	Give “link” less color	41 26 18 1	

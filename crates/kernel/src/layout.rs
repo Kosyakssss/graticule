@@ -13,6 +13,8 @@ pub const SWATCH: i32 = 4;
 const BUTTON_MIN: i32 = 16;
 pub const CALLOUT: i32 = 4;
 pub const SWITCH: i32 = CHECK;
+pub const CRUMB: i32 = 3;
+pub const HIDDEN: i32 = 7;
 const GAUGE: i32 = 20;
 const GAUGE_MIN: i32 = 8;
 
@@ -155,8 +157,43 @@ impl<'t> Layout<'t> {
                 self.release(start);
                 (min, pref)
             }
-            Kind::Fieldset | Kind::Labelled => {
-                let label = self.cols(tree.str(n.text), false);
+            Kind::Tab { .. } | Kind::PageLink { .. } | Kind::More => {
+                let c = self.cols(tree.str(n.text), matches!(n.kind, Kind::PageLink { .. })) + 2;
+                (c, c)
+            }
+            Kind::Place { .. } | Kind::Opener { .. } => {
+                let c = self.cols(tree.str(n.text), false) + if matches!(n.kind, Kind::Place { .. }) { 2 } else { CHECK };
+                (c.min(10), c)
+            }
+            Kind::Strip | Kind::Overflow | Kind::Places => {
+                let (start, end) = self.children(tree, i);
+                let (mut widest, mut last, mut pref, mut count) = (0, 0, 0, 0);
+                for k in start..end {
+                    let (_, b) = self.size(tree, self.stack[k]);
+                    (widest, last) = (widest.max(b), b);
+                    pref += b;
+                    count += 1;
+                }
+                self.release(start);
+                let min = if n.kind == Kind::Strip { widest } else { last };
+                (min, pref + GAP * (count - 1).max(0))
+            }
+            Kind::Crumbs => {
+                let (start, end) = self.children(tree, i);
+                let (mut pref, mut count, mut first, mut last) = (0, 0, 0, 0);
+                for k in start..end {
+                    let w = self.size(tree, self.stack[k]).1;
+                    (first, last) = (if count == 0 { w } else { first }, w);
+                    pref += w;
+                    count += 1;
+                }
+                self.release(start);
+                pref += CRUMB * (count - 1).max(0);
+                let min = if count > 2 { (first + last + HIDDEN).min(pref) } else { pref };
+                (min, pref)
+            }
+            Kind::Fieldset | Kind::Labelled | Kind::Disclosure | Kind::Tabs => {
+                let label = if matches!(n.kind, Kind::Disclosure | Kind::Tabs) { 0 } else { self.cols(tree.str(n.text), false) };
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref) = (label.min(8), label);
                 for k in start..end {
@@ -329,7 +366,40 @@ impl<'t> Layout<'t> {
             }
             Kind::Check { .. } | Kind::Radio { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
             Kind::Switch { .. } => self.wrapped(tree.str(n.text), false, cols - SWITCH - 1),
-            Kind::Toggle { .. } | Kind::IconButton { .. } | Kind::Group => 1,
+            Kind::Toggle { .. } | Kind::IconButton { .. } | Kind::Group | Kind::Crumbs | Kind::Overflow | Kind::Places => 1,
+            Kind::Tab { .. } | Kind::Place { .. } | Kind::Opener { .. } | Kind::PageLink { .. } | Kind::More => 1,
+            Kind::Strip => {
+                let (start, end) = self.children(tree, i);
+                let (mut rows, mut col) = (1, 0);
+                for k in start..end {
+                    let w = self.size(tree, self.stack[k]).1;
+                    if col > 0 && col + w > cols {
+                        rows += 1;
+                        col = 0;
+                    }
+                    col += w + GAP;
+                }
+                self.release(start);
+                rows
+            }
+            Kind::Tabs => {
+                let (start, end) = self.children(tree, i);
+                let mut rows = 0;
+                for k in start..end {
+                    rows += self.rows(tree, self.stack[k], cols) + 1;
+                }
+                self.release(start);
+                (rows - 1).max(0)
+            }
+            Kind::Disclosure => {
+                let (start, end) = self.children(tree, i);
+                let mut rows = 0;
+                for k in start..end {
+                    rows += self.rows(tree, self.stack[k], if k == start { cols } else { cols - CHECK });
+                }
+                self.release(start);
+                rows
+            }
             Kind::Fieldset | Kind::Labelled => {
                 let (start, end) = self.children(tree, i);
                 let mut rows = self.wrapped(tree.str(n.text), false, cols);
@@ -492,6 +562,100 @@ impl<'t> Layout<'t> {
                 let label = self.wrapped(tree.str(tree.nodes[i as usize].text), false, area.cols);
                 self.stack_down(tree, i, Area::new(area.col, area.row + label, area.cols, area.rows - label), 0);
             }
+            Kind::Tabs => self.stack_down(tree, i, area, 1),
+            Kind::Disclosure => {
+                let (start, end) = self.children(tree, i);
+                let mut row = area.row;
+                for k in start..end {
+                    let c = self.stack[k];
+                    let (col, cols) = if k == start { (area.col, area.cols) } else { (area.col + CHECK, area.cols - CHECK) };
+                    let rows = self.rows(tree, c, cols).min(area.bottom() - row).max(0);
+                    self.place(tree, c, if rows > 0 { Area::new(col, row, cols, rows) } else { Area::default() });
+                    row += rows;
+                }
+                self.release(start);
+            }
+            Kind::Strip => {
+                let (start, end) = self.children(tree, i);
+                let (mut row, mut col) = (0, 0);
+                for k in start..end {
+                    let c = self.stack[k];
+                    let w = self.size(tree, c).1;
+                    if col > 0 && col + w > area.cols {
+                        row += 1;
+                        col = 0;
+                    }
+                    let a = if row < area.rows { Area::new(area.col + col, area.row + row, w.min(area.cols - col), 1) } else { Area::default() };
+                    self.place(tree, c, a);
+                    col += w + GAP;
+                }
+                self.release(start);
+            }
+            Kind::Overflow | Kind::Places => {
+                let (start, end) = self.children(tree, i);
+                let at = self.widths.len();
+                for k in start..end {
+                    let w = self.size(tree, self.stack[k]).1;
+                    self.widths.push(w);
+                }
+                let count = end - start;
+                let more = if count > 0 { self.widths[at + count - 1] } else { 0 };
+                let all = self.widths[at..at + count.saturating_sub(1)].iter().sum::<i32>() + GAP * (count as i32 - 2).max(0);
+                let room = if all <= area.cols { area.cols } else { area.cols - more - GAP };
+                let (mut col, mut hidden) = (0, false);
+                for k in start..end {
+                    let (c, w, last) = (self.stack[k], self.widths[at + k - start], k + 1 == end);
+                    let a = if last {
+                        if hidden { Area::new(area.col + col, area.row, w.min(area.cols - col).max(0), 1) } else { Area::default() }
+                    } else if !hidden && col + w <= room {
+                        Area::new(area.col + col, area.row, w, 1)
+                    } else {
+                        hidden = true;
+                        Area::default()
+                    };
+                    self.place(tree, c, a);
+                    if a.cols > 0 && !last {
+                        col += w + GAP;
+                    }
+                }
+                self.widths.truncate(at);
+                self.release(start);
+            }
+            Kind::Crumbs => {
+                let (start, end) = self.children(tree, i);
+                let at = self.widths.len();
+                for k in start..end {
+                    let w = self.size(tree, self.stack[k]).1;
+                    self.widths.push(w);
+                }
+                let count = end - start;
+                let sum: i32 = self.widths[at..at + count].iter().sum();
+                let total = |widths: &[i32], hidden: usize| {
+                    let shown = (count - hidden) as i32;
+                    let gaps = CRUMB * (shown - 1).max(0) + if hidden > 0 { HIDDEN - CRUMB } else { 0 };
+                    sum - widths[1..1 + hidden].iter().sum::<i32>() + gaps
+                };
+                let mut hidden = 0;
+                while count > 2 && hidden + 2 < count && total(&self.widths[at..at + count], hidden) > area.cols {
+                    hidden += 1;
+                }
+                let mut col = area.col;
+                for k in start..end {
+                    let (c, j) = (self.stack[k], k - start);
+                    if (1..1 + hidden).contains(&j) {
+                        self.place(tree, c, Area::default());
+                        continue;
+                    }
+                    if j > 0 {
+                        col += if j == 1 + hidden && hidden > 0 { HIDDEN } else { CRUMB };
+                    }
+                    let w = self.widths[at + j].min(area.right() - col).max(0);
+                    self.place(tree, c, if w > 0 { Area::new(col, area.row, w, 1) } else { Area::default() });
+                    col += w;
+                }
+                self.widths.truncate(at);
+                self.release(start);
+            }
             Kind::Group => {
                 let (start, end) = self.children(tree, i);
                 let mut col = area.col;
@@ -552,7 +716,24 @@ impl<'t> Layout<'t> {
                 self.rows(tree, c, area.cols)
             };
             let rows = rows.min(area.bottom() - row).max(0);
-            let cols = if matches!(tree.nodes[c as usize].kind, Kind::Button | Kind::Link | Kind::Swatch { .. } | Kind::Picture { .. } | Kind::Keys | Kind::Tag | Kind::Avatar | Kind::Toggle { .. } | Kind::IconButton { .. } | Kind::Group) { self.size(tree, c).1.min(area.cols) } else { area.cols };
+            let cols = if matches!(
+                tree.nodes[c as usize].kind,
+                Kind::Button
+                    | Kind::Link
+                    | Kind::Swatch { .. }
+                    | Kind::Picture { .. }
+                    | Kind::Keys
+                    | Kind::Tag
+                    | Kind::Avatar
+                    | Kind::Toggle { .. }
+                    | Kind::IconButton { .. }
+                    | Kind::Group
+                    | Kind::Opener { .. }
+            ) {
+                self.size(tree, c).1.min(area.cols)
+            } else {
+                area.cols
+            };
             let a = if rows > 0 { Area::new(area.col, row, cols, rows) } else { Area::default() };
             self.place(tree, c, a);
             row += rows + self.gap_after(tree, k, end, gap);

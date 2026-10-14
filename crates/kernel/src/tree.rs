@@ -126,6 +126,17 @@ pub enum Kind {
     Switch { on: bool },
     Fieldset,
     Labelled,
+    Tabs,
+    Strip,
+    Tab { on: bool },
+    Place { on: bool },
+    Disclosure,
+    Opener { open: bool },
+    Crumbs,
+    PageLink { on: bool },
+    Overflow,
+    Places,
+    More,
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -142,11 +153,46 @@ impl Kind {
 
     /// Whether it is a control the user presses: a button, a link, a box to tick or a switch to flip.
     pub fn control(&self) -> bool {
-        matches!(self, Kind::Button | Kind::Link | Kind::Check { .. } | Kind::Toggle { .. } | Kind::IconButton { .. } | Kind::Radio { .. } | Kind::Switch { .. })
+        matches!(
+            self,
+            Kind::Button
+                | Kind::Link
+                | Kind::Check { .. }
+                | Kind::Toggle { .. }
+                | Kind::IconButton { .. }
+                | Kind::Radio { .. }
+                | Kind::Switch { .. }
+                | Kind::Tab { .. }
+                | Kind::Place { .. }
+                | Kind::Opener { .. }
+                | Kind::PageLink { .. }
+                | Kind::More
+        )
     }
 
     pub fn container(&self) -> bool {
-        matches!(self, Kind::Root | Kind::Page | Kind::Row | Kind::Column | Kind::Columns | Kind::List { .. } | Kind::ListRow { .. } | Kind::Overlay { .. } | Kind::Callout { .. } | Kind::Card | Kind::Group | Kind::Fieldset | Kind::Labelled)
+        matches!(
+            self,
+            Kind::Root
+                | Kind::Page
+                | Kind::Row
+                | Kind::Column
+                | Kind::Columns
+                | Kind::List { .. }
+                | Kind::ListRow { .. }
+                | Kind::Overlay { .. }
+                | Kind::Callout { .. }
+                | Kind::Card
+                | Kind::Group
+                | Kind::Fieldset
+                | Kind::Labelled
+                | Kind::Tabs
+                | Kind::Strip
+                | Kind::Disclosure
+                | Kind::Crumbs
+                | Kind::Overflow
+                | Kind::Places
+        )
     }
 
     pub fn role(&self) -> &'static str {
@@ -191,6 +237,17 @@ impl Kind {
             Kind::Switch { .. } => "switch",
             Kind::Fieldset => "fieldset",
             Kind::Labelled => "labelled",
+            Kind::Tabs => "tabs",
+            Kind::Strip => "tab list",
+            Kind::Tab { .. } => "tab",
+            Kind::Place { .. } => "place",
+            Kind::Disclosure => "disclosure",
+            Kind::Opener { .. } => "opener",
+            Kind::Crumbs => "breadcrumbs",
+            Kind::PageLink { .. } => "page link",
+            Kind::Overflow => "overflow",
+            Kind::Places => "navigation",
+            Kind::More => "more",
         }
     }
 }
@@ -327,7 +384,20 @@ pub struct Tree<C> {
 
 impl<C> Default for Tree<C> {
     fn default() -> Self {
-        Self { nodes: Vec::new(), text: String::new(), commands: Vec::new(), counts: HashMap::new(), index: HashMap::new(), lists: Vec::new(), calendar: Calendar::default(), changes: None, sets: Vec::new(), only_changed: false, files: Vec::new(), moves: Vec::new() }
+        Self {
+            nodes: Vec::new(),
+            text: String::new(),
+            commands: Vec::new(),
+            counts: HashMap::new(),
+            index: HashMap::new(),
+            lists: Vec::new(),
+            calendar: Calendar::default(),
+            changes: None,
+            sets: Vec::new(),
+            only_changed: false,
+            files: Vec::new(),
+            moves: Vec::new(),
+        }
     }
 }
 

@@ -464,6 +464,137 @@ impl<'a, C, S> Ui<'a, C, S> {
         f(&mut self.child(i, subject));
     }
 
+    /// Pages of one panel: a tab for each option of the enum at `path`, an enum with `derive(Choice)`, and under them the page `f` describes for the chosen one. Switching tabs is an `Edit` and one undo step.
+    #[track_caller]
+    pub fn tabs<F: Field, T: Setting>(&mut self, path: FactPath<F, T>, f: impl FnOnce(&mut Ui<'_, C, S>, T)) {
+        let (Control::Choice(options), Some(now)) = (T::control(), self.facts::<F>().and_then(|f| path.get(f)).cloned()) else { return };
+        let at = Location::caller();
+        let path = path.erased();
+        let id = Id::ROOT.mix(path.hash64());
+        let tabs = self.tree.add(self.parent, Kind::Tabs, Some(id), at);
+        self.tree.nodes[tabs as usize].span = crate::tree::Fill;
+        let strip = self.tree.add(tabs, Kind::Strip, Some(id.mix(1)), at);
+        let value = now.value();
+        for (k, (option, v)) in options.iter().enumerate() {
+            let c = self.tree.add(strip, Kind::Tab { on: *v == value }, Some(id.mix(3).mix(k as u64)), at);
+            self.choice(c, option, path, v.clone());
+        }
+        let page = self.tree.add(tabs, Kind::Column, Some(id.mix(2)), at);
+        let subject = self.subject;
+        f(&mut self.child(page, subject), now);
+    }
+
+    /// The places of an app along the top, one for each option of the enum at `path`, an enum with `derive(Choice)`, with the current one marked. Places that don't fit go into a "More…" choice. Going to one is an `Edit` and one undo step.
+    #[track_caller]
+    pub fn places<F: Field, T: Setting>(&mut self, path: FactPath<F, T>) {
+        let (Control::Choice(options), Some(now)) = (T::control(), self.facts::<F>().and_then(|f| path.get(f)).map(Field::value)) else { return };
+        let at = Location::caller();
+        let path = path.erased();
+        let id = Id::ROOT.mix(path.hash64());
+        let places = self.tree.add(self.parent, Kind::Places, Some(id), at);
+        for (k, (option, v)) in options.iter().enumerate() {
+            let c = self.tree.add(places, Kind::Place { on: *v == now }, Some(id.mix(3).mix(k as u64)), at);
+            self.choice(c, option, path, v.clone());
+        }
+        self.more(places, id, at);
+    }
+
+    /// A section that opens in place: `label` with a chevron, and under it what `f` describes while the fact at `path` is true. Opening and closing it is an `Edit` and one undo step.
+    #[track_caller]
+    pub fn disclosure<F: Field>(&mut self, label: impl AsRef<str>, path: FactPath<F, bool>, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let open = self.facts::<F>().and_then(|f| path.get(f)).copied().unwrap_or(false);
+        let (label, at) = (label.as_ref(), Location::caller());
+        let path = path.erased();
+        let id = Id::ROOT.mix(path.hash64());
+        let section = self.tree.add(self.parent, Kind::Disclosure, Some(id), at);
+        self.tree.nodes[section as usize].subject = self.subject;
+        let opener = self.tree.add(section, Kind::Opener { open }, Some(id.mix(1)), at);
+        let r = self.tree.put(label);
+        self.tree.nodes[opener as usize].text = r;
+        self.set(opener, path, ledger::Value::Bool(!open), format!("{label}: {}", if open { "close" } else { "open" }));
+        if open {
+            let subject = self.subject;
+            f(&mut self.child(section, subject));
+        }
+    }
+
+    /// Where something sits, as the levels that lead to it: `names` from the top down, with the fact at `path` saying how deep the current one is, counting from 0. The levels above it are links back up, and going to one is an `Edit` and one undo step. A long trail is shortened in the middle.
+    #[track_caller]
+    pub fn breadcrumbs<F: Field>(&mut self, path: FactPath<F, u32>, names: &[&str]) {
+        let depth = self.facts::<F>().and_then(|f| path.get(f)).copied().unwrap_or(0) as usize;
+        let at = Location::caller();
+        let path = path.erased();
+        let id = Id::ROOT.mix(path.hash64());
+        let crumbs = self.tree.add(self.parent, Kind::Crumbs, Some(id), at);
+        for (k, name) in names.iter().enumerate().take(depth + 1) {
+            let kind = if k < depth { Kind::Link } else { Kind::Text { mono: false, tone: Tone::Ink, strong: true } };
+            let c = self.tree.add(crumbs, kind, Some(id.mix(3).mix(k as u64)), at);
+            let r = self.tree.put(name);
+            self.tree.nodes[c as usize].text = r;
+            if k < depth {
+                self.set(c, path, (k as u32).value(), format!("Back to {name}"));
+            }
+        }
+    }
+
+    /// Links to the pages of something that comes in `count` pages, with the page at `path` marked: the first, the last, the ones beside it, and the previous and next. Pages count from 0 in the facts and from 1 on screen. Going to one is an `Edit` and one undo step.
+    #[track_caller]
+    pub fn pages<F: Field>(&mut self, path: FactPath<F, u32>, count: u32) {
+        let now = self.facts::<F>().and_then(|f| path.get(f)).copied().unwrap_or(0);
+        let at = Location::caller();
+        let path = path.erased();
+        let id = Id::ROOT.mix(path.hash64());
+        let strip = self.tree.add(self.parent, Kind::Strip, Some(id), at);
+        let last = count.saturating_sub(1);
+        let link = |ui: &mut Self, label: &str, page: u32, on: bool, enabled: bool, key: u64| {
+            let c = ui.tree.add(strip, Kind::PageLink { on }, Some(id.mix(key)), at);
+            let r = ui.tree.put(label);
+            ui.tree.nodes[c as usize].text = r;
+            if enabled {
+                ui.set(c, path, page.value(), format!("Page {}", page + 1));
+            } else {
+                ui.tree.nodes[c as usize].enabled = false;
+            }
+        };
+        link(self, "Previous", now.saturating_sub(1), false, now > 0, 1);
+        let mut gap = false;
+        for page in 0..count {
+            if page == 0 || page == last || page.abs_diff(now) <= 1 {
+                link(self, &(page + 1).to_string(), page, page == now, page != now, 4 + page as u64);
+                gap = false;
+            } else if !gap {
+                let c = self.tree.add(strip, Kind::Text { mono: true, tone: Tone::Muted, strong: false }, Some(id.mix(3).mix(page as u64)), at);
+                let r = self.tree.put("…");
+                self.tree.nodes[c as usize].text = r;
+                gap = true;
+            }
+        }
+        link(self, "Next", (now + 1).min(last), false, now < last, 2);
+    }
+
+    /// Buttons and links on one row; what doesn't fit goes into a "More…" choice at the end, which lists it.
+    #[track_caller]
+    pub fn overflow(&mut self, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let at = Location::caller();
+        let i = self.add(Kind::Overflow, at);
+        let subject = self.subject;
+        f(&mut self.child(i, subject));
+        let id = self.tree.nodes[i as usize].id;
+        self.more(i, id, at);
+    }
+
+    fn choice(&mut self, c: u32, option: &str, path: ledger::ErasedPath, value: ledger::Value) {
+        let r = self.tree.put(option);
+        self.tree.nodes[c as usize].text = r;
+        self.set(c, path, value, option.to_owned());
+    }
+
+    fn more(&mut self, parent: u32, id: Id, at: &'static Location<'static>) {
+        let c = self.tree.add(parent, Kind::More, Some(id.mix(9)), at);
+        let r = self.tree.put("More…");
+        self.tree.nodes[c as usize].text = r;
+    }
+
     fn switch_at(&mut self, label: &str, path: ledger::ErasedPath, on: bool, at: &'static Location<'static>) {
         let i = self.tree.add(self.parent, Kind::Switch { on }, Some(Id::ROOT.mix(path.hash64())), at);
         let r = self.tree.put(label);

@@ -48,6 +48,31 @@ pub enum Shape {
     Board,
 }
 
+/// The pages of the live example of tabs.
+#[derive(Facts, Choice, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Pane {
+    #[default]
+    General,
+    Appearance,
+    Keys,
+}
+
+/// The places of the live example of navigation: more than fit in a narrow window.
+#[derive(Facts, Choice, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Folder {
+    #[default]
+    Inbox,
+    Drafts,
+    Sent,
+    Archive,
+    Spam,
+    Trash,
+}
+
+const LEVELS: [&str; 3] = ["Settings", "Account", "Password"];
+
+const TRAIL: [&str; 6] = ["Home", "Projects", "Graticule", "docs", "components", "Breadcrumbs"];
+
 /// Specimen's own facts: where it is, and the live examples on its pages, which are as real as any app's.
 #[derive(Facts)]
 pub struct Catalog {
@@ -91,6 +116,18 @@ pub struct Catalog {
     wrapping: bool,
     #[session]
     shape: Shape,
+    #[session]
+    pane: Pane,
+    #[session]
+    folder: Folder,
+    #[session]
+    open: bool,
+    #[session]
+    leaf: u32,
+    #[session]
+    depth: u32,
+    #[session]
+    trail: u32,
 }
 
 #[derive(Facts)]
@@ -199,10 +236,18 @@ pub enum Component {
     Radio,
     Fieldset,
     Labelled,
+    Tabs,
+    Navigation,
+    Pagination,
+    Disclosure,
+    Breadcrumbs,
+    PanelStack,
+    Overflow,
+    ScrollEdges,
 }
 
 impl Component {
-    const ALL: [Component; 34] = [
+    const ALL: [Component; 42] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -237,6 +282,14 @@ impl Component {
         Component::Radio,
         Component::Fieldset,
         Component::Labelled,
+        Component::Tabs,
+        Component::Navigation,
+        Component::Pagination,
+        Component::Disclosure,
+        Component::Breadcrumbs,
+        Component::PanelStack,
+        Component::Overflow,
+        Component::ScrollEdges,
     ];
 
     fn name(self) -> &'static str {
@@ -275,6 +328,14 @@ impl Component {
             Component::Radio => "Radio group",
             Component::Fieldset => "Fieldset",
             Component::Labelled => "Label",
+            Component::Tabs => "Tabs",
+            Component::Navigation => "Navigation",
+            Component::Pagination => "Pagination",
+            Component::Disclosure => "Disclosure",
+            Component::Breadcrumbs => "Breadcrumbs",
+            Component::PanelStack => "Panel stack",
+            Component::Overflow => "Overflow",
+            Component::ScrollEdges => "Scroll edges",
         }
     }
 
@@ -314,6 +375,14 @@ impl Component {
             Component::Radio => include_str!("../../../docs/components/radio.md"),
             Component::Fieldset => include_str!("../../../docs/components/fieldset.md"),
             Component::Labelled => include_str!("../../../docs/components/labelled.md"),
+            Component::Tabs => include_str!("../../../docs/components/tabs.md"),
+            Component::Navigation => include_str!("../../../docs/components/navigation.md"),
+            Component::Pagination => include_str!("../../../docs/components/pagination.md"),
+            Component::Disclosure => include_str!("../../../docs/components/disclosure.md"),
+            Component::Breadcrumbs => include_str!("../../../docs/components/breadcrumbs.md"),
+            Component::PanelStack => include_str!("../../../docs/components/panel-stack.md"),
+            Component::Overflow => include_str!("../../../docs/components/overflow.md"),
+            Component::ScrollEdges => include_str!("../../../docs/components/scroll-edges.md"),
         }
     }
 
@@ -332,6 +401,8 @@ pub enum Cmd {
     Tick,
     #[label("Bold")]
     Bold,
+    #[label("Go one level in")]
+    Deeper,
     #[label("Say it")]
     Say,
     #[label("Open the page for “{name}”", short: "Open")]
@@ -413,6 +484,12 @@ impl Default for Catalog {
             bold: false,
             wrapping: true,
             shape: Shape::List,
+            pane: Pane::General,
+            folder: Folder::Inbox,
+            open: false,
+            leaf: 4,
+            depth: 0,
+            trail: 5,
         }
     }
 }
@@ -424,6 +501,7 @@ impl App for Catalog {
         match cmd {
             Cmd::Say => kernel::no_if(self.draft.is_empty(), Message::from("Type something first")),
             Cmd::Open(section) => kernel::no_if(!self.sections.has(*section), Message::from("There is no such component")),
+            Cmd::Deeper => kernel::no_if(self.depth as usize + 1 >= LEVELS.len(), Message::from("This is as deep as it goes")),
             Cmd::Back => kernel::no_if(self.page.is_none(), Message::from("All components are showing")),
             Cmd::Echo(sample) => kernel::no_if(!self.samples.has(*sample), Message::from("There is no such sample")),
             Cmd::Lighter(s) | Cmd::Darker(s) | Cmd::MoreColor(s) | Cmd::LessColor(s) | Cmd::HueForward(s) | Cmd::HueBack(s) => match self.nudge(*s, nudge(cmd)) {
@@ -453,6 +531,10 @@ impl App for Catalog {
             }
             Cmd::Bold => {
                 self.bold = !self.bold;
+                Outcome::Changed
+            }
+            Cmd::Deeper => {
+                self.depth += 1;
                 Outcome::Changed
             }
             Cmd::Say => {
@@ -763,6 +845,35 @@ impl Catalog {
                 ui.field(Catalog::draft, Message::from("Type here")).on_submit(Cmd::Say);
                 ui.muted("It shows in the message line");
             }),
+            Component::Tabs => ui.tabs(Catalog::pane, |ui, pane| match pane {
+                Pane::General => ui.switch("Wrap long lines", Catalog::wrapping),
+                Pane::Appearance => ui.radio("Show as", Catalog::shape),
+                Pane::Keys => ui.muted("Keys are bound in the keymap file"),
+            }),
+            Component::Navigation => ui.places(Catalog::folder),
+            Component::Pagination => ui.pages(Catalog::leaf, 12),
+            Component::Disclosure => ui.disclosure("More settings", Catalog::open, |ui| {
+                ui.switch("Wrap long lines", Catalog::wrapping);
+                ui.check("A yes-or-no fact", self.ticked, Cmd::Tick);
+            }),
+            Component::Breadcrumbs => ui.breadcrumbs(Catalog::trail, &TRAIL),
+            Component::PanelStack => {
+                ui.breadcrumbs(Catalog::depth, &LEVELS);
+                ui.muted(match self.depth {
+                    0 => "Everything you can change",
+                    1 => "Who you are here",
+                    _ => "How you sign in",
+                });
+                ui.button(Cmd::Deeper);
+            }
+            Component::Overflow => ui.overflow(|ui| {
+                ui.button(Cmd::Press);
+                ui.toggle(self.bold, Cmd::Bold);
+                ui.button(Cmd::Tick);
+                ui.link(Cmd::Follow);
+                ui.button(Cmd::Say);
+            }),
+            Component::ScrollEdges => ui.muted("This page's list shows them: scroll it, and a rule marks the edge with more beyond"),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);

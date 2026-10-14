@@ -128,12 +128,7 @@ impl Clock {
     }
 
     fn fields(&self) -> [(String, Value); 4] {
-        [
-            ("replica".into(), Value::UInt(self.replica)),
-            ("counter".into(), Value::UInt(self.counter)),
-            ("now".into(), Value::Int(self.now.0)),
-            ("seed".into(), Value::UInt(self.seed)),
-        ]
+        [("replica".into(), Value::UInt(self.replica)), ("counter".into(), Value::UInt(self.counter)), ("now".into(), Value::Int(self.now.0)), ("seed".into(), Value::UInt(self.seed))]
     }
 }
 
@@ -460,6 +455,25 @@ impl<A: App> Runner<A> {
     /// Opens the context menu drawn as an overlay at a cell, with its first entry that can run focused.
     pub fn open_menu(&mut self, col: i32, row: i32) -> bool {
         let items = self.menu_at(col, row);
+        self.show_menu((col, row), items)
+    }
+
+    fn open_more(&mut self, i: u32) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let mut items = Vec::new();
+        let mut k = self.tree.nodes[n.parent as usize].first;
+        while k != NONE {
+            let c = self.tree.nodes[k as usize];
+            if k != i && c.area.is_empty() {
+                let label = if c.text.is_empty() { self.tree.str(c.name) } else { self.tree.str(c.text) };
+                items.push(crate::menu::MenuItem { id: c.id.0, label: label.to_string(), keys: None, enabled: c.enabled });
+            }
+            k = c.next;
+        }
+        self.show_menu((n.area.col, n.area.row + 1), items)
+    }
+
+    fn show_menu(&mut self, (col, row): (i32, i32), items: Vec<crate::menu::MenuItem>) -> bool {
         if items.is_empty() {
             return false;
         }
@@ -723,7 +737,8 @@ impl<A: App> Runner<A> {
         self.inspecting = false;
         let n = self.tree.nodes[i as usize];
         let name = if n.name.is_empty() { self.tree.str(n.text) } else { self.tree.str(n.name) }.to_string();
-        let command = n.builtin.map(Builtin::name).or_else(|| (n.cmd != NONE).then(|| self.tree.commands[n.cmd as usize].name())).or_else(|| (n.asks != NONE).then(|| A::Cmd::entries()[n.asks as usize].name));
+        let command =
+            n.builtin.map(Builtin::name).or_else(|| (n.cmd != NONE).then(|| self.tree.commands[n.cmd as usize].name())).or_else(|| (n.asks != NONE).then(|| A::Cmd::entries()[n.asks as usize].name));
         let acts = command.is_some() || n.host != NONE;
         if !acts {
             let what = n.kind.role();
@@ -1988,10 +2003,15 @@ impl<A: App> Runner<A> {
                     }
                 });
                 match feed {
-                    Some(feed) => self.spawn(name, move || {
-                        run(feed);
-                        None
-                    }, Box::new(|_| None), None),
+                    Some(feed) => self.spawn(
+                        name,
+                        move || {
+                            run(feed);
+                            None
+                        },
+                        Box::new(|_| None),
+                        None,
+                    ),
                     None => self.said = Some(Said::Failure(format!("“{name}” has no live value to write"))),
                 }
             }
@@ -2198,6 +2218,9 @@ impl<A: App> Runner<A> {
             let ran = self.run(cmd);
             self.naming = None;
             return ran;
+        }
+        if n.kind == Kind::More {
+            return self.open_more(i);
         }
         if n.cmd == NONE {
             return false;
@@ -3393,4 +3416,3 @@ fn shortened(type_name: &str) -> String {
     }
     out.trim_end().to_string()
 }
-

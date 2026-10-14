@@ -1,9 +1,9 @@
 //! The one crate a Graticule app imports: `use graticule::prelude::*;` and `graticule::run::<App>(t!("Name"))`.
 
 pub use kernel;
-pub use ledger;
 /// The types Engraver's output names, so a build script can compile an app's own pictures with the prefix `graticule`.
 pub use kernel::{Ink, Layer, Picture};
+pub use ledger;
 
 /// Everything an app's code uses, in one import.
 pub mod prelude {

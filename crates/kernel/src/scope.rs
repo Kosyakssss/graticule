@@ -28,7 +28,8 @@ pub enum Cause {
 }
 
 impl Cause {
-    pub const ALL: [Cause; 11] = [Cause::Launch, Cause::Key, Cause::Typing, Cause::Pointer, Cause::Click, Cause::Wheel, Cause::Resize, Cause::Appearance, Cause::Woken, Cause::Assistive, Cause::Uncovered];
+    pub const ALL: [Cause; 11] =
+        [Cause::Launch, Cause::Key, Cause::Typing, Cause::Pointer, Cause::Click, Cause::Wheel, Cause::Resize, Cause::Appearance, Cause::Woken, Cause::Assistive, Cause::Uncovered];
 
     /// The cause in words, as Scope shows it.
     pub fn name(self) -> &'static str {

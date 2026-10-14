@@ -212,14 +212,7 @@ pub fn code(p: &Picture, prefix: &str) -> String {
     for l in &p.layers {
         let _ = write!(layers, "{prefix}::Layer {{ ink: {prefix}::Ink::{}, path: {:?}, even_odd: {} }}, ", l.ink, l.path, l.even_odd);
     }
-    format!(
-        "/// {}\npub static {}: {prefix}::Picture = {prefix}::Picture {{ label: {:?}, width: {:?}, height: {:?}, layers: &[{layers}] }};\n",
-        p.label,
-        ident(&p.name),
-        p.label,
-        p.width,
-        p.height
-    )
+    format!("/// {}\npub static {}: {prefix}::Picture = {prefix}::Picture {{ label: {:?}, width: {:?}, height: {:?}, layers: &[{layers}] }};\n", p.label, ident(&p.name), p.label, p.width, p.height)
 }
 
 /// The Rust for `ALL`, every picture by name, in name order.
@@ -230,11 +223,8 @@ pub fn all(names: &[String], prefix: &str) -> String {
 
 /// Every SVG file in a folder, in name order, compiled or refused.
 pub fn read(dir: &Path) -> Result<Vec<(String, Compiled)>, String> {
-    let mut files: Vec<_> = std::fs::read_dir(dir)
-        .map_err(|e| format!("{}: {e}", dir.display()))?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "svg"))
-        .collect();
+    let mut files: Vec<_> =
+        std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "svg")).collect();
     files.sort();
     let mut out = Vec::new();
     for file in files {

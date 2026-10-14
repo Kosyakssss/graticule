@@ -66,7 +66,11 @@ struct Clock {
 
 impl Clock {
     fn of(entry: &Value) -> Option<Clock> {
-        let (Some(Value::UInt(replica)), Some(Value::UInt(counter)), Some(Value::Int(now)), Some(Value::UInt(seed))) = (entry.field("replica"), entry.field("counter"), entry.field("now"), entry.field("seed")) else { return None };
+        let (Some(Value::UInt(replica)), Some(Value::UInt(counter)), Some(Value::Int(now)), Some(Value::UInt(seed))) =
+            (entry.field("replica"), entry.field("counter"), entry.field("now"), entry.field("seed"))
+        else {
+            return None;
+        };
         Some(Clock { replica: *replica, counter: *counter, now: Moment(*now), seed: *seed })
     }
 }
@@ -769,7 +773,8 @@ impl<A: App> Runner<A> {
         if !replaced.is_empty() {
             ledger::Field::attach(&mut self.facts, ErasedPath::ROOT);
             let names: Vec<String> = replaced.iter().map(|t| shortened(t)).collect();
-            self.said = Some(Said::Failure(format!("{label} replaced a {} by assigning a new one, which undo can't take back; change it with its own methods, like replace or set", names.join(" and a "))));
+            self.said =
+                Some(Said::Failure(format!("{label} replaced a {} by assigning a new one, which undo can't take back; change it with its own methods, like replace or set", names.join(" and a "))));
         }
         let pruned = self.prune(&ops);
         ops.extend(pruned);
@@ -856,10 +861,13 @@ impl<A: App> Runner<A> {
     }
 
     fn prune(&mut self, ops: &[Op]) -> Vec<Op> {
-        let inserted: std::collections::HashSet<u128> = ops.iter().filter_map(|op| match op {
-            Op::Insert { key, .. } => Some(*key),
-            _ => None,
-        }).collect();
+        let inserted: std::collections::HashSet<u128> = ops
+            .iter()
+            .filter_map(|op| match op {
+                Op::Insert { key, .. } => Some(*key),
+                _ => None,
+            })
+            .collect();
         let deleted: Vec<(std::any::TypeId, u128)> =
             ops.iter().filter_map(|op| op.deleted().filter(|k| !inserted.contains(k)).and_then(|k| Some((self.facts.item_type(op.path().steps())?, k)))).collect();
         if deleted.is_empty() {

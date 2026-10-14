@@ -13,7 +13,27 @@ use crate::screen::Screen;
 use crate::{Finding, Law, Plan};
 
 const KEYS: &[&str] = &[
-    "down", "up", "shift+down", "shift+up", "home", "end", "pageup", "pagedown", "space", "enter", "tab", "shift+tab", "escape", "delete", "backspace", "left", "right", "primary+a", "primary+z", "primary+shift+z", "primary+shift+p",
+    "down",
+    "up",
+    "shift+down",
+    "shift+up",
+    "home",
+    "end",
+    "pageup",
+    "pagedown",
+    "space",
+    "enter",
+    "tab",
+    "shift+tab",
+    "escape",
+    "delete",
+    "backspace",
+    "left",
+    "right",
+    "primary+a",
+    "primary+z",
+    "primary+shift+z",
+    "primary+shift+p",
 ];
 const BUILTINS: &[&str] = &["palette", "undo", "redo", "next-control", "previous-control", "up", "down", "extend-up", "extend-down", "first", "last", "select-all", "cancel"];
 const TYPED: &[char] = &['a', 'b', 'c', 'd', 'e', ' ', 'é'];
@@ -244,7 +264,11 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
             }
         }
         if let Some((measure, from)) = measure.as_mut() {
-            measure.frames.push((took + painted, format!("from {from}, after step {}: {}", n + 1, played.done[n]) + &format!(" (update {took} µs, view {}, layout {}, paint {})", runner.stages().view, runner.stages().layout, runner.stages().paint)));
+            measure.frames.push((
+                took + painted,
+                format!("from {from}, after step {}: {}", n + 1, played.done[n])
+                    + &format!(" (update {took} µs, view {}, layout {}, paint {})", runner.stages().view, runner.stages().layout, runner.stages().paint),
+            ));
             for node in &runner.tree.nodes {
                 if node.cmd == NONE {
                     continue;

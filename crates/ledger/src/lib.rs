@@ -15,6 +15,7 @@ mod store;
 mod text;
 mod value;
 
+pub use bulk::{Bulk, Search, deferred};
 pub use edit::{Change, Edit};
 pub use history::{History, Kept, Moved};
 pub use journal::{Transaction, record, recording, replaced, take_replaced};
@@ -23,7 +24,6 @@ pub use list::List;
 pub use op::Op;
 pub use outcome::Outcome;
 pub use path::{DEPTH, ErasedPath, FactPath, Facts, Field, FieldInfo, Find, Kind, Record, Step};
-pub use bulk::{Bulk, Search, deferred};
 pub use plain::Document;
 pub use selection::{Choose, Selection};
 pub use store::{Opened, Store, entries, fresh_replica};

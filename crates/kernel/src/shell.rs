@@ -13,9 +13,9 @@ use crate::ink::Appearance;
 use crate::look::{Look, Looks, Switch};
 use crate::metrics::Metrics;
 use crate::pace::Pace;
-use crate::scope::{Cause, Recorder, Stages};
 use crate::paint::Painter;
 use crate::reload::{Handoff, Reload};
+use crate::scope::{Cause, Recorder, Stages};
 use crate::text::Text;
 
 pub struct Config {

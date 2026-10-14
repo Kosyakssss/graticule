@@ -79,7 +79,8 @@ pub enum Ink {
 
 impl Ink {
     /// Every ink, surfaces first, then the inks for text and lines.
-    pub const ALL: [Ink; 14] = [Ink::Background, Ink::Field, Ink::Hover, Ink::Cursor, Ink::Selection, Ink::Ink, Ink::Muted, Ink::Faint, Ink::Rule, Ink::Link, Ink::Visited, Ink::Danger, Ink::Warn, Ink::Ok];
+    pub const ALL: [Ink; 14] =
+        [Ink::Background, Ink::Field, Ink::Hover, Ink::Cursor, Ink::Selection, Ink::Ink, Ink::Muted, Ink::Faint, Ink::Rule, Ink::Link, Ink::Visited, Ink::Danger, Ink::Warn, Ink::Ok];
 
     /// The ink's name, as theme files and Specimen call it.
     pub fn name(self) -> &'static str {

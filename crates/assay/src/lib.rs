@@ -129,11 +129,21 @@ pub fn assay<A: kernel::App>(plan: Plan) -> Assayed {
     findings.extend(taste.findings);
     let frames = Measured::of(universal.frames);
     if judged() && frames.slowest_percent > FRAME_BUDGET {
-        findings.push(Finding { law: Law::FrameBudget, said: format!("the slowest 1% of frames took {} µs, over the budget of {FRAME_BUDGET} µs; the slowest, {} µs, was {}", frames.slowest_percent, frames.slowest, frames.at), from: String::new(), steps: Vec::new() });
+        findings.push(Finding {
+            law: Law::FrameBudget,
+            said: format!("the slowest 1% of frames took {} µs, over the budget of {FRAME_BUDGET} µs; the slowest, {} µs, was {}", frames.slowest_percent, frames.slowest, frames.at),
+            from: String::new(),
+            steps: Vec::new(),
+        });
     }
     let available = Measured::of(universal.available);
     if judged() && available.slowest_percent > AVAILABLE_BUDGET {
-        findings.push(Finding { law: Law::AvailableBudget, said: format!("the slowest 1% of calls took {} ns, over the budget of {AVAILABLE_BUDGET} ns; the slowest, {} ns, was {}", available.slowest_percent, available.slowest, available.at), from: String::new(), steps: Vec::new() });
+        findings.push(Finding {
+            law: Law::AvailableBudget,
+            said: format!("the slowest 1% of calls took {} ns, over the budget of {AVAILABLE_BUDGET} ns; the slowest, {} ns, was {}", available.slowest_percent, available.slowest, available.at),
+            from: String::new(),
+            steps: Vec::new(),
+        });
     }
     findings.extend(taste.allocations.iter().filter(|(_, count)| *count > 0).map(|(from, count)| Finding {
         law: Law::NoAllocationPerFrame,
@@ -160,7 +170,11 @@ pub fn report<A: kernel::App>() -> Result<(), String> {
 /// The report, as `report` prints it.
 pub fn written(a: &Assayed) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "Assay drove the app through {} command sequences of {} steps, from {} starting states, and looked at each state at its normal and smallest size.", a.sequences, a.steps, a.states);
+    let _ = writeln!(
+        out,
+        "Assay drove the app through {} command sequences of {} steps, from {} starting states, and looked at each state at its normal and smallest size.",
+        a.sequences, a.steps, a.states
+    );
     for f in &a.findings {
         let _ = writeln!(out, "\nfound: {}", f.law.name());
         let _ = writeln!(out, "  {}", f.said);
@@ -173,8 +187,13 @@ pub fn written(a: &Assayed) -> String {
     }
     let _ = writeln!(out);
     let judging = if judged() { "" } else { " (a debug build: times are shown but not judged; build with --release)" };
-    let _ = writeln!(out, "Frames{judging}: {} drawn, the slowest 1% in {} µs against {FRAME_BUDGET}, the slowest in {} µs, {}.", a.frames.count, a.frames.slowest_percent, a.frames.slowest, a.frames.at);
-    let _ = writeln!(out, "Available: {} calls, the slowest 1% in {} ns against {AVAILABLE_BUDGET}, the slowest in {} ns, {}.", a.available.count, a.available.slowest_percent, a.available.slowest, a.available.at);
+    let _ =
+        writeln!(out, "Frames{judging}: {} drawn, the slowest 1% in {} µs against {FRAME_BUDGET}, the slowest in {} µs, {}.", a.frames.count, a.frames.slowest_percent, a.frames.slowest, a.frames.at);
+    let _ = writeln!(
+        out,
+        "Available: {} calls, the slowest 1% in {} ns against {AVAILABLE_BUDGET}, the slowest in {} ns, {}.",
+        a.available.count, a.available.slowest_percent, a.available.slowest, a.available.at
+    );
     let _ = match a.allocations {
         Some(n) => writeln!(out, "Allocation: {n} in steady frames of every state."),
         None => writeln!(out, "Allocation: not counted in this build; build with the feature count-allocations to count it."),

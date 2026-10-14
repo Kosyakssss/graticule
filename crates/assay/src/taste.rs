@@ -37,7 +37,12 @@ pub fn run<A: kernel::App>(starts: &[(String, A)]) -> Taste {
                 let ratio = contrast(theme.get(ink), theme.bg);
                 if ratio < needs {
                     let look = if appearance == Appearance::Light { "light" } else { "dark" };
-                    taste.findings.push(Finding { law: Law::Contrast, said: format!("{} on the background reaches {ratio:.2}:1 in {}'s {look} appearance; it needs {needs}:1", ink.name(), file.name), from: String::new(), steps: Vec::new() });
+                    taste.findings.push(Finding {
+                        law: Law::Contrast,
+                        said: format!("{} on the background reaches {ratio:.2}:1 in {}'s {look} appearance; it needs {needs}:1", ink.name(), file.name),
+                        from: String::new(),
+                        steps: Vec::new(),
+                    });
                 }
             }
         }
@@ -68,10 +73,12 @@ fn grid<C>(tree: &Tree<C>, window: Area, at: &str, findings: &mut Vec<Finding>) 
 fn steady<A: kernel::App>(screen: &mut Screen, runner: &mut Runner<A>) -> Option<u64> {
     screen.paint(runner);
     screen.paint(runner);
-    Some(allocation_counter::measure(|| {
-        screen.paint(runner);
-    })
-    .count_total)
+    Some(
+        allocation_counter::measure(|| {
+            screen.paint(runner);
+        })
+        .count_total,
+    )
 }
 
 #[cfg(not(feature = "count-allocations"))]

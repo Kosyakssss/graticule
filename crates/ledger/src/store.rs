@@ -176,7 +176,8 @@ impl Files {
 
     fn snapshot<F: Field>(&mut self, facts: &F) -> io::Result<()> {
         self.log.flush()?;
-        let snapshot = Value::Map(vec![("version".into(), Value::UInt(VERSION)), ("log".into(), Value::UInt(self.end)), ("counter".into(), Value::UInt(self.counter)), ("facts".into(), facts.value())]);
+        let snapshot =
+            Value::Map(vec![("version".into(), Value::UInt(VERSION)), ("log".into(), Value::UInt(self.end)), ("counter".into(), Value::UInt(self.counter)), ("facts".into(), facts.value())]);
         write_atomic(&self.folder.join("facts"), &snapshot.to_bytes())?;
         self.snapshot_at = self.end;
         self.since = 0;
@@ -192,7 +193,10 @@ fn report(problems: &Mutex<Option<String>>, done: io::Result<()>) {
 
 fn read_snapshot<F: Field>(bytes: &[u8]) -> Option<(F, u64, u64)> {
     let value = Value::from_bytes(bytes).ok()?;
-    let (Some(Value::UInt(VERSION)), Some(Value::UInt(log)), Some(Value::UInt(counter)), Some(facts)) = (value.field("version"), value.field("log"), value.field("counter"), value.field("facts")) else { return None };
+    let (Some(Value::UInt(VERSION)), Some(Value::UInt(log)), Some(Value::UInt(counter)), Some(facts)) = (value.field("version"), value.field("log"), value.field("counter"), value.field("facts"))
+    else {
+        return None;
+    };
     Some((F::from_value(facts)?, *log, *counter))
 }
 

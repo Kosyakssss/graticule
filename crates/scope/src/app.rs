@@ -73,7 +73,19 @@ pub struct Frame {
 
 impl Frame {
     pub fn of(s: kernel::scope::Stamp) -> Frame {
-        Frame { id: Key::fixed(s.frame + 1), number: s.frame, at: s.at, cause: s.cause.name().to_string(), update: s.update, view: s.view, layout: s.layout, paint: s.paint, gpu: s.gpu, after: s.after, total: s.total }
+        Frame {
+            id: Key::fixed(s.frame + 1),
+            number: s.frame,
+            at: s.at,
+            cause: s.cause.name().to_string(),
+            update: s.update,
+            view: s.view,
+            layout: s.layout,
+            paint: s.paint,
+            gpu: s.gpu,
+            after: s.after,
+            total: s.total,
+        }
     }
 }
 
@@ -197,19 +209,23 @@ impl App for Scope {
                 .rev()
                 .map(|n| {
                     let total = 180 + ((n * 37) % 11) as u32 * 70 + if n == 17 { 900 } else { 0 };
-                    let stamp = kernel::scope::Stamp { frame: n, at: 400_000 + n * 16_000, cause: causes[(n % 4) as usize], update: 20, view: total / 5, layout: total / 6, paint: total / 3, gpu: total / 5, after: total / 20, total };
+                    let stamp = kernel::scope::Stamp {
+                        frame: n,
+                        at: 400_000 + n * 16_000,
+                        cause: causes[(n % 4) as usize],
+                        update: 20,
+                        view: total / 5,
+                        layout: total / 6,
+                        paint: total / 3,
+                        gpu: total / 5,
+                        after: total / 20,
+                        total,
+                    };
                     Frame::of(stamp)
                 })
                 .collect();
             let launch = [("event loop", 4.1), ("system", 2.0), ("window", 31.5), ("gpu", 88.2), ("fonts", 1.2), ("app", 0.6), ("first frame", 9.8)];
-            Scope {
-                view,
-                apps: [app].into_iter().collect(),
-                attached: Some(id),
-                launch: launch.iter().zip(1..).map(|((name, ms), n)| Stage::of(n, name, *ms)).collect(),
-                frames,
-                ..Scope::default()
-            }
+            Scope { view, apps: [app].into_iter().collect(), attached: Some(id), launch: launch.iter().zip(1..).map(|((name, ms), n)| Stage::of(n, name, *ms)).collect(), frames, ..Scope::default() }
         };
         let running = Scope { apps: [Running::of(4242, "To do", 50_000), Running::of(4243, "Specimen", 50_001)].into_iter().collect(), ..Scope::default() };
         kernel::States::new().add("No apps", Scope::default()).add("Two apps running", running).add("Time", attached(View::Time)).add("Why it redrew", attached(View::Redraws))

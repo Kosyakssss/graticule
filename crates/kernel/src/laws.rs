@@ -680,7 +680,6 @@ mod commands {
         }
     }
 
-
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(256))]
 

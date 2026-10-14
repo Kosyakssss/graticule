@@ -454,9 +454,7 @@ impl App for Catalog {
             let _ = chosen.looking.choose(&ledger::Choose::Only(link.raw()));
         }
         let start = States::new().add("Components", Catalog::default()).add("Style", Catalog { place: Place::Style, ..Catalog::default() }).add("Style, an ink chosen", chosen);
-        Component::ALL.iter().fold(start, |states, &component| {
-            states.add(component.name(), Catalog { page: Some(component), blocks: blocks(component), ..Catalog::default() })
-        })
+        Component::ALL.iter().fold(start, |states, &component| states.add(component.name(), Catalog { page: Some(component), blocks: blocks(component), ..Catalog::default() }))
     }
 }
 
@@ -521,7 +519,6 @@ impl Catalog {
             });
         });
     }
-
 
     fn sheet(&self, ui: &mut Ui<Cmd>, component: Component) {
         ui.page(Message::plain(component.name()), |ui| {
@@ -687,7 +684,12 @@ fn settings() -> List<Setting> {
     let line = |shown: Shown, name: &str, light: &str, dark: &str| (shown, name.to_string(), light.to_string(), dark.to_string());
     let mut lines = vec![
         line(Shown::Heading, "Inks", "", ""),
-        line(Shown::Paragraph, "Everything is drawn in one of these inks, so a theme restyles everything at once. Each is given as OKLCH lightness, chroma and hue, then, for inks that text and lines are drawn in, its contrast on the background: text needs 4.5 to 1, faint text 3 to 1. Choose an ink to change it from the bar; a change that would make text hard to read can't be made, and says why. Every screen and component follows as it moves.", "", ""),
+        line(
+            Shown::Paragraph,
+            "Everything is drawn in one of these inks, so a theme restyles everything at once. Each is given as OKLCH lightness, chroma and hue, then, for inks that text and lines are drawn in, its contrast on the background: text needs 4.5 to 1, faint text 3 to 1. Choose an ink to change it from the bar; a change that would make text hard to read can't be made, and says why. Every screen and component follows as it moves.",
+            "",
+            "",
+        ),
         line(Shown::Columns, "Ink", "Light", "Dark"),
     ];
     lines.extend(Ink::ALL.into_iter().map(|ink| line(Shown::Ink(ink), ink.name(), "", "")));
@@ -728,7 +730,6 @@ fn describe(theme: &kernel::ink::Theme, shade: style::Shade, ink: Ink) -> String
         _ => format!("{numbers} · {ratio:.1}"),
     }
 }
-
 
 fn nudge(cmd: &Cmd) -> Nudge {
     match cmd {

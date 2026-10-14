@@ -5,8 +5,8 @@ use crate::ink::Color;
 use crate::layout::{CHECK, MARGIN};
 use crate::look::CheckMark;
 use crate::paint::Painter;
-use crate::px::Rect;
 use crate::picture::Picture;
+use crate::px::Rect;
 use crate::text::{Block, Data, Outline, Paint, SpanStyle};
 use crate::tree::{Kind, Node, Tone, Tree};
 

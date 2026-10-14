@@ -124,11 +124,7 @@ fn capital(s: &str) -> String {
 /// The theme the editor starts from: Graticule's own, ink by ink.
 pub fn mixes() -> List<Mix> {
     let file = &kernel::look::THEMES[0];
-    Ink::ALL
-        .into_iter()
-        .zip(1..)
-        .map(|(ink, n)| Mix { id: Key::fixed(n), ink, light: Shade::of(file.get(Appearance::Light, ink)), dark: Shade::of(file.get(Appearance::Dark, ink)) })
-        .collect()
+    Ink::ALL.into_iter().zip(1..).map(|(ink, n)| Mix { id: Key::fixed(n), ink, light: Shade::of(file.get(Appearance::Light, ink)), dark: Shade::of(file.get(Appearance::Dark, ink)) }).collect()
 }
 
 pub fn shade(inks: &List<Mix>, ink: Ink, side: Side) -> Shade {

@@ -303,19 +303,12 @@ impl StyleFile {
 
 /// The themes Graticule ships, the first of them the default.
 pub static THEMES: LazyLock<Vec<ThemeFile>> = LazyLock::new(|| {
-    [include_str!("../looks/graticule.theme"), include_str!("../looks/contrast.theme")]
-        .into_iter()
-        .map(|t| ThemeFile::parse(t).expect("the built-in themes read and pass the contrast law"))
-        .collect()
+    [include_str!("../looks/graticule.theme"), include_str!("../looks/contrast.theme")].into_iter().map(|t| ThemeFile::parse(t).expect("the built-in themes read and pass the contrast law")).collect()
 });
 
 /// The styles Graticule ships, the first of them the default.
-pub static STYLES: LazyLock<Vec<StyleFile>> = LazyLock::new(|| {
-    [include_str!("../looks/graticule.style"), include_str!("../looks/flat.style")]
-        .into_iter()
-        .map(|s| StyleFile::parse(s).expect("the built-in styles read"))
-        .collect()
-});
+pub static STYLES: LazyLock<Vec<StyleFile>> =
+    LazyLock::new(|| [include_str!("../looks/graticule.style"), include_str!("../looks/flat.style")].into_iter().map(|s| StyleFile::parse(s).expect("the built-in styles read")).collect());
 
 /// Everything a frame is drawn in: the theme's colors in the appearance shown, and the style.
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -32,11 +32,7 @@ fn shape() -> impl Strategy<Value = Shape> {
 }
 
 fn title() -> impl Strategy<Value = Title> {
-    prop_oneof![
-        Just(Title::Missing),
-        "[ \t\n]{0,3}".prop_map(Title::Blank),
-        "[A-Za-z][A-Za-z ]{0,12}|長い絵|שלום".prop_map(Title::Given),
-    ]
+    prop_oneof![Just(Title::Missing), "[ \t\n]{0,3}".prop_map(Title::Blank), "[A-Za-z][A-Za-z ]{0,12}|長い絵|שלום".prop_map(Title::Given),]
 }
 
 fn hex([r, g, b]: [u8; 3]) -> String {

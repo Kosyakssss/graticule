@@ -27,7 +27,7 @@ impl Config {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Mods {
     pub shift: bool,
     pub alt: bool,

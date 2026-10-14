@@ -6,17 +6,17 @@ use std::panic::Location;
 use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
 use crate::message::Message;
-use crate::tree::{Id, Kind, NONE, Span, Tone, Tree};
+use crate::tree::{Id, Kind, ListInfo, NONE, Span, Tone, Tree};
 
 const CHECK_MIN: i32 = 12;
 
-/// Where a list is scrolled to: the row at its top, by key so rows arriving above don’t move it, and how many rows it showed last frame.
+/// Where a list is scrolled to: the row at its top, by key so rows arriving above don’t move it, and how many rows it showed last frame, and where its focused row was, so focus can stay in place when that row goes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Scroll {
     pub anchor: Option<u128>,
     pub index: u32,
-
     pub rows: i32,
+    pub focus: Option<u32>,
 }
 
 pub type Scrolls = HashMap<Id, Scroll>;
@@ -242,6 +242,28 @@ impl<'a, C, S> Ui<'a, C, S> {
             shown = n as u32 + 1;
         }
         self.tree.nodes[i as usize].kind = Kind::List { count: len as u32, first: first as u32, shown };
+        let focused = chosen.and_then(|s| s.focused());
+        let focus_index = focused.and_then(|k| items.position(k));
+        let gone = scroll.focus.filter(|_| focused.is_some() && focus_index.is_none() && len > 0).and_then(|p| items.get((p as usize).min(len - 1))).map(|t| t.key().raw());
+        let near = |d: isize| focus_index.and_then(|p| p.checked_add_signed(d)).and_then(|p| items.get(p)).map(|t| t.key().raw());
+        self.tree.nodes[i as usize].list = self.tree.lists.len() as u32;
+        self.tree.lists.push(ListInfo {
+            node: i,
+            item: std::any::TypeId::of::<T>(),
+            items: items.path(),
+            selection: erased,
+            count: len as u32,
+            chosen: chosen.map_or(0, |s| s.len() as u32),
+            focused: focused.map(Key::raw),
+            anchor: chosen.and_then(|s| s.anchor()).map(Key::raw),
+            focus_index: focus_index.map(|p| p as u32),
+            before: near(-1),
+            after: near(1),
+            first: items.first().map(|t| t.key().raw()),
+            last: items.last().map(|t| t.key().raw()),
+            gone,
+            keys: keys::<F, T>,
+        });
     }
 
     /// What the page shows when there is nothing yet: a sentence, and the command that makes something.
@@ -264,5 +286,22 @@ impl<C> Tree<C> {
     pub fn in_row(&self, i: u32) -> bool {
         let parent = self.nodes[i as usize].parent;
         parent != NONE && self.row_of(parent).is_some()
+    }
+}
+
+fn keys<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, selection: ledger::ErasedPath, span: Option<(u128, u128)>) -> Vec<u128> {
+    let Some(facts) = facts.downcast_ref::<F>() else { return Vec::new() };
+    let Some(list) = facts.reach(items.steps()).and_then(|l| l.downcast_ref::<List<T>>()) else { return Vec::new() };
+    match span {
+        Some((from, to)) => {
+            let (Some(a), Some(b)) = (list.position(Key::from_raw(from)), list.position(Key::from_raw(to))) else { return Vec::new() };
+            (a.min(b)..=a.max(b)).filter_map(|i| list.get(i)).map(|t| t.key().raw()).collect()
+        }
+        None => {
+            let Some(chosen) = facts.reach(selection.steps()).and_then(|s| s.downcast_ref::<Selection<T>>()) else { return Vec::new() };
+            let mut keys: Vec<(usize, u128)> = chosen.iter().filter_map(|k| list.position(k).map(|p| (p, k.raw()))).collect();
+            keys.sort_unstable();
+            keys.into_iter().map(|(_, k)| k).collect()
+        }
     }
 }

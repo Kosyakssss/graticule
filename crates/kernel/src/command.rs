@@ -45,6 +45,11 @@ pub trait Commands<F>: Field + Sized {
 
     fn make(entry: usize, subject: Option<u128>) -> Option<Self>;
 
+    /// The app's keymap file, `keymap.txt` beside its `Cargo.toml`, built into the app.
+    fn keymap() -> &'static str {
+        ""
+    }
+
     fn entry(&self) -> Option<usize> {
         let name = self.name();
         Self::entries().iter().position(|e| e.name == name)

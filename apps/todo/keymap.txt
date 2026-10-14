@@ -1,0 +1,4 @@
+delete: remove
+d d: remove
+space: toggle
+primary+shift+p: palette

@@ -4,6 +4,7 @@ use std::panic::Location;
 
 use ledger::ErasedPath;
 
+use crate::builtin::Builtin;
 use crate::grid::Area;
 
 pub const NONE: u32 = u32::MAX;
@@ -100,11 +101,13 @@ pub enum Kind {
     Action,
     Status,
     Note,
+    Palette,
+    Choice { chosen: bool },
 }
 
 impl Kind {
     pub fn acts(&self) -> bool {
-        matches!(self, Kind::Field | Kind::Check { .. } | Kind::Link | Kind::Button | Kind::Action | Kind::ListRow { .. })
+        matches!(self, Kind::Field | Kind::Check { .. } | Kind::Link | Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::ListRow { .. })
     }
 
     pub fn container(&self) -> bool {
@@ -129,6 +132,8 @@ impl Kind {
             Kind::Action => "button",
             Kind::Status => "status",
             Kind::Note => "alert",
+            Kind::Palette => "dialog",
+            Kind::Choice { .. } => "option",
         }
     }
 }
@@ -164,6 +169,10 @@ pub struct Node {
     pub subject: Option<u128>,
     pub path: Option<ErasedPath>,
     pub hash: u64,
+    pub keys: Range32,
+    pub builtin: Option<Builtin>,
+    pub list: u32,
+    pub many: u32,
     pub at: &'static Location<'static>,
 }
 
@@ -187,9 +196,37 @@ impl Node {
             subject: None,
             path: None,
             hash: 0,
+            keys: Range32::default(),
+            builtin: None,
+            list: NONE,
+            many: 0,
             at,
         }
     }
+}
+
+/// Reads keys out of the facts a list was built from: the chosen keys in list order, or the keys from one to another.
+pub type Keys = fn(&dyn std::any::Any, ErasedPath, ErasedPath, Option<(u128, u128)>) -> Vec<u128>;
+
+/// What the kernel knows about a list it can move around in and choose from, without knowing the type of its items.
+#[derive(Clone, Copy, Debug)]
+pub struct ListInfo {
+    pub node: u32,
+    pub item: std::any::TypeId,
+    pub items: ErasedPath,
+    pub selection: ErasedPath,
+    pub count: u32,
+    pub chosen: u32,
+    pub focused: Option<u128>,
+    pub anchor: Option<u128>,
+    pub focus_index: Option<u32>,
+    pub before: Option<u128>,
+    pub after: Option<u128>,
+    pub first: Option<u128>,
+    pub last: Option<u128>,
+    /// When the focused row has gone from the list, the row now where it was.
+    pub gone: Option<u128>,
+    pub keys: Keys,
 }
 
 /// The flat tree a view builds: every component on screen, in building order, with stable ids. Its vectors keep their capacity, so building it again allocates nothing in steady state.
@@ -199,17 +236,19 @@ pub struct Tree<C> {
     pub commands: Vec<C>,
     counts: HashMap<(u64, u32), u32>,
     pub index: HashMap<Id, u32>,
+    pub lists: Vec<ListInfo>,
 }
 
 impl<C> Default for Tree<C> {
     fn default() -> Self {
-        Self { nodes: Vec::new(), text: String::new(), commands: Vec::new(), counts: HashMap::new(), index: HashMap::new() }
+        Self { nodes: Vec::new(), text: String::new(), commands: Vec::new(), counts: HashMap::new(), index: HashMap::new(), lists: Vec::new() }
     }
 }
 
 impl<C> Tree<C> {
     pub fn clear(&mut self) {
         self.nodes.clear();
+        self.lists.clear();
         self.text.clear();
         self.commands.clear();
         self.counts.clear();
@@ -302,6 +341,10 @@ impl<C> Tree<C> {
         n.kind.hash(&mut h);
         n.span.hash(&mut h);
         n.enabled.hash(&mut h);
+        n.builtin.hash(&mut h);
+        n.many.hash(&mut h);
+        self.text[n.keys.start as usize..n.keys.end as usize].hash(&mut h);
+        self.text[n.reason.start as usize..n.reason.end as usize].hash(&mut h);
         self.text[n.text.start as usize..n.text.end as usize].hash(&mut h);
         self.text[n.name.start as usize..n.name.end as usize].hash(&mut h);
         let hash = h.finish();

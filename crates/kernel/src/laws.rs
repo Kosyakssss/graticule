@@ -306,7 +306,7 @@ mod tree {
             let mut scrolls = Scrolls::new();
             build(&mut tree, &shapes, &board, &scrolls);
             let id = tree.nodes.iter().find(|n| matches!(n.kind, Kind::List { .. })).map(|n| n.id).expect("a list");
-            scrolls.insert(id, Scroll { anchor: Some(anchor.raw()), index: top as u32, rows: 5 });
+            scrolls.insert(id, Scroll { anchor: Some(anchor.raw()), index: top as u32, rows: 5, focus: None });
             let mut next = len + 1;
             for (insert, at) in changes {
                 let nth = board.items.keys().nth(at as usize % board.items.len().max(1));
@@ -325,6 +325,210 @@ mod tree {
                 _ => None,
             });
             prop_assert_eq!(first, Some(anchor.raw()));
+        }
+    }
+}
+
+mod commands {
+    use graticule_macros::{Commands, Facts};
+    use ledger::{Edit, Key, List, Outcome, Selection, Text};
+    use proptest::prelude::*;
+
+    use crate::app::{App, Cx};
+    use crate::command::{Available, no_if};
+    use crate::field::{self, Action, Caret};
+    use crate::keys::{Chord, Key as Pressed};
+    use crate::message::Message;
+    use crate::runner::Runner;
+    use crate::ui::Ui;
+
+    #[derive(Facts, Default)]
+    struct Shelf {
+        items: List<Item>,
+        #[session]
+        draft: Text,
+        #[session]
+        chosen: Selection<Item>,
+    }
+
+    #[derive(Facts)]
+    struct Item {
+        #[key]
+        id: Key<Item>,
+        title: String,
+        done: bool,
+    }
+
+    #[derive(Commands)]
+    enum Cmd {
+        #[label("Add")]
+        Add,
+        #[label("Finish “{title}”")]
+        Finish(#[subject] Key<Item>),
+        #[label("Remove “{title}”", many: "Remove {count} items")]
+        Remove(#[subject] Key<Item>),
+        #[internal]
+        Edit(Edit),
+    }
+
+    impl App for Shelf {
+        type Cmd = Cmd;
+
+        fn available(&self, cmd: &Cmd) -> Available {
+            let done = |item: &Key<Item>| self.items.find(*item).is_some_and(|i| i.done);
+            match cmd {
+                Cmd::Add => no_if(self.draft.is_empty(), Message::from("Type something first")),
+                Cmd::Finish(item) | Cmd::Remove(item) if !self.items.has(*item) => Available::No(Message::from("That item is gone")),
+                Cmd::Finish(item) => no_if(done(item), Message::from("It is finished already")),
+                Cmd::Remove(item) => no_if(done(item), Message::from("Finished items stay")),
+                Cmd::Edit(_) => Available::Yes,
+            }
+        }
+
+        fn update(&mut self, cmd: Cmd, cx: &mut Cx<Cmd>) -> Outcome {
+            assert!(self.available(&cmd).is_yes(), "ran a command that available refused");
+            match cmd {
+                Cmd::Add => {
+                    let title = self.draft.take();
+                    self.items.push(Item { id: cx.key(), title, done: false })
+                }
+                Cmd::Finish(item) => self.items.change(item, |item| item.done = true),
+                Cmd::Remove(item) => self.items.remove(item),
+                Cmd::Edit(edit) => edit.apply(self),
+            }
+        }
+
+        fn view(&self, ui: &mut Ui<Cmd>) {
+            ui.page(Message::from("Shelf"), |ui| {
+                ui.row(|ui| {
+                    ui.field(Shelf::draft, Message::from("Something")).on_submit(Cmd::Add);
+                    ui.button(Cmd::Add);
+                });
+                ui.list(&self.items, Shelf::chosen, |ui, item| {
+                    ui.check(&item.title, item.done, Cmd::Finish);
+                    ui.link(Cmd::Remove);
+                });
+            });
+        }
+    }
+
+    fn shelf(done: &[bool]) -> Shelf {
+        let items = done.iter().zip(1..).map(|(&done, n)| Item { id: Key::fixed(n), title: format!("item {n}"), done }).collect();
+        Shelf { items, ..Shelf::default() }
+    }
+
+    #[derive(Clone, Debug)]
+    enum Step {
+        Press(&'static str),
+        Type(char),
+        Run(&'static str),
+    }
+
+    const KEYS: &[&str] =
+        &["down", "up", "shift+down", "shift+up", "home", "end", "space", "enter", "tab", "shift+tab", "escape", "delete", "backspace", "left", "right", "primary+a", "primary+shift+p"];
+    const NAMES: &[&str] = &["add", "finish", "remove", "palette", "up", "down", "extend-down", "select-all", "cancel", "next-control"];
+
+    fn step() -> impl Strategy<Value = Step> {
+        prop_oneof![prop::sample::select(KEYS).prop_map(Step::Press), prop::char::range('a', 'e').prop_map(Step::Type), Just(Step::Type(' ')), prop::sample::select(NAMES).prop_map(Step::Run)]
+    }
+
+    fn take(runner: &mut Runner<Shelf>, step: &Step) {
+        match step {
+            Step::Press(keys) => {
+                runner.press(Chord::parse(keys).expect("a chord"), None);
+            }
+            Step::Type(c) => {
+                runner.press(Chord { key: Pressed::Char(*c), mods: Default::default() }, Some(&c.to_string()));
+            }
+            Step::Run(name) => {
+                runner.run_named(name);
+            }
+        }
+    }
+
+    const FIELD_KEYS: &[&str] = &[
+        "backspace",
+        "delete",
+        "left",
+        "right",
+        "shift+left",
+        "shift+right",
+        "home",
+        "end",
+        "shift+home",
+        "shift+end",
+        "primary+left",
+        "primary+right",
+        "alt+left",
+        "alt+right",
+        "primary+backspace",
+        "alt+backspace",
+        "primary+a",
+        "up",
+        "down",
+    ];
+
+    fn field_step() -> impl Strategy<Value = Step> {
+        prop_oneof![prop::sample::select(FIELD_KEYS).prop_map(Step::Press), prop::char::range('a', 'e').prop_map(Step::Type), Just(Step::Type(' ')), Just(Step::Type('\u{e9}'))]
+    }
+
+    proptest! {
+        #[test]
+        fn a_command_is_never_run_when_available_says_no(done in prop::collection::vec(any::<bool>(), 0..12), steps in prop::collection::vec(step(), 0..60)) {
+            let mut runner = Runner::new(shelf(&done));
+            for step in &steps {
+                take(&mut runner, step);
+            }
+        }
+
+        #[test]
+        fn a_bulk_command_is_one_transaction(done in prop::collection::vec(any::<bool>(), 2..30), down in 0usize..30, more in 1usize..30) {
+            let mut runner = Runner::new(shelf(&done));
+            for _ in 0..=down {
+                runner.run_named("down");
+            }
+            for _ in 0..more {
+                runner.run_named("extend-down");
+            }
+            let chosen: Vec<Key<Item>> = runner.facts.chosen.iter().collect();
+            let stays = |k: &Key<Item>| !chosen.contains(k) || runner.facts.items.find(*k).is_some_and(|i| i.done);
+            let left: Vec<Key<Item>> = runner.facts.items.keys().filter(stays).collect();
+            let removed = runner.facts.items.len() - left.len();
+            let before = runner.steps.len();
+            runner.run_named("remove");
+            prop_assert_eq!(runner.steps.len() - before, usize::from(removed > 0));
+            prop_assert_eq!(runner.facts.items.keys().collect::<Vec<_>>(), left);
+        }
+
+        #[test]
+        fn field_edits_through_update_give_the_same_text_as_the_field_model(steps in prop::collection::vec(field_step(), 0..60)) {
+            let mut runner = Runner::new(shelf(&[]));
+            runner.run_named("next-control");
+            let (mut text, mut caret, mut kill) = (String::new(), Caret::default(), String::new());
+            for step in &steps {
+                let action = match step {
+                    Step::Type(c) => field::insert(caret, &c.to_string()),
+                    Step::Press(keys) => {
+                        let chord = Chord::parse(keys).expect("a chord");
+                        if !field::handles(chord.key, chord.mods) {
+                            continue;
+                        }
+                        field::key(&text, caret, chord.key, chord.mods, &mut kill)
+                    }
+                    Step::Run(_) => continue,
+                };
+                match action {
+                    Action::Splice { range, text: inserted, caret: at, .. } => {
+                        text.replace_range(range, &inserted);
+                        caret = Caret::at(at);
+                    }
+                    Action::Moved(at) => caret = at,
+                    Action::SelectAll => caret = Caret { caret: text.len(), anchor: 0 },
+                    _ => {}
+                }
+                take(&mut runner, step);
+                prop_assert_eq!(runner.facts.draft.as_str(), text.as_str());
+            }
         }
     }
 }

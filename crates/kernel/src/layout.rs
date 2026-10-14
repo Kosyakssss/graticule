@@ -81,9 +81,11 @@ impl<'t> Layout<'t> {
                 let c = self.cols(tree.str(n.text), true) + BUTTON;
                 (c, c)
             }
-            Kind::Action => {
-                let c = self.cols(tree.str(n.text), false) + 2;
-                (c, c)
+            Kind::Action | Kind::Choice { .. } => {
+                let keys = tree.str(n.keys);
+                let keys = if keys.is_empty() { 0 } else { self.cols(keys, true) + 1 };
+                let c = self.cols(tree.str(n.text), false) + 2 + keys;
+                (c.min(if matches!(n.kind, Kind::Choice { .. }) { 16 } else { c }), c)
             }
             Kind::Link => {
                 let c = self.cols(tree.str(n.text), false).max(1);
@@ -107,7 +109,7 @@ impl<'t> Layout<'t> {
                 let gaps = GAP * (count - 1).max(0);
                 (min + gaps, pref + gaps)
             }
-            Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Bar | Kind::List { .. } => {
+            Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Bar | Kind::Palette | Kind::List { .. } => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref) = (0, 0);
                 for k in start..end {
@@ -194,7 +196,7 @@ impl<'t> Layout<'t> {
         match n.kind {
             Kind::Text { mono, .. } => self.wrapped(tree.str(n.text), mono, cols),
             Kind::Check { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
-            Kind::Button | Kind::Action | Kind::Link | Kind::Field | Kind::Status | Kind::Note => 1,
+            Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Link | Kind::Field | Kind::Status | Kind::Note => 1,
             Kind::List { .. } => 3,
             Kind::Bar => {
                 let (start, end) = self.children(tree, i);
@@ -233,7 +235,7 @@ impl<'t> Layout<'t> {
                 self.release(start);
                 rows
             }
-            Kind::Root | Kind::Page | Kind::Column | Kind::Empty => {
+            Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Palette => {
                 let (start, end) = self.children(tree, i);
                 let inner = if n.kind == Kind::Page { cols - MARGIN * 2 } else { cols };
                 let gap = i32::from(matches!(n.kind, Kind::Page | Kind::Empty));
@@ -262,6 +264,11 @@ impl<'t> Layout<'t> {
                     let a = rest.take_bottom(rows);
                     self.place(tree, c, Area::new(a.col + MARGIN, a.row, a.cols - MARGIN * 2, a.rows));
                 }
+                Kind::Palette => {
+                    let rows = self.rows(tree, c, rest.cols - MARGIN * 2).min(rest.rows / 2);
+                    let a = rest.take_bottom(rows);
+                    self.place(tree, c, Area::new(a.col + MARGIN, a.row, a.cols - MARGIN * 2, a.rows));
+                }
                 Kind::Status | Kind::Note => {
                     let a = rest.take_bottom(1);
                     self.place(tree, c, Area::new(a.col + MARGIN, a.row, a.cols - MARGIN * 2, a.rows));
@@ -284,7 +291,7 @@ impl<'t> Layout<'t> {
                 let inner = Area::new(area.col + MARGIN, area.row + 3, area.cols - MARGIN * 2, area.rows - 4);
                 self.stack_down(tree, i, inner, 1);
             }
-            Kind::Root | Kind::Column => self.stack_down(tree, i, area, 0),
+            Kind::Root | Kind::Column | Kind::Palette => self.stack_down(tree, i, area, 0),
             Kind::Empty => self.stack_down(tree, i, area, 1),
             Kind::Row | Kind::ListRow { .. } | Kind::Columns => self.side_by_side(tree, i, area),
             Kind::List { .. } => self.list(tree, i, area),

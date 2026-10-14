@@ -75,6 +75,11 @@ impl<T: Record> List<T> {
         Self::default()
     }
 
+    /// Where this list is in the facts, once they have been attached.
+    pub fn path(&self) -> ErasedPath {
+        self.at
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }

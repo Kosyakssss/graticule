@@ -18,6 +18,8 @@ fn role(kind: Kind) -> Role {
         Kind::Bar => Role::Toolbar,
         Kind::Status => Role::Status,
         Kind::Note => Role::Alert,
+        Kind::Palette => Role::Dialog,
+        Kind::Choice { .. } => Role::ListBoxOption,
     }
 }
 
@@ -44,6 +46,10 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 }
             }
             Kind::ListRow { selected, .. } => node.set_selected(selected),
+            Kind::Choice { chosen } => {
+                node.set_label(text);
+                node.set_selected(chosen);
+            }
             _ if !name.is_empty() => node.set_label(name),
             _ if !text.is_empty() => node.set_label(text),
             _ => {}

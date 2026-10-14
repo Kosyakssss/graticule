@@ -392,6 +392,14 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
         })
     });
     let edit_as = edit_as.unwrap_or_default();
+    let keymap = match std::env::var("CARGO_MANIFEST_DIR") {
+        Ok(dir) if std::path::Path::new(&dir).join("keymap.txt").exists() => quote! {
+            fn keymap() -> &'static str {
+                ::std::include_str!(::std::concat!(::std::env!("CARGO_MANIFEST_DIR"), "/keymap.txt"))
+            }
+        },
+        _ => quote!(),
+    };
     let bounds = bounds.iter().map(|b| quote!(F: #ledger::Find<#b>));
     Ok(quote! {
         impl ::std::clone::Clone for #name {
@@ -461,6 +469,8 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
                     _ => ::std::option::Option::None,
                 }
             }
+
+            #keymap
 
             fn entries() -> &'static [#kernel::Entry] {
                 &[#(#entries),*]

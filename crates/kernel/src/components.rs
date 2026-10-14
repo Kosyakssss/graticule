@@ -13,6 +13,7 @@ pub struct Look {
     pub pressed: bool,
     pub focused: bool,
     pub caret: u32,
+    pub anchor: u32,
 }
 
 /// The two lists a frame is drawn from: what lies under, then what lies on top. Boxes on the grid never overlap, so this is the only ordering painting needs.
@@ -106,7 +107,19 @@ fn button(p: &mut Painter, n: &Node, label: &str, look: Look) {
     p.text(label, mono, (x, y), Some(r.w), ink);
 }
 
-fn action(p: &mut Painter, n: &Node, label: &str, look: Look) {
+fn keycap(p: &mut Painter, at: (f32, f32), keys: &str, enabled: bool) -> f32 {
+    let mono = p.m.mono();
+    let w = p.measure(keys, mono);
+    let i = (p.m.cell_h * 0.15).round();
+    let cap = Rect::new(at.0, at.1 + i, (w + p.m.cell_w * 0.5).ceil(), p.m.cell_h - i * 2.0);
+    let theme = p.theme;
+    p.fill(cap, theme.field);
+    let ink = if enabled { theme.ink } else { theme.faint };
+    p.text(keys, mono, ((at.0 + p.m.cell_w * 0.25).round(), at.1), None, ink);
+    cap.w
+}
+
+fn action(p: &mut Painter, n: &Node, label: &str, keys: &str, look: Look) {
     let r = p.rect(n.area);
     let theme = p.theme;
     if n.enabled && look.hovered {
@@ -116,6 +129,13 @@ fn action(p: &mut Painter, n: &Node, label: &str, look: Look) {
     let i = (p.m.cell_h * 0.1).round();
     let chip = Rect::new(r.x, r.y + i, r.w, r.h - i * 2.0);
     border(p, chip, t, if n.enabled { theme.muted } else { theme.rule });
+    let mut x = r.x + p.m.cell_w;
+    if !keys.is_empty() {
+        let mono = p.m.mono();
+        let w = p.measure(keys, mono);
+        keycap(p, (x - p.m.cell_w * 0.25, r.y), keys, n.enabled);
+        x += (w / p.m.cell_w).ceil() * p.m.cell_w + p.m.cell_w;
+    }
     let style = p.m.sans(400.0);
     let ink = if !n.enabled {
         theme.faint
@@ -124,7 +144,30 @@ fn action(p: &mut Painter, n: &Node, label: &str, look: Look) {
     } else {
         theme.ink
     };
-    p.text(label, style, (r.x + p.m.cell_w, r.y), Some(r.w - p.m.cell_w), ink);
+    p.text(label, style, (x, r.y), Some(r.right() - x), ink);
+}
+
+fn choice(p: &mut Painter, n: &Node, chosen: bool, label: &str, keys: &str, reason: &str, look: Look) {
+    let r = p.rect(n.area);
+    let theme = p.theme;
+    if chosen {
+        p.fill(r, theme.selection);
+    } else if look.hovered {
+        p.fill(r, theme.hover);
+    }
+    let style = p.m.sans(400.0);
+    let ink = if n.enabled { theme.ink } else { theme.faint };
+    let mut x = r.x + p.m.cell_w;
+    let mono = p.m.mono();
+    let keys_w = if keys.is_empty() { 0.0 } else { (p.measure(keys, mono) / p.m.cell_w).ceil() * p.m.cell_w + p.m.cell_w };
+    let w = p.text(label, style, (x, r.y), Some(r.w - keys_w - p.m.cell_w * 2.0), ink).width;
+    x += (w / p.m.cell_w).ceil() * p.m.cell_w + p.m.cell_w;
+    if !reason.is_empty() && x < r.right() - keys_w {
+        p.text(reason, style, (x, r.y), Some(r.right() - keys_w - x), theme.muted);
+    }
+    if !keys.is_empty() {
+        keycap(p, (r.right() - keys_w, r.y), keys, n.enabled);
+    }
 }
 
 fn link(p: &mut Painter, n: &Node, label: &str, look: Look, ink: Color) {
@@ -168,6 +211,13 @@ fn field(p: &mut Painter, n: &Node, value: &str, placeholder: &str, look: Look) 
         let room = r.w - p.m.cell_w * 1.5;
         let shift = if look.focused { (before - room).max(0.0) } else { 0.0 };
         let x0 = tx - shift;
+        let anchor = (look.anchor as usize).min(value.len());
+        let anchor = (0..=anchor).rev().find(|&i| value.is_char_boundary(i)).unwrap_or(0);
+        if look.focused && anchor != caret {
+            let other = p.measure(&value[..anchor], mono);
+            let (a, b) = (before.min(other), before.max(other));
+            p.fill(Rect::new((x0 + a).floor(), r.y, (b - a).ceil(), p.m.cell_h), theme.selection);
+        }
         p.text(value, mono, (x0, r.y), None, if n.enabled { theme.ink } else { theme.faint });
         if look.focused {
             p.fill(Rect::new((x0 + before).floor(), r.y + p.m.cell_h * 0.15, (p.m.scale * 2.0).round().max(1.0), p.m.cell_h * 0.7), theme.ink);
@@ -220,7 +270,15 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             wrapped(p, n.area, text, mono, if strong { 600.0 } else { 400.0 }, color);
         }
         (Layer::Over, Kind::Button) => button(p, &n, text, look),
-        (Layer::Over, Kind::Action) => action(p, &n, text, look),
+        (Layer::Over, Kind::Action) => action(p, &n, text, tree.str(n.keys), look),
+        (Layer::Over, Kind::Choice { chosen }) => choice(p, &n, chosen, text, tree.str(n.keys), tree.str(n.reason), look),
+        (Layer::Under, Kind::Palette) => {
+            let r = p.rect(n.area);
+            let t = p.m.hair();
+            let rule = p.theme.rule;
+            let width = p.m.width;
+            p.fill(Rect::new(0.0, r.y, width, t), rule);
+        }
         (Layer::Over, Kind::Link) => {
             let ink = p.theme.link;
             link(p, &n, text, look, ink);

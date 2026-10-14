@@ -228,7 +228,11 @@ For `enum Cmd`, an `impl<F> Commands<F> for Cmd where F: Find<Item>` (one bound 
 
 ### 9.4 Kernel commands
 
-Undo, redo, copy, cut, paste, select all, focus the next and previous field, open the palette, and the list's movements are the kernel's own commands. They are in the same registry, so they show in the palette, the menus and which-key, have labels ("Undo “Add buy milk”") and say why not ("Nothing to undo"). The platform's conventions bind them (Cmd-Z, Tab, the arrows in a list, Cmd-A); everything else is bound only by keymap files.
+Undo, redo, focusing the next and previous control, opening the palette, cancelling, and the list's movements (up, down, extending up and down, first, last, choosing everything) are the kernel's own commands, in `builtin.rs`. They sit beside the app's commands, so they show in the palette and which-key, have labels and say why not ("Nothing to undo"); a keymap file can bind them by name (`palette`, `undo`, `next-control`, `extend-down`). The platform's conventions bind them (Cmd-Z, Tab, the arrows in a list, Cmd-A, Escape); everything else is bound only by keymap files. Copy, cut, paste and select all inside a field are the field's own keys (§11.2).
+
+An app's keymap is `keymap.txt` beside its `Cargo.toml`, which `derive(Commands)` builds into the app. One binding a line, `keys: command`; a sequence is chords separated by spaces (`d d: remove`); a chord is modifiers and a key joined by `+` (`primary+shift+p`), where `primary` is Cmd on a Mac and Ctrl elsewhere. A line the kernel can't read, or a name that is no command, is said in the message line when the app starts. Applying edits to the file while the app runs is build-plan item 12.
+
+A key goes, in order, to the palette when it is open; to the focused field, which takes typed text and every key its editing model knows, even one that changes nothing, so Delete at the end of a field never removes an item; to a focused button, link or checkbox for Return and Space; to the keymap, where the first chord of a longer sequence waits and the action bar shows what can follow (which-key) until the sequence ends or Escape; and last to the conventions.
 
 ### 9.5 Bindable everywhere
 
@@ -254,18 +258,20 @@ The kernel has `trait Bind<C, Marker>` with `impl<C> Bind<C, Whole> for C where 
 | A control inside a row | that row, always one |
 | A context menu (later) | the row under the pointer; if it is in the selection, the whole selection |
 | A keymap sequence, the palette, the menu bar | the focused list's selection if it has more than the focused row; otherwise the focused row |
-| Nothing focused or selected | none: the command is unavailable, and says "Nothing chosen" |
+| Nothing focused or selected | none: the command is unavailable, and says "Nothing is chosen" |
 
 A command started on several subjects runs `update` once per subject, in list order, inside one transaction, so it is one undo step. The owner decided (§21) how it reads and what happens when some subjects can't take it:
 
 - A command runs on several subjects only if its label says what it is called then: `#[label("Remove “{title}”", short: "Remove", many: "Remove {count} items")]`. Without `many`, the command takes only the focused row, so no command shows a label nobody wrote.
-- Subjects that `available` refuses are skipped, the others run, and the message line says which were skipped and why ("Removed 2. ‘Call mum’ was already gone.").
+- Subjects that `available` refuses are skipped, the others run, and the message line says which were skipped and why ("Remove “Call mum” was skipped: That item is gone").
 
 ### 10.3 Selection
 
 `Selection<T>` is a set of keys plus the focused key, in the session part of the facts, defined by Ledger. Clicking, Shift-clicking, Cmd-clicking, the arrows and Cmd-A in a list change it, following React Aria's list behavior. The kernel sends each change as an `Edit` on the selection's path, through the app's `update` like every other change to the facts (§11), so an app could keep an invariant on its selection in the same place it keeps one on its text.
 
 After every commit, Ledger removes the keys that the commit's operations deleted from every `Selection` of that key's type (`derive(Facts)` lists the selection fields), locally or arriving through sync. The cost is the number of deleted keys.
+
+When a command removes the focused row, the kernel focuses the row now in its place, as a selection edit after the command, so the keys keep working on the next item. It knows the place because it remembers where the focused row was each time it builds the list.
 
 Changing only the selection is not an undo step (spec §13.2), but every step records the selection and focus from before it, and undoing restores them.
 
@@ -286,7 +292,7 @@ The kernel changes the app's facts in exactly one way: it sends `Edit` through t
 1. A key reaches the focused field. The field's editing model (Feedreader's `field.rs`, moved in with the macOS key bindings and its law, §18) computes the splice and the new caret from the current text.
 2. The kernel sends `Cmd::Edit(Edit { path: Todo::draft, change: Text(splice), gesture })`.
 3. `available` says `Yes`; `update` calls `edit.apply(self)`; `Text` journals the splice.
-4. On commit, Ledger merges the step with the previous one if it is the same field, the same kind (typing or deleting) and no word boundary has passed, so a word is one undo step. A slider's drag is merged by its gesture id.
+4. The kernel gives an edit the gesture id of the one before it when it is the same field, the same kind (typing or deleting) and no word boundary has passed; moving the caret, pasting, cutting and anything else start a new one. On commit, Ledger merges steps with the same gesture id, so a word is one undo step, and a slider's drag merges the same way.
 5. The kernel moves the caret to where the field computed, or clamps it if the app didn't apply the edit.
 
 The input method's unfinished text (preedit) is the kernel's, not a fact; only committed text becomes an edit. Return in a single-line field runs the field's `on_submit` command.
@@ -407,7 +413,7 @@ The first slice's steps each end with something visible. S3 needs facts and labe
 | `update`, `Cx`, `Outcome`, running commands, kernel commands | S4 |
 | Subjects resolved from rows, focus and selection; bulk commands; selection changes as edits | S4 |
 | `Edit` and the field's editing model; caret and input method | S4 |
-| Keymap files applied live, sequences, which-key, the palette | S4 |
+| Keymap files built into the app, sequences, which-key, the palette (applying edits to the file live is item 12) | S4 |
 | The journal and transactions, register comparison, `Op`, rollback on panic; jobs, tallies and bulk changes | S5 |
 | The CRDT on Ledger's thread, chosen by measuring both candidates; chunked `List` storage | S5 |
 | Steps, merging typing by word, the undo tree with selection, focus and caret; versions | S5 |

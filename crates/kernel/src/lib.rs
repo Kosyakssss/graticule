@@ -2,15 +2,18 @@
 
 pub mod access;
 pub mod app;
+pub mod builtin;
 pub mod chars;
 pub mod command;
 pub mod components;
+pub mod field;
 pub mod fonts;
 pub mod gpu;
 pub mod grid;
 pub mod hit;
 pub mod ink;
 pub mod kept;
+pub mod keys;
 pub mod layout;
 pub mod message;
 pub mod metrics;

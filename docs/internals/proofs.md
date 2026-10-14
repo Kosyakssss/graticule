@@ -27,3 +27,7 @@ Containers (groups, columns, pages, list rows, lists, the bar, the status and me
 The first time Changes opens, Specimen draws every sheet on a thread of its own with an offscreen renderer and compares each with its proof; the place shows that it is looking until the thread wakes the window. The sheets then become the facts of a small app (`specimen::Changes`), so approving is a command like any other. It is in the bar, the palette and on each row, and works on a selection of several. Approving writes the proof through `Effect::Write`, off the main thread. Rejecting needs nothing: a sheet that is not approved stays on the list until the code is fixed.
 
 `--changes` does the same without a window: it prints the words and fails when anything differs or was never approved. `--approve` approves every sheet as it renders now.
+
+## The page for review
+
+`--render <folder>` writes `index.html` beside the pictures: every named state with its four pictures and the words from the survey, so a review needs only a browser. Reference images stay outside the repository; `--references <folder>` pins any picture whose name is a state's name, or starts with it and a comma ("Empty, the mockup.png"), beside that state, linked by its path rather than copied.

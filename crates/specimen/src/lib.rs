@@ -2,6 +2,7 @@
 
 mod catalog;
 mod changes;
+mod page;
 
 use std::sync::mpsc;
 
@@ -239,8 +240,8 @@ impl<A: App> Face for Specimen<A> {
     }
 }
 
-/// Renders every named state of an app in both appearances, at its normal size and at the smallest window it allows, into pictures in `folder`, then the Changes page for them, and prints how long each took to paint.
-pub fn render<A: App>(folder: &std::path::Path) -> Result<(), String> {
+/// Renders every named state of an app in both appearances, at its normal size and at the smallest window it allows, into pictures in `folder`, then the Changes page for them, and prints how long each took to paint. It also writes `index.html` there, a page with every picture and what changed, with any images from `references` pinned beside the state they are named after.
+pub fn render<A: App>(folder: &std::path::Path, references: Option<&std::path::Path>) -> Result<(), String> {
     std::fs::create_dir_all(folder).map_err(|e| e.to_string())?;
     let mut screen = kernel::offscreen::Offscreen::new(1920, 1280, 2.0);
     for (name, facts) in A::states().list.iter() {
@@ -260,10 +261,15 @@ pub fn render<A: App>(folder: &std::path::Path) -> Result<(), String> {
         }
     }
     screen.resize(1920, 1280);
-    let mut runner = Runner::new(Changes::found(changes::survey::<A>(&changes::folder())));
+    let sheets = changes::survey::<A>(&changes::folder());
+    let mut runner = Runner::new(Changes::found(sheets.clone()));
     let picture = screen.render_face(Appearance::Light, &mut runner);
     picture.save_png(&folder.join("Changes.png"))?;
     println!("Changes: painted in {:.2} ms", picture.paint_ms);
+    let app = std::env::current_exe().ok().and_then(|exe| exe.file_stem().map(|s| s.to_string_lossy().into_owned())).unwrap_or_default();
+    let names: Vec<&str> = A::states().list.iter().map(|(name, _)| *name).collect();
+    page::write(folder, &app, &names, &sheets, references)?;
+    println!("The page for review: {}", folder.join("index.html").display());
     Ok(())
 }
 

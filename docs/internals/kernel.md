@@ -232,7 +232,7 @@ For `enum Cmd`, an `impl<F> Commands<F> for Cmd where F: Find<Item>` (one bound 
 
 Undo, redo, focusing the next and previous control, opening the palette, cancelling, and the list's movements (up, down, extending up and down, first, last, choosing everything) are the kernel's own commands, in `builtin.rs`. They sit beside the app's commands, so they show in the palette and which-key, have labels and say why not ("Nothing to undo"); a keymap file can bind them by name (`palette`, `undo`, `next-control`, `extend-down`). The platform's conventions bind them (Cmd-Z, Tab, the arrows in a list, Cmd-A, Escape); everything else is bound only by keymap files. Copy, cut, paste and select all inside a field are the field's own keys (§11.2).
 
-An app's keymap is `keymap.txt` beside its `Cargo.toml`, which `derive(Commands)` builds into the app. One binding a line, `keys: command`; a sequence is chords separated by spaces (`d d: remove`); a chord is modifiers and a key joined by `+` (`primary+shift+p`), where `primary` is Cmd on a Mac and Ctrl elsewhere. A line the kernel can't read, or a name that is no command, is said in the message line when the app starts. Applying edits to the file while the app runs is build-plan item 12.
+An app's keymap is `keymap.txt` beside its `Cargo.toml`, which `derive(Commands)` builds into the app. One binding a line, `keys: command`; a sequence is chords separated by spaces (`d d: remove`); a chord is modifiers and a key joined by `+` (`primary+shift+p`), where `primary` is Cmd on a Mac and Ctrl elsewhere. The user can change them: `keymap.txt` in the app's folder (beside its saved facts), when it is there, replaces the built-in keymap. "Edit the keys" (`edit-keys`) writes the built-in keymap there the first time and opens it with the system's editor. The runner watches that one file through the system's notifications, so it costs nothing while the file stays the same; on a change the waker wakes the window and the keymap is read again. A line the kernel can't read keeps the keys that were in use and says the mistake in the message line; a name that is no command is said too, and the rest of the file still applies. Deleting the file brings back the built-in keys. A window without a folder (Specimen's samples) has no file, and "Edit the keys" says so.
 
 A key goes, in order, to the palette when it is open; to the focused field, which takes typed text and every key its editing model knows, even one that changes nothing, so Delete at the end of a field never removes an item; to a focused button, link or checkbox for Return and Space; to the keymap, where the first chord of a longer sequence waits and the action bar shows what can follow (which-key) until the sequence ends or Escape; and last to the conventions.
 
@@ -420,7 +420,8 @@ The first slice's steps each end with something visible. S3 needs facts and labe
 | `update`, `Cx`, `Outcome`, running commands, kernel commands | S4 |
 | Subjects resolved from rows, focus and selection; bulk commands; selection changes as edits | S4 |
 | `Edit` and the field's editing model; caret and input method | S4 |
-| Keymap files built into the app, sequences, which-key, the palette (applying edits to the file live is item 12) | S4 |
+| Keymap files built into the app, sequences, which-key, the palette | S4 |
+| The user's own keymap file, applied live, and "Edit the keys" | 12 |
 | The journal and transactions, register comparison, `Op`, rollback on panic; jobs, tallies and bulk changes | S5 |
 | The CRDT on Ledger's thread, chosen by measuring both candidates; chunked `List` storage | S5 |
 | Steps, merging typing by word, the undo tree with selection, focus and caret; versions | S5 |

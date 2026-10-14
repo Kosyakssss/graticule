@@ -27,10 +27,11 @@ pub enum Builtin {
     NextStyle,
     AbsoluteDates,
     RelativeDates,
+    EditKeys,
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 21] = [
+    pub const ALL: [Builtin; 22] = [
         Builtin::Palette,
         Builtin::Undo,
         Builtin::Redo,
@@ -52,6 +53,7 @@ impl Builtin {
         Builtin::NextStyle,
         Builtin::AbsoluteDates,
         Builtin::RelativeDates,
+        Builtin::EditKeys,
     ];
 
     pub fn name(self) -> &'static str {
@@ -77,6 +79,7 @@ impl Builtin {
             Builtin::NextStyle => "next-style",
             Builtin::AbsoluteDates => "absolute-dates",
             Builtin::RelativeDates => "relative-dates",
+            Builtin::EditKeys => "edit-keys",
         }
     }
 
@@ -103,6 +106,7 @@ impl Builtin {
             Builtin::NextStyle => "Use the next style",
             Builtin::AbsoluteDates => "Write dates as the day and time",
             Builtin::RelativeDates => "Write dates as how long ago",
+            Builtin::EditKeys => "Edit the keys",
         }
     }
 
@@ -176,7 +180,8 @@ impl Builtin {
             | Builtin::NextTheme
             | Builtin::NextStyle
             | Builtin::AbsoluteDates
-            | Builtin::RelativeDates => &[],
+            | Builtin::RelativeDates
+            | Builtin::EditKeys => &[],
         }
     }
 

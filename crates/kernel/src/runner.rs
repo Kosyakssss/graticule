@@ -188,12 +188,14 @@ pub struct Runner<A: App> {
     offered: Offered,
     offered_problem: Option<String>,
     calendar: Calendar,
+    keys_file: Option<std::path::PathBuf>,
+    keys_watch: Option<(notify::RecommendedWatcher, mpsc::Receiver<()>)>,
 }
 
 impl<A: App> Runner<A> {
     pub fn new(mut facts: A) -> Self {
         ledger::Field::attach(&mut facts, ErasedPath::ROOT);
-        let (keymap, said) = read_keymap::<A>();
+        let (keymap, said) = read_keymap::<A>(A::Cmd::keymap(), "The keymap").unwrap_or_else(|said| (Keymap::default(), Some(said)));
         Self {
             facts,
             history: History::new(),
@@ -246,6 +248,8 @@ impl<A: App> Runner<A> {
             offered: Offered::default(),
             offered_problem: None,
             calendar: Calendar::default(),
+            keys_file: None,
+            keys_watch: None,
         }
     }
 
@@ -261,6 +265,8 @@ impl<A: App> Runner<A> {
                 if let Some(trouble) = opened.trouble {
                     runner.said = Some(Said::Failure(trouble));
                 }
+                runner.keys_file = Some(folder.join(KEYMAP));
+                runner.read_keys();
                 runner
             }
             Err(e) => {
@@ -688,6 +694,7 @@ impl<A: App> Runner<A> {
             Builtin::NextStyle if self.offered.styles < 2 => Available::No(Message::from("There is only one style")),
             Builtin::AbsoluteDates if self.offered.dates == Dates::Absolute => Available::No(Message::from("Dates are written as the day and time already")),
             Builtin::RelativeDates if self.offered.dates == Dates::Relative => Available::No(Message::from("Dates are written as how long ago already")),
+            Builtin::EditKeys if self.keys_file.is_none() => Available::No(Message::from("This window keeps no files, so its keys can't be edited")),
             _ => Available::Yes,
         }
     }
@@ -1086,8 +1093,42 @@ impl<A: App> Runner<A> {
 
     /// Lets jobs wake the window when their results are ready.
     pub fn wake_with(mut self, waker: Waker) -> Self {
+        self.keys_watch = self.keys_file.as_deref().and_then(|file| watch_keys(file, waker.clone()));
         self.waker = Some(waker);
         self
+    }
+
+    fn read_keys(&mut self) {
+        let Some(file) = &self.keys_file else { return };
+        let read = match std::fs::read_to_string(file) {
+            Ok(source) => read_keymap::<A>(&source, KEYMAP),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => read_keymap::<A>(A::Cmd::keymap(), "The keymap"),
+            Err(e) => Err(Said::Failure(format!("{KEYMAP} couldn't be read: {e}"))),
+        };
+        match read {
+            Ok((keymap, said)) => {
+                self.keymap = keymap;
+                self.pending.clear();
+                if said.is_some() {
+                    self.said = said;
+                }
+            }
+            Err(said) => self.said = Some(said),
+        }
+        self.stale = true;
+    }
+
+    fn edit_keys(&mut self) -> bool {
+        let Some(file) = self.keys_file.clone() else { return false };
+        if !file.exists() {
+            let written = file.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&file, A::Cmd::keymap()));
+            if let Err(e) = written {
+                return self.say(Message::plain(format!("{KEYMAP} couldn't be made: {e}")));
+            }
+        }
+        self.effects.push(Effect::Open { target: file.to_string_lossy().into_owned() });
+        self.stale = true;
+        true
     }
 
     /// The effects the last commands asked for that haven't started yet. Specimen shows these instead of running them.
@@ -1150,6 +1191,9 @@ impl<A: App> Runner<A> {
     }
 
     fn collect(&mut self) {
+        if self.keys_watch.as_ref().is_some_and(|(_, changed)| changed.try_iter().count() > 0) {
+            self.read_keys();
+        }
         let mut results = Vec::new();
         self.jobs.retain(|job| match job.receive.try_recv() {
             Ok(result) => {
@@ -1279,6 +1323,7 @@ impl<A: App> Runner<A> {
             Builtin::Undo | Builtin::Redo => self.undo(b == Builtin::Undo),
             Builtin::Next | Builtin::Previous => self.cycle(b == Builtin::Next),
             Builtin::Cancel => self.cancel(),
+            Builtin::EditKeys => self.edit_keys(),
             Builtin::Copy => {
                 let text = self.chosen_text();
                 self.copy(text);
@@ -2115,16 +2160,31 @@ impl<A: App> Face for Runner<A> {
     }
 }
 
-fn read_keymap<A: App>() -> (Keymap, Option<Said>) {
-    match Keymap::parse(A::Cmd::keymap()) {
-        Ok(keymap) => {
-            let known = |name: &str| Builtin::find(name).is_some() || A::Cmd::entries().iter().any(|e| e.name == name && !e.internal);
-            let unknown = keymap.bindings.iter().find(|(_, c)| !known(c)).map(|(_, c)| c.clone());
-            let said = unknown.map(|c| Said::Failure(format!("The keymap names “{c}”, which is not a command")));
-            (keymap, said)
+fn read_keymap<A: App>(source: &str, file: &str) -> Result<(Keymap, Option<Said>), Said> {
+    let keymap = Keymap::parse(source).map_err(|e| Said::Failure(format!("{file} has a mistake on {e}")))?;
+    let known = |name: &str| Builtin::find(name).is_some() || A::Cmd::entries().iter().any(|e| e.name == name && !e.internal);
+    let unknown = keymap.bindings.iter().find(|(_, c)| !known(c)).map(|(_, c)| c.clone());
+    let said = unknown.map(|c| Said::Failure(format!("{file} names “{c}”, which is not a command")));
+    Ok((keymap, said))
+}
+
+const KEYMAP: &str = "keymap.txt";
+
+fn watch_keys(file: &std::path::Path, waker: Waker) -> Option<(notify::RecommendedWatcher, mpsc::Receiver<()>)> {
+    use notify::Watcher;
+    let folder = file.parent()?;
+    std::fs::create_dir_all(folder).ok()?;
+    let (send, receive) = mpsc::channel();
+    let name = file.file_name()?.to_owned();
+    let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        let Ok(event) = event else { return };
+        if !event.kind.is_access() && event.paths.iter().any(|p| p.file_name() == Some(name.as_os_str())) && send.send(()).is_ok() {
+            waker.wake();
         }
-        Err(e) => (Keymap::default(), Some(Said::Failure(format!("The keymap has a mistake on {e}")))),
-    }
+    })
+    .ok()?;
+    watcher.watch(folder, notify::RecursiveMode::NonRecursive).ok()?;
+    Some((watcher, receive))
 }
 
 fn title(name: &str) -> String {

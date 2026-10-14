@@ -1,5 +1,8 @@
 use graticule_macros::{Commands, Facts};
-use kernel::{App, Available, Cx, Message, States, Ui};
+use kernel::ink::{Theme, contrast, to_oklch};
+use kernel::layout::{GAP, MARGIN};
+use kernel::metrics::{FONT_POINTS, LINE};
+use kernel::{App, Available, Cx, Ink, Message, States, Ui};
 use ledger::{Edit, Key, List, Outcome, Selection, Text};
 
 /// Specimen's places. Every one is in the bar wherever you are.
@@ -50,6 +53,10 @@ pub struct Catalog {
     #[session]
     reading: Selection<Block>,
     #[session]
+    settings: List<Setting>,
+    #[session]
+    looking: Selection<Setting>,
+    #[session]
     samples: List<Sample>,
     #[session]
     draft: Text,
@@ -87,6 +94,27 @@ pub enum Piece {
     Awkward,
 }
 
+/// One line of the Style place: a heading, a sentence, an ink in both appearances, or a value of the style.
+#[derive(Facts)]
+pub struct Setting {
+    #[key]
+    id: Key<Setting>,
+    shown: Shown,
+    name: String,
+    light: String,
+    dark: String,
+}
+
+#[derive(Facts, Debug, Default, PartialEq)]
+pub enum Shown {
+    #[default]
+    Heading,
+    Paragraph,
+    Columns,
+    Ink(Ink),
+    Value,
+}
+
 /// Content that breaks careless components: nothing, too much, the other direction, other scripts, pictures and long numbers.
 #[derive(Facts)]
 pub struct Sample {
@@ -107,6 +135,7 @@ pub enum Component {
     Field,
     List,
     Empty,
+    Swatch,
     Row,
     Columns,
     Bar,
@@ -116,7 +145,7 @@ pub enum Component {
 }
 
 impl Component {
-    const ALL: [Component; 14] = [
+    const ALL: [Component; 15] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -127,6 +156,7 @@ impl Component {
         Component::Field,
         Component::List,
         Component::Empty,
+        Component::Swatch,
         Component::Bar,
         Component::Status,
         Component::Message,
@@ -143,6 +173,7 @@ impl Component {
             Component::Field => "Field",
             Component::List => "List",
             Component::Empty => "Empty",
+            Component::Swatch => "Swatch",
             Component::Row => "Row",
             Component::Columns => "Columns",
             Component::Bar => "Action bar",
@@ -162,6 +193,7 @@ impl Component {
             Component::Field => include_str!("../../../docs/components/field.md"),
             Component::List => include_str!("../../../docs/components/list.md"),
             Component::Empty => include_str!("../../../docs/components/empty.md"),
+            Component::Swatch => include_str!("../../../docs/components/swatch.md"),
             Component::Row => include_str!("../../../docs/components/row.md"),
             Component::Columns => include_str!("../../../docs/components/columns.md"),
             Component::Bar => include_str!("../../../docs/components/bar.md"),
@@ -218,6 +250,8 @@ impl Default for Catalog {
             page: None,
             blocks: List::default(),
             reading: Selection::default(),
+            settings: settings(),
+            looking: Selection::default(),
             samples,
             draft: Text::default(),
             ticked: false,
@@ -287,9 +321,7 @@ impl App for Catalog {
             (Place::Screens, _) => ui.page(Message::from("Screens"), |ui| {
                 ui.muted("Specimen was opened on its own, so there are no app screens to show. Run an app with --specimen to see its named states here.");
             }),
-            (Place::Style, _) => ui.page(Message::from("Style"), |ui| {
-                ui.muted("The style and theme come in a later part of this item.");
-            }),
+            (Place::Style, _) => self.style(ui),
             (Place::Changes, _) => ui.page(Message::from("Changes"), |ui| {
                 ui.muted("Changes come in a later part of this item.");
             }),
@@ -297,7 +329,8 @@ impl App for Catalog {
     }
 
     fn states() -> States<Self> {
-        Component::ALL.iter().fold(States::new().add("Components", Catalog::default()), |states, &component| {
+        let start = States::new().add("Components", Catalog::default()).add("Style", Catalog { place: Place::Style, ..Catalog::default() });
+        Component::ALL.iter().fold(start, |states, &component| {
             states.add(component.name(), Catalog { page: Some(component), blocks: blocks(component), ..Catalog::default() })
         })
     }
@@ -315,6 +348,32 @@ impl Catalog {
                         ui.link(Cmd::Open);
                     });
                 });
+            });
+        });
+    }
+
+    fn style(&self, ui: &mut Ui<Cmd>) {
+        ui.page(Message::from("Style"), |ui| {
+            ui.list(&self.settings, Catalog::looking, |ui, setting| match setting.shown {
+                Shown::Heading => ui.strong(&setting.name),
+                Shown::Paragraph => ui.muted(&setting.name),
+                Shown::Columns => ui.columns(|ui| {
+                    ui.column(SWATCH_COLUMN, |ui| ui.muted("Now"));
+                    ui.column(NAME_COLUMN, |ui| ui.muted(&setting.name));
+                    ui.column(kernel::Fill, |ui| ui.muted(&setting.light));
+                    ui.column(kernel::Fill, |ui| ui.muted(&setting.dark));
+                }),
+                Shown::Ink(ink) => ui.columns(|ui| {
+                    ui.column(SWATCH_COLUMN, |ui| ui.swatch(ink));
+                    ui.column(NAME_COLUMN, |ui| ui.text(&setting.name));
+                    ui.column(kernel::Fill, |ui| ui.mono(&setting.light));
+                    ui.column(kernel::Fill, |ui| ui.mono(&setting.dark));
+                }),
+                Shown::Value => ui.columns(|ui| {
+                    ui.column(SWATCH_COLUMN + NAME_COLUMN + GAP, |ui| ui.text(&setting.name));
+                    ui.column(kernel::Fill, |ui| ui.mono(&setting.light));
+                    ui.column(kernel::Fill, |ui| ui.muted(&setting.dark));
+                }),
             });
         });
     }
@@ -377,6 +436,12 @@ impl Catalog {
             Component::Status => ui.muted("Just above the bar: hover over something"),
             Component::Message => ui.muted("Under the page: press the button above"),
             Component::Palette => ui.muted("Open it from the bar"),
+            Component::Swatch => ui.row(|ui| {
+                ui.swatch(Ink::Link);
+                ui.swatch(Ink::Danger);
+                ui.swatch(Ink::Ok);
+                ui.swatch(Ink::Selection);
+            }),
         }
     }
 }
@@ -443,4 +508,45 @@ fn blocks(component: Component) -> List<Block> {
         pieces.extend(SAMPLES.iter().map(|(what, _)| (Piece::Awkward, what.to_string())));
     }
     pieces.into_iter().zip(1..).map(|((kind, text), n)| Block { id: Key::fixed(n), kind, text }).collect()
+}
+
+const SWATCH_COLUMN: i32 = 6;
+const NAME_COLUMN: i32 = 12;
+
+/// The Style place's lines: every ink of the theme in both appearances with its contrast on the background, then the values the grid and the type are built from.
+fn settings() -> List<Setting> {
+    let light = Theme::of(kernel::ink::Appearance::Light);
+    let dark = Theme::of(kernel::ink::Appearance::Dark);
+    let describe = |theme: &Theme, ink: Ink| {
+        let (l, c, h) = to_oklch(theme.get(ink));
+        let numbers = format!("{l:.2} {c:.3} {h:.0}");
+        if ink.surface() {
+            return numbers;
+        }
+        let ratio = contrast(theme.get(ink), theme.bg);
+        match ink.needs() {
+            Some(needs) if ratio < needs => format!("{numbers} · {ratio:.1}, below {needs}"),
+            _ => format!("{numbers} · {ratio:.1}"),
+        }
+    };
+    let line = |shown: Shown, name: &str, light: String, dark: String| (shown, name.to_string(), light, dark);
+    let mut lines = vec![
+        line(Shown::Heading, "Inks", String::new(), String::new()),
+        line(Shown::Paragraph, "Everything is drawn in one of these inks, so a theme restyles everything at once. Each is given as OKLCH lightness, chroma and hue, then, for inks that text and lines are drawn in, its contrast on the background: text needs 4.5 to 1, faint text 3 to 1. The swatch shows the appearance the window is in now.", String::new(), String::new()),
+        line(Shown::Columns, "Ink", "Light".to_string(), "Dark".to_string()),
+    ];
+    lines.extend(Ink::ALL.into_iter().map(|ink| line(Shown::Ink(ink), ink.name(), describe(light, ink), describe(dark, ink))));
+    lines.extend([
+        line(Shown::Paragraph, "", String::new(), String::new()),
+        line(Shown::Heading, "The grid and the type", String::new(), String::new()),
+        line(Shown::Paragraph, "Editing these here, and the inks above, comes with style and theme files.", String::new(), String::new()),
+        line(Shown::Value, "Type size", format!("{FONT_POINTS} pt"), "The monospace face at this size sets a cell's width, rounded to a whole point".to_string()),
+        line(Shown::Value, "Line height", format!("{LINE}"), "A cell is this many lines of type tall, rounded to a whole point".to_string()),
+        line(Shown::Value, "Text face", "IBM Plex Sans".to_string(), "For words".to_string()),
+        line(Shown::Value, "Data face", "IBM Plex Mono".to_string(), "For data, code and anything that lines up in cells".to_string()),
+        line(Shown::Value, "Strong weight", "600".to_string(), "Text that heads what follows it; other text is 400".to_string()),
+        line(Shown::Value, "Gap", format!("{GAP} cells"), "Between things side by side".to_string()),
+        line(Shown::Value, "Margin", format!("{MARGIN} cells"), "Around a page".to_string()),
+    ]);
+    lines.into_iter().zip(1..).map(|((shown, name, light, dark), n)| Setting { id: Key::fixed(n), shown, name, light, dark }).collect()
 }

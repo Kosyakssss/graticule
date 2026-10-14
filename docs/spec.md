@@ -11,6 +11,7 @@ Every decision below is the owner's unless marked **Proposed** (engineering choi
 - A clean start. Graticule began inside Feedreader; its architecture is rewritten here, and the parts that meet the operating system are moved in one at a time with their laws and the traps they avoid (`docs/internals/`), not rewritten. Feedreader is paused and later depends on Graticule like any other app.
 - Desktop first: macOS, then Linux once macOS works, then Windows. The API never uses a concept only macOS has, so each new platform is work, not a rewrite. Mobile comes later.
 - No `unsafe` in our code; the workspace denies it, with two approved exceptions (`docs/internals/unsafe.md`): the native context menu on macOS, and the macOS spellchecker if no safe binding reaches it. Every other exception is justified to the owner before it lands.
+- License: MPL-2.0 (`LICENSE`). Changes to Graticule's own files stay open; apps built on it may use any license.
 - Tests are laws (§11). Everything else is verified by running the apps and looking at Specimen.
 
 ## 1. Purpose
@@ -368,12 +369,11 @@ The faces of Galley, Plotter, Specimen and Scope are apps too. Beside them, six 
 Order, by difficulty, because each forces new pieces into the kernel: Galley's editor and Twin; Ticker; Plotter's whiteboard, Atlas and Patchbay; Lightbox; Four-track.
 
 ## 15. Open questions
-1. License, decided once the first slice stands. MPL-2.0 is favored: changes to Graticule stay open, apps built on it may use any license.
-2. The Linux details (§10), after testing on a real machine.
-3. Proofs kept as images, as text descriptions of the tree, or both.
-4. The CRDT library under Ledger's types (§13.2).
-5. The four kinds of state as marks on fields or as separate structs (§3.2); marks for now.
-6. Fractional display scales (Linux), where a cell can't be whole pixels and whole points at once.
+1. The Linux details (§10), after testing on a real machine.
+2. Proofs kept as images, as text descriptions of the tree, or both.
+3. The CRDT library under Ledger's types (§13.2).
+4. The four kinds of state as marks on fields or as separate structs (§3.2); marks for now.
+5. Fractional display scales (Linux), where a cell can't be whole pixels and whole points at once.
 
 ## 16. Later
 - Every Graticule app also running in a terminal or a browser tab, from the same tree. Parked until the framework stands on its own.

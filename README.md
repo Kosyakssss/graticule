@@ -8,3 +8,5 @@ Nothing runs yet. Start with:
 - [`docs/api.md`](docs/api.md): the app code we want to be able to write.
 - [`docs/guide/`](docs/guide/README.md): all of it in plain words.
 - [`AGENTS.md`](AGENTS.md): how to work on it.
+
+Licensed under the [Mozilla Public License 2.0](LICENSE).

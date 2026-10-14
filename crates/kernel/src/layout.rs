@@ -11,6 +11,9 @@ pub const CHECK: i32 = 3;
 pub const BUTTON: i32 = 3;
 pub const SWATCH: i32 = 4;
 const BUTTON_MIN: i32 = 16;
+pub const CALLOUT: i32 = 4;
+const GAUGE: i32 = 20;
+const GAUGE_MIN: i32 = 8;
 
 /// Lays a tree out in whole cells: each node's `Area` from its parent's, top down, measuring text in columns as it goes.
 pub struct Layout<'t> {
@@ -141,6 +144,27 @@ impl<'t> Layout<'t> {
                 (c.min(8), c)
             }
             Kind::Field => (16, 32),
+            Kind::Rule | Kind::Placeholder { .. } => (0, 0),
+            Kind::Keys | Kind::Tag | Kind::Avatar => {
+                let c = self.cols(tree.str(n.text), matches!(n.kind, Kind::Keys | Kind::Avatar)) + 1;
+                (c, c)
+            }
+            Kind::Gauge { .. } => {
+                let label = self.cols(tree.str(n.text), true);
+                (GAUGE_MIN + 1 + label, GAUGE + 1 + label)
+            }
+            Kind::Callout { .. } | Kind::Card => {
+                let (start, end) = self.children(tree, i);
+                let (mut min, mut pref) = (self.cols(tree.str(n.text), false), self.cols(tree.str(n.text), false));
+                for k in start..end {
+                    let (a, b) = self.size(tree, self.stack[k]);
+                    min = min.max(a);
+                    pref = pref.max(b);
+                }
+                self.release(start);
+                let edges = if n.kind == Kind::Card { 4 } else { CALLOUT + 1 };
+                (min.min(16) + edges, pref + edges)
+            }
             Kind::Swatch { .. } => (SWATCH, SWATCH),
             Kind::Picture { picture, rows } => {
                 let c = self.picture_cols(picture, rows);
@@ -276,6 +300,19 @@ impl<'t> Layout<'t> {
             Kind::Value { .. } => 1,
             Kind::Button | Kind::Action | Kind::Choice { .. } | Kind::Entry | Kind::Link | Kind::Field | Kind::Status | Kind::Note | Kind::Swatch { .. } => 1,
             Kind::Picture { rows, .. } => rows,
+            Kind::Rule => 2,
+            Kind::Keys | Kind::Gauge { .. } | Kind::Tag | Kind::Avatar => 1,
+            Kind::Placeholder { rows } => rows.max(1),
+            Kind::Callout { .. } | Kind::Card => {
+                let (start, end) = self.children(tree, i);
+                let inner = if n.kind == Kind::Card { cols - 4 } else { cols - CALLOUT - 1 };
+                let mut rows = 0;
+                for k in start..end {
+                    rows += self.rows(tree, self.stack[k], inner);
+                }
+                self.release(start);
+                if n.kind == Kind::Card { rows + 3 } else { rows.max(1) }
+            }
             Kind::List { .. } => 3,
             Kind::Bar => {
                 let (start, end) = self.children(tree, i);
@@ -324,10 +361,13 @@ impl<'t> Layout<'t> {
                 let gap = i32::from(matches!(n.kind, Kind::Page | Kind::Empty));
                 let mut rows = 0;
                 for k in start..end {
-                    rows += self.rows(tree, self.stack[k], inner) + gap;
+                    rows += self.rows(tree, self.stack[k], inner);
+                    if k + 1 < end {
+                        rows += self.gap_after(tree, k, end, gap);
+                    }
                 }
                 self.release(start);
-                if n.kind == Kind::Page { rows + 3 } else { (rows - gap).max(0) }
+                if n.kind == Kind::Page { rows + 4 } else { rows }
             }
         }
     }
@@ -403,6 +443,8 @@ impl<'t> Layout<'t> {
             Kind::Overlay { .. } => self.stack_down(tree, i, Area::new(area.col + 1, area.row, area.cols - 2, area.rows), 0),
             Kind::Empty => self.stack_down(tree, i, area, 1),
             Kind::Row | Kind::ListRow { .. } | Kind::Columns => self.side_by_side(tree, i, area),
+            Kind::Callout { .. } => self.stack_down(tree, i, Area::new(area.col + CALLOUT, area.row, area.cols - CALLOUT - 1, area.rows), 0),
+            Kind::Card => self.stack_down(tree, i, Area::new(area.col + 2, area.row + 2, area.cols - 4, area.rows - 3), 0),
             Kind::List { .. } => self.list(tree, i, area),
             Kind::Bar => {
                 let (start, end) = self.children(tree, i);
@@ -436,7 +478,7 @@ impl<'t> Layout<'t> {
                 fixed += self.rows(tree, c, area.cols);
             }
         }
-        let gaps = gap * (end - start).saturating_sub(1) as i32;
+        let gaps: i32 = (start..end.saturating_sub(1)).map(|k| self.gap_after(tree, k, end, gap)).sum();
         let spare = (area.rows - fixed - gaps).max(0);
         let mut row = area.row;
         let mut given = 0;
@@ -452,12 +494,18 @@ impl<'t> Layout<'t> {
                 self.rows(tree, c, area.cols)
             };
             let rows = rows.min(area.bottom() - row).max(0);
-            let cols = if matches!(tree.nodes[c as usize].kind, Kind::Button | Kind::Link | Kind::Swatch { .. } | Kind::Picture { .. }) { self.size(tree, c).1.min(area.cols) } else { area.cols };
+            let cols = if matches!(tree.nodes[c as usize].kind, Kind::Button | Kind::Link | Kind::Swatch { .. } | Kind::Picture { .. } | Kind::Keys | Kind::Tag | Kind::Avatar) { self.size(tree, c).1.min(area.cols) } else { area.cols };
             let a = if rows > 0 { Area::new(area.col, row, cols, rows) } else { Area::default() };
             self.place(tree, c, a);
-            row += rows + gap;
+            row += rows + self.gap_after(tree, k, end, gap);
         }
         self.release(start);
+    }
+
+    /// The gap after the child at `k` of a stack: none beside a separator, which brings its own room.
+    fn gap_after<C>(&self, tree: &Tree<C>, k: usize, end: usize, gap: i32) -> i32 {
+        let rule = |k: usize| k < end && self.stack.get(k).is_some_and(|&c| tree.nodes[c as usize].kind == Kind::Rule);
+        if rule(k) || rule(k + 1) { 0 } else { gap }
     }
 
     fn side_by_side<C>(&mut self, tree: &mut Tree<C>, i: u32, area: Area) {

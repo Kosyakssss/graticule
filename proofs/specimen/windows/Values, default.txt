@@ -5,7 +5,7 @@ window		0 0 120 30
         text	Each kind of value has one look, used everywhere, so a reader knows what a thing is before reading it. A count and a date are data, in the monospace face. A version, a state, a product code, a piece of code and a mode each sit in a box one column wider than the text. These boxed values are badges: they say what something is and never what to do, so clicking one does nothing. What you can act on is a button or a link.	2 3 114 3	
       list item		2 6 114 1	
       list item		2 7 114 1	
-        text	Use it for	2 7 7 1	strong
+        heading	Use it for	2 7 7 1	strong
       list item		2 8 114 1	
         text	• count: how many there are, with its thousands grouped: 1,284.	2 8 48 1	
       list item		2 9 114 3	
@@ -24,7 +24,7 @@ window		0 0 120 30
         text	• error: what went wrong, in the danger ink.	2 17 33 1	
       list item		2 18 114 1	
       list item		2 19 114 1	
-        text	Code	2 19 4 1	strong
+        heading	Code	2 19 4 1	strong
   alert		2 25 116 1	
   status		2 26 116 1	
   toolbar		2 27 116 3	

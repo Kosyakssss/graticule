@@ -192,12 +192,88 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.text_as(text.as_ref(), false, Tone::Muted, Location::caller());
     }
 
-    /// Text that heads what follows it, in the strong weight.
+    /// A rule between what comes before and what comes after, on a cell edge, with the same room above and below it.
     #[track_caller]
-    pub fn strong(&mut self, text: impl AsRef<str>) {
+    pub fn separator(&mut self) {
+        self.add(Kind::Rule, Location::caller());
+    }
+
+    /// Text that heads what follows it, in the strong weight, which a screen reader announces as a heading.
+    #[track_caller]
+    pub fn heading(&mut self, text: impl AsRef<str>) {
         let i = self.add(Kind::Text { mono: false, tone: Tone::Ink, strong: true }, Location::caller());
         let r = self.tree.put(text.as_ref());
         self.tree.nodes[i as usize].text = r;
+    }
+
+    /// The keys that run `cmd`, read from the keymap as it is now, so they never go stale; "no key" when nothing is bound to it.
+    #[track_caller]
+    pub fn keys<M>(&mut self, cmd: impl Bind<C, S, M>) {
+        let i = self.add(Kind::Keys, Location::caller());
+        self.command(i, cmd);
+    }
+
+    /// How far a piece of work has come, `done` of `total`, as a bar with the count beside it.
+    #[track_caller]
+    pub fn progress(&mut self, done: u64, total: u64) {
+        let filled = if total == 0 { 0 } else { (done.min(total) as u128 * 1000 / total as u128) as u16 };
+        let i = self.add(Kind::Gauge { filled, meter: false }, Location::caller());
+        let r = self.tree.put(&format!("{} of {}", grouped(done.min(total)), grouped(total)));
+        self.tree.nodes[i as usize].text = r;
+    }
+
+    /// A level within its range, such as how full a disk is, as a bar with the percentage beside it. `level` runs from 0 to 1.
+    #[track_caller]
+    pub fn meter(&mut self, level: f32) {
+        let level = if level.is_nan() { 0.0 } else { level.clamp(0.0, 1.0) };
+        let filled = (level * 1000.0).round() as u16;
+        let i = self.add(Kind::Gauge { filled, meter: true }, Location::caller());
+        let r = self.tree.put(&format!("{} %", (level * 100.0).round()));
+        self.tree.nodes[i as usize].text = r;
+    }
+
+    /// `rows` rows kept for content that hasn't arrived yet, drawn as faint lines, so the page doesn't jump when it comes.
+    #[track_caller]
+    pub fn placeholder(&mut self, rows: i32) {
+        self.add(Kind::Placeholder { rows: rows.max(1) }, Location::caller());
+    }
+
+    /// A short word that sorts something into a group, such as `design` or `urgent`, in a thin box.
+    #[track_caller]
+    pub fn tag(&mut self, text: impl AsRef<str>) {
+        let i = self.add(Kind::Tag, Location::caller());
+        let r = self.tree.put(text.as_ref());
+        self.tree.nodes[i as usize].text = r;
+    }
+
+    /// A person, as the initials of their name in a box. A screen reader reads the whole name.
+    #[track_caller]
+    pub fn avatar(&mut self, name: impl AsRef<str>) {
+        let name = name.as_ref();
+        let initials: String = name.split_whitespace().filter_map(|w| w.chars().next()).flat_map(char::to_uppercase).take(2).collect();
+        let i = self.add(Kind::Avatar, Location::caller());
+        let r = self.tree.put(if initials.is_empty() { "?" } else { &initials });
+        self.tree.nodes[i as usize].text = r;
+        let r = self.tree.put(name);
+        self.tree.nodes[i as usize].name = r;
+    }
+
+    /// A message boxed into the page with its ink's icon: `Ink::Link` for information, `Warn`, `Danger` or `Ok`. What goes inside is described in `f`.
+    #[track_caller]
+    pub fn callout(&mut self, ink: Ink, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let i = self.add(Kind::Callout { ink }, Location::caller());
+        let subject = self.subject;
+        f(&mut self.child(i, subject));
+    }
+
+    /// A group of components in a box under its title, for things that belong together, such as one account's details.
+    #[track_caller]
+    pub fn card(&mut self, title: impl AsRef<str>, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let i = self.add(Kind::Card, Location::caller());
+        let r = self.tree.put(title.as_ref());
+        self.tree.nodes[i as usize].text = r;
+        let subject = self.subject;
+        f(&mut self.child(i, subject));
     }
 
     /// A small box filled with one of the theme's inks, which follows the theme and the appearance. A screen reader reads the ink's name.

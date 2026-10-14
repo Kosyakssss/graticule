@@ -686,7 +686,7 @@ impl<A: App> Runner<A> {
             ui.column(crate::tree::Fill, |ui| {
                 for line in lines.into_iter().skip(top as usize).take(shown as usize) {
                     match line {
-                        Help::Heading(text) => ui.strong(text),
+                        Help::Heading(text) => ui.heading(text),
                         Help::Doc(text) => ui.muted(text),
                         Help::Dated(at, text) => ui.columns(|ui| {
                             ui.column(crate::tree::cols(HELP_DATE), |ui| ui.date(at));
@@ -871,6 +871,14 @@ impl<A: App> Runner<A> {
                 continue;
             }
             if n.cmd == NONE {
+                continue;
+            }
+            if n.kind == Kind::Keys {
+                let name = self.tree.commands[n.cmd as usize].entry().map(|e| A::Cmd::entries()[e].name);
+                let keys = name.and_then(|name| self.keymap.keys_for(self.mode, name));
+                let r = self.tree.put(keys.as_deref().unwrap_or("no key"));
+                self.tree.nodes[i].text = r;
+                self.tree.nodes[i].enabled = keys.is_some();
                 continue;
             }
             let short = matches!(n.kind, Kind::Button | Kind::Link) && self.tree.in_row(i as u32);

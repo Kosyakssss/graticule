@@ -21,7 +21,7 @@ Several names on either side are the same component. They are merged into one ro
 |---|---|---|---|
 | Page | | | the scrolling page every place is drawn in |
 | Row, Columns | | | layout in cells |
-| Text | Typography | Text | plain, muted, mono, strong |
+| Text | Typography | Text | plain, muted, mono |
 | Button | Button | Button | |
 | Link | Link | Link | |
 | Check | Checkbox | Checkbox | |
@@ -35,6 +35,17 @@ Several names on either side are the same component. They are merged into one ro
 | Status line | Tooltip | Tooltip | grounded: a hint, never a floating tip |
 | Message line | Toast | Toast, Toaster | grounded |
 | Palette | | Omnibar | |
+| Key label | Kbd | KeyComboTag | drawn from the keymap, never typed by hand |
+| Separator | Separator | Divider | a rule on a cell edge |
+| Spinner | Spinner | Spinner | the status line says what is running, in words; nothing spins, since nothing moves by itself (§4.5) |
+| Progress | ProgressBar, ProgressCircle | ProgressBar | work the app counts; a job's own progress is in the status line |
+| Meter | Meter | | a value within a range |
+| Placeholder | Skeleton | Skeleton | rows reserved while data arrives late |
+| Tag | Chip, Tag, TagGroup | Tag | removable tags are wave 2 |
+| Avatar | Avatar, AvatarGroup | | a person's initials; their picture comes with raster images (item 16) |
+| Callout | Alert | Callout | a boxed message in the page |
+| Card | Card, Surface | Card, CardList, Section, ControlCard | a boxed group with a heading |
+| Heading | Header | EntityTitle | strong text announced as a heading; with its icon and typed values, a row of them |
 
 ## Wave 1: on the kernel as it stands
 
@@ -50,17 +61,6 @@ These are drawn from what exists now: boxes, text, pictures, the registry and fo
 | Switch | Switch, SwitchGroup | Switch | an on/off fact, applied at once |
 | Label, description, error | Label, Description, FieldError, ErrorMessage | Label, FormGroup helper text | the parts of a labelled control |
 | Fieldset | Fieldset, Form | FormGroup, ControlGroup | controls grouped under a heading |
-| Key label | Kbd | KeyComboTag | drawn from the keymap, never typed by hand |
-| Separator | Separator | Divider | a rule on a cell edge |
-| Spinner | Spinner | Spinner | only beside a running job (§3.5), never alone |
-| Progress | ProgressBar, ProgressCircle | ProgressBar | a job's progress |
-| Meter | Meter | | a value within a range |
-| Placeholder | Skeleton | Skeleton | rows reserved while data arrives late |
-| Tag | Chip, Tag, TagGroup | Tag | removable tags are wave 2 |
-| Avatar | Avatar, AvatarGroup | | a person's initials or picture |
-| Callout | Alert | Callout | a boxed message in the page |
-| Card | Card, Surface | Card, CardList, Section, ControlCard | a boxed group with a heading |
-| Heading | Header | EntityTitle | a title with its icon and typed values |
 | Breadcrumbs | Breadcrumbs | Breadcrumbs | long paths shortened in the middle |
 | Navigation | | Navbar | places along the top, the current one marked |
 | Pagination | Pagination | | only where paging is the data's own shape |

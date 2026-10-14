@@ -65,6 +65,8 @@ fn state<C>(tree: &Tree<C>, n: &Node) -> String {
         }
         Kind::Choice { chosen: true } => parts.push("highlighted".to_string()),
         Kind::List { count, .. } => parts.push(format!("{count} items")),
+        Kind::Gauge { filled, .. } => parts.push(format!("{} %", f32::from(filled) / 10.0)),
+        Kind::Callout { ink } => parts.push(ink.name().to_string()),
         _ => {}
     }
     if n.kind.acts() && !n.enabled {

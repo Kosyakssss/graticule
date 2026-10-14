@@ -167,10 +167,20 @@ pub enum Component {
     Status,
     Message,
     Palette,
+    Heading,
+    Separator,
+    Keys,
+    Progress,
+    Meter,
+    Placeholder,
+    Tag,
+    Avatar,
+    Callout,
+    Card,
 }
 
 impl Component {
-    const ALL: [Component; 17] = [
+    const ALL: [Component; 27] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -188,6 +198,16 @@ impl Component {
         Component::Status,
         Component::Message,
         Component::Palette,
+        Component::Heading,
+        Component::Separator,
+        Component::Keys,
+        Component::Progress,
+        Component::Meter,
+        Component::Placeholder,
+        Component::Tag,
+        Component::Avatar,
+        Component::Callout,
+        Component::Card,
     ];
 
     fn name(self) -> &'static str {
@@ -209,6 +229,16 @@ impl Component {
             Component::Status => "Status line",
             Component::Message => "Message line",
             Component::Palette => "Palette",
+            Component::Heading => "Heading",
+            Component::Separator => "Separator",
+            Component::Keys => "Key label",
+            Component::Progress => "Progress",
+            Component::Meter => "Meter",
+            Component::Placeholder => "Placeholder",
+            Component::Tag => "Tag",
+            Component::Avatar => "Avatar",
+            Component::Callout => "Callout",
+            Component::Card => "Card",
         }
     }
 
@@ -231,11 +261,21 @@ impl Component {
             Component::Status => include_str!("../../../docs/components/status.md"),
             Component::Message => include_str!("../../../docs/components/message.md"),
             Component::Palette => include_str!("../../../docs/components/palette.md"),
+            Component::Heading => include_str!("../../../docs/components/heading.md"),
+            Component::Separator => include_str!("../../../docs/components/separator.md"),
+            Component::Keys => include_str!("../../../docs/components/keys.md"),
+            Component::Progress => include_str!("../../../docs/components/progress.md"),
+            Component::Meter => include_str!("../../../docs/components/meter.md"),
+            Component::Placeholder => include_str!("../../../docs/components/placeholder.md"),
+            Component::Tag => include_str!("../../../docs/components/tag.md"),
+            Component::Avatar => include_str!("../../../docs/components/avatar.md"),
+            Component::Callout => include_str!("../../../docs/components/callout.md"),
+            Component::Card => include_str!("../../../docs/components/card.md"),
         }
     }
 
     fn awkward(self) -> bool {
-        matches!(self, Component::Text | Component::Button | Component::Link | Component::Check | Component::Value)
+        matches!(self, Component::Text | Component::Button | Component::Link | Component::Check | Component::Value | Component::Heading | Component::Tag | Component::Callout | Component::Card)
     }
 }
 
@@ -488,7 +528,7 @@ impl Catalog {
         };
         ui.page(Message::from("Style"), |ui| {
             ui.list(&self.settings, Catalog::looking, |ui, setting| match setting.shown {
-                Shown::Heading => ui.strong(&setting.name),
+                Shown::Heading => ui.heading(&setting.name),
                 Shown::Paragraph => ui.muted(&setting.name),
                 Shown::Columns => ui.columns(|ui| {
                     ui.column(SWATCH_COLUMN, |ui| ui.muted("Now"));
@@ -527,7 +567,7 @@ impl Catalog {
     fn sheet(&self, ui: &mut Ui<Cmd>, component: Component) {
         ui.page(Message::plain(component.name()), |ui| {
             ui.list(&self.blocks, Catalog::reading, |ui, block| match block.kind {
-                Piece::Heading => ui.strong(&block.text),
+                Piece::Heading => ui.heading(&block.text),
                 Piece::Paragraph => ui.text(&block.text),
                 Piece::Bullet => ui.text(format!("• {}", block.text)),
                 Piece::Code => ui.mono(&block.text),
@@ -614,6 +654,40 @@ impl Catalog {
                 });
                 ui.error("Couldn't reach the server");
             }
+            Component::Heading => ui.heading("Recent changes"),
+            Component::Separator => {
+                ui.text("Above the rule");
+                ui.separator();
+                ui.text("Below the rule");
+            }
+            Component::Keys => ui.row(|ui| {
+                ui.text("Press");
+                ui.keys(Cmd::Press);
+                ui.text("to press the button");
+            }),
+            Component::Progress => ui.progress(37, 120),
+            Component::Meter => ui.meter(0.62),
+            Component::Placeholder => ui.placeholder(3),
+            Component::Tag => ui.row(|ui| {
+                ui.tag("design");
+                ui.tag("urgent");
+            }),
+            Component::Avatar => ui.row(|ui| {
+                ui.avatar("Ada Lovelace");
+                ui.text("Ada Lovelace");
+            }),
+            Component::Callout => {
+                ui.callout(Ink::Warn, |ui| {
+                    ui.text("The disk is nearly full. Old versions are removed first.");
+                });
+                ui.callout(Ink::Link, |ui| {
+                    ui.text("Changes are saved as you make them.");
+                });
+            }
+            Component::Card => ui.card("Account", |ui| {
+                ui.text("ada@example.org");
+                ui.button(Cmd::Press);
+            }),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);
@@ -640,6 +714,10 @@ fn awkward<S: Copy + 'static>(ui: &mut Ui<Cmd, S>, component: Component, sample:
             ui.state(&sample.text, Ink::Ok);
             ui.code(&sample.text);
         }),
+        Component::Heading => ui.heading(&sample.text),
+        Component::Tag => ui.tag(&sample.text),
+        Component::Callout => ui.callout(Ink::Danger, |ui| ui.text(&sample.text)),
+        Component::Card => ui.card(&sample.text, |ui| ui.text(&sample.text)),
         _ => {}
     }
 }

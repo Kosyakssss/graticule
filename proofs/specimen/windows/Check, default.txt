@@ -5,12 +5,12 @@ window		0 0 120 30
         text	A checkbox: a yes-or-no fact and its label. Clicking it runs a command, which changes the fact; the box only shows what the facts say. What a ticked box shows comes from the style: a filled square, or a tick.	2 3 114 2	
       list item		2 5 114 1	
       list item		2 6 114 1	
-        text	Use it for	2 6 7 1	strong
+        heading	Use it for	2 6 7 1	strong
       list item		2 7 114 1	
         text	A fact that is true or false, such as whether an item is done.	2 7 44 1	
       list item		2 8 114 1	
       list item		2 9 114 1	
-        text	Code	2 9 4 1	strong
+        heading	Code	2 9 4 1	strong
       list item		2 10 114 1	
         text	ui.check(&item.title, item.done, Cmd::Toggle);	2 10 46 1	mono
       list item		2 11 114 1	
@@ -21,22 +21,22 @@ window		0 0 120 30
             checkbox	A yes-or-no fact	18 11 98 1	
       list item		2 12 114 1	
       list item		2 13 114 1	
-        text	Keys	2 13 4 1	strong
+        heading	Keys	2 13 4 1	strong
       list item		2 14 114 1	
         text	Tab reaches it; Return or Space runs its command.	2 14 38 1	
       list item		2 15 114 1	
       list item		2 16 114 1	
-        text	Narrow windows	2 16 14 1	strong
+        heading	Narrow windows	2 16 14 1	strong
       list item		2 17 114 1	
         text	The label wraps beside the box.	2 17 24 1	
       list item		2 18 114 1	
       list item		2 19 114 1	
-        text	Screen reader	2 19 11 1	strong
+        heading	Screen reader	2 19 11 1	strong
       list item		2 20 114 1	
         text	Says "checkbox", the label and whether it is ticked.	2 20 38 1	
       list item		2 21 114 1	
       list item		2 22 114 1	
-        text	With awkward content	2 22 18 1	strong
+        heading	With awkward content	2 22 18 1	strong
       list item		2 23 114 1	
         group		2 23 114 1	
           column		2 23 14 1	

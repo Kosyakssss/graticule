@@ -2,7 +2,7 @@ window		0 0 120 30
   page	Style	0 0 120 24	
     list		2 3 116 20	33 items
       list item		2 3 114 1	
-        text	Inks	2 3 4 1	strong
+        heading	Inks	2 3 4 1	strong
       list item		2 4 114 3	
         text	Everything is drawn in one of these inks, so a theme restyles everything at once. Each is given as OKLCH lightness, chroma and hue, then, for inks that text and lines are drawn in, its contrast on the background: text needs 4.5 to 1, faint text 3 to 1. Choose an ink to change it from the bar; a change that would make text hard to read can't be made, and says why. Every screen and component follows as it moves.	2 4 114 3	muted
       list item		2 7 114 1	

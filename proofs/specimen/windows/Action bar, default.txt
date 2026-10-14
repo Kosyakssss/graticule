@@ -11,17 +11,17 @@ window		0 0 120 30
             text	At the bottom of this window	18 6 98 1	muted
       list item		2 7 114 1	
       list item		2 8 114 1	
-        text	Code	2 8 4 1	strong
+        heading	Code	2 8 4 1	strong
       list item		2 9 114 1	
         text	None: the kernel draws it for every app.	2 9 30 1	
       list item		2 10 114 1	
       list item		2 11 114 1	
-        text	Keys	2 11 4 1	strong
+        heading	Keys	2 11 4 1	strong
       list item		2 12 114 1	
         text	Its commands' own keys, from the keymap and the platform.	2 12 46 1	
       list item		2 13 114 1	
       list item		2 14 114 1	
-        text	Screen reader	2 14 11 1	strong
+        heading	Screen reader	2 14 11 1	strong
       list item		2 15 114 1	
         text	A toolbar of buttons, each with its label and keys.	2 15 37 1	
   alert		2 25 116 1	

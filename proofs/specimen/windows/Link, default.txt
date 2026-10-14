@@ -5,12 +5,12 @@ window		0 0 120 30
         text	A lighter way to offer a command: underlined text that runs it. Like a button, its words are the command's label, and inside a list row its short form ("Remove", where the palette says "Remove “Call mum”").	2 3 114 2	
       list item		2 5 114 1	
       list item		2 6 114 1	
-        text	Use it for	2 6 7 1	strong
+        heading	Use it for	2 6 7 1	strong
       list item		2 7 114 1	
         text	Commands that are one of several on a row, where buttons would be loud.	2 7 56 1	
       list item		2 8 114 1	
       list item		2 9 114 1	
-        text	Code	2 9 4 1	strong
+        heading	Code	2 9 4 1	strong
       list item		2 10 114 1	
         text	ui.link(Cmd::Remove);	2 10 21 1	mono
       list item		2 11 114 1	
@@ -21,17 +21,17 @@ window		0 0 120 30
             link	Follow the link	18 11 11 1	
       list item		2 12 114 1	
       list item		2 13 114 1	
-        text	Keys	2 13 4 1	strong
+        heading	Keys	2 13 4 1	strong
       list item		2 14 114 1	
         text	Tab reaches it; Return or Space runs it.	2 14 29 1	
       list item		2 15 114 1	
       list item		2 16 114 1	
-        text	Screen reader	2 16 11 1	strong
+        heading	Screen reader	2 16 11 1	strong
       list item		2 17 114 1	
         text	Says "link" and the command's full label.	2 17 31 1	
       list item		2 18 114 1	
       list item		2 19 114 1	
-        text	With awkward content	2 19 18 1	strong
+        heading	With awkward content	2 19 18 1	strong
       list item		2 20 114 1	
         group		2 20 114 1	
           column		2 20 14 1	

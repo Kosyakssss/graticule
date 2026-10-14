@@ -5,12 +5,12 @@ window		0 0 120 30
         text	Components side by side, left to right, a column apart.	2 3 41 1	
       list item		2 4 114 1	
       list item		2 5 114 1	
-        text	Use it for	2 5 7 1	strong
+        heading	Use it for	2 5 7 1	strong
       list item		2 6 114 1	
         text	A field with the button that acts on it, or a few short pieces that read as one line.	2 6 60 1	
       list item		2 7 114 1	
       list item		2 8 114 1	
-        text	Code	2 8 4 1	strong
+        heading	Code	2 8 4 1	strong
       list item		2 9 114 4	
         text	ui.row(|ui| {\n    ui.field(Todo::draft, t!("Something to do")).on_submit(Cmd::Add);\n    ui.button(Cmd::Add);\n});	2 9 112 4	mono
       list item		2 13 114 1	
@@ -24,12 +24,12 @@ window		0 0 120 30
               text	side	28 13 4 1	
       list item		2 14 114 1	
       list item		2 15 114 1	
-        text	Narrow windows	2 15 14 1	strong
+        heading	Narrow windows	2 15 14 1	strong
       list item		2 16 114 1	
         text	When the components' narrow widths don't fit side by side, they stack, one under the other, in the same order.	2 16 82 1	
       list item		2 17 114 1	
       list item		2 18 114 1	
-        text	Screen reader	2 18 11 1	strong
+        heading	Screen reader	2 18 11 1	strong
       list item		2 19 114 1	
         text	A group; each component inside says its own part.	2 19 38 1	
   alert		2 25 116 1	

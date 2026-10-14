@@ -5,7 +5,7 @@ window		0 0 120 30
         text	The line under the page, for what a command said, or what failed and why. It stays until the next command says something else.	2 3 96 1	
       list item		2 4 114 1	
       list item		2 5 114 1	
-        text	Code	2 5 4 1	strong
+        heading	Code	2 5 4 1	strong
       list item		2 6 114 1	
         text	cx.say(t!("Saved to {path}"))	2 6 29 1	mono
       list item		2 7 114 1	
@@ -16,7 +16,7 @@ window		0 0 120 30
             text	Under the page: press the button above	18 7 98 1	muted
       list item		2 8 114 1	
       list item		2 9 114 1	
-        text	Screen reader	2 9 11 1	strong
+        heading	Screen reader	2 9 11 1	strong
       list item		2 10 114 1	
         text	An alert, read when it appears.	2 10 23 1	
   alert		2 25 116 1	

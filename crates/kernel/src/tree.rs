@@ -111,6 +111,14 @@ pub enum Kind {
     Value { value: Value },
     Overlay { anchor: Anchor },
     Entry,
+    Rule,
+    Keys,
+    Gauge { filled: u16, meter: bool },
+    Placeholder { rows: i32 },
+    Tag,
+    Avatar,
+    Callout { ink: Ink },
+    Card,
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -126,7 +134,7 @@ impl Kind {
     }
 
     pub fn container(&self) -> bool {
-        matches!(self, Kind::Root | Kind::Page | Kind::Row | Kind::Column | Kind::Columns | Kind::List { .. } | Kind::ListRow { .. } | Kind::Overlay { .. })
+        matches!(self, Kind::Root | Kind::Page | Kind::Row | Kind::Column | Kind::Columns | Kind::List { .. } | Kind::ListRow { .. } | Kind::Overlay { .. } | Kind::Callout { .. } | Kind::Card)
     }
 
     pub fn role(&self) -> &'static str {
@@ -141,6 +149,7 @@ impl Kind {
             Kind::Check { .. } => "checkbox",
             Kind::Link => "link",
             Kind::Button => "button",
+            Kind::Text { strong: true, .. } => "heading",
             Kind::Text { .. } => "text",
             Kind::Empty => "empty",
             Kind::Bar => "toolbar",
@@ -154,6 +163,15 @@ impl Kind {
             Kind::Value { .. } => "value",
             Kind::Overlay { .. } => "menu",
             Kind::Entry => "menu item",
+            Kind::Rule => "separator",
+            Kind::Keys => "keys",
+            Kind::Gauge { meter: false, .. } => "progress bar",
+            Kind::Gauge { meter: true, .. } => "meter",
+            Kind::Placeholder { .. } => "placeholder",
+            Kind::Tag => "tag",
+            Kind::Avatar => "avatar",
+            Kind::Callout { .. } => "callout",
+            Kind::Card => "card",
         }
     }
 }

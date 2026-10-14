@@ -115,7 +115,7 @@ impl App for Changes {
                     }
                     ui.columns(|ui| {
                         ui.column(kernel::Fill, |ui| {
-                            ui.strong(&sheet.name);
+                            ui.heading(&sheet.name);
                             match sheet.verdict {
                                 Verdict::New => ui.muted("Never approved"),
                                 Verdict::Approved => ui.muted("Approved"),

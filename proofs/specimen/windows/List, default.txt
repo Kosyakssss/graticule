@@ -5,12 +5,12 @@ window		0 0 120 30
         text	A list of the records in a List field, scrolled by whole rows, with its selection in a Selection field. The view describes one row; the kernel calls it only for the rows that show, so a list of fifty million items costs what a screenful does.	2 3 114 2	
       list item		2 5 114 1	
       list item		2 6 114 1	
-        text	Use it for	2 6 7 1	strong
+        heading	Use it for	2 6 7 1	strong
       list item		2 7 114 1	
         text	Any collection the user goes through: items, files, messages.	2 7 45 1	
       list item		2 8 114 1	
       list item		2 9 114 1	
-        text	Code	2 9 4 1	strong
+        heading	Code	2 9 4 1	strong
       list item		2 10 114 4	
         text	ui.list(&self.items, Todo::selection, |ui, item| {\n    ui.check(&item.title, item.done, Cmd::Toggle);\n    ui.link(Cmd::Remove);\n});	2 10 114 4	mono
       list item		2 14 114 1	

@@ -5,12 +5,12 @@ window		0 0 120 30
         text	A button for a command. Its label comes from the command's label, so a button always says what it will do, in the same words as the bar, the palette and the menus. When the command can't run right now, the button is drawn faint and the status line says why.	2 3 114 2	
       list item		2 5 114 1	
       list item		2 6 114 1	
-        text	Use it for	2 6 7 1	strong
+        heading	Use it for	2 6 7 1	strong
       list item		2 7 114 1	
         text	The main thing a part of the screen is for. When a row has several commands, the lighter link reads better.	2 7 79 1	
       list item		2 8 114 1	
       list item		2 9 114 1	
-        text	Code	2 9 4 1	strong
+        heading	Code	2 9 4 1	strong
       list item		2 10 114 1	
         text	ui.button(Cmd::Add);	2 10 20 1	mono
       list item		2 11 114 1	
@@ -21,17 +21,17 @@ window		0 0 120 30
             button	Press	18 11 8 1	
       list item		2 12 114 1	
       list item		2 13 114 1	
-        text	Keys	2 13 4 1	strong
+        heading	Keys	2 13 4 1	strong
       list item		2 14 114 1	
         text	Tab reaches it; Return or Space runs it. Its command can also have keys of its own in the app's keymap.	2 14 77 1	
       list item		2 15 114 1	
       list item		2 16 114 1	
-        text	Screen reader	2 16 11 1	strong
+        heading	Screen reader	2 16 11 1	strong
       list item		2 17 114 1	
         text	Says "button", the command's label and, when it can't run, why.	2 17 48 1	
       list item		2 18 114 1	
       list item		2 19 114 1	
-        text	With awkward content	2 19 18 1	strong
+        heading	With awkward content	2 19 18 1	strong
       list item		2 20 114 1	
         group		2 20 114 1	
           column		2 20 14 1	

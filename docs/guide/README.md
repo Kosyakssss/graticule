@@ -114,6 +114,8 @@ An app can also run work of its own in the background, such as a feed that keeps
 Doing something to thousands of chosen items at once, or undoing a big change, happens a little at a time, between pictures, with how far it has got in the status line, so the window never stops answering; it is still one step to undo.
 After an undo, or when something finishes in the background and changes the list, the rows that changed carry a small blue bar at their right edge until you next press a key or click, so you can see what moved without watching for it.
 
+The first wave of further components is in Specimen, each on its own page: headings, separators, the keys of a command drawn from the keymap, progress and level bars, placeholders for content still on its way, tags, a person's initials, boxed messages marked with an icon in their color, and cards that box a group under a title.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

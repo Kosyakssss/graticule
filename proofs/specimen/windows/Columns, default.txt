@@ -5,12 +5,12 @@ window		0 0 120 30
         text	Columns side by side, each made with column and given a width in cells: a number, Fill, or either with a smallest width (28.min(20), Fill.min(40)).	2 3 108 1	
       list item		2 4 114 1	
       list item		2 5 114 1	
-        text	Use it for	2 5 7 1	strong
+        heading	Use it for	2 5 7 1	strong
       list item		2 6 114 1	
         text	A label beside what it labels, or two panes of content that line up down the page.	2 6 61 1	
       list item		2 7 114 1	
       list item		2 8 114 1	
-        text	Code	2 8 4 1	strong
+        heading	Code	2 8 4 1	strong
       list item		2 9 114 4	
         text	ui.columns(|ui| {\n    ui.column(12, |ui| ui.text("Name"));\n    ui.column(Fill, |ui| ui.muted("Takes the rest of the width"));\n});	2 9 114 4	mono
       list item		2 13 114 1	
@@ -25,12 +25,12 @@ window		0 0 120 30
                 text	and one that fills the rest	30 13 86 1	muted
       list item		2 14 114 1	
       list item		2 15 114 1	
-        text	Narrow windows	2 15 14 1	strong
+        heading	Narrow windows	2 15 14 1	strong
       list item		2 16 114 1	
         text	When the columns' smallest widths don't fit, they stack.	2 16 42 1	
       list item		2 17 114 1	
       list item		2 18 114 1	
-        text	Screen reader	2 18 11 1	strong
+        heading	Screen reader	2 18 11 1	strong
       list item		2 19 114 1	
         text	A group of columns; each says its own content.	2 19 35 1	
   alert		2 25 116 1	

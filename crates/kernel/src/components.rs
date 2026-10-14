@@ -1,7 +1,7 @@
 use std::hash::{Hash, Hasher};
 
 use crate::grid::Area;
-use crate::ink::Color;
+use crate::ink::{Color, Ink};
 use crate::layout::{CHECK, MARGIN};
 use crate::look::CheckMark;
 use crate::paint::Painter;
@@ -409,6 +409,68 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         }
         (Layer::Over, Kind::Picture { picture, .. }) => draw_picture(p, p.rect(n.area), picture, None),
         (Layer::Over, Kind::Value { value }) => typed(p, &n, value, text),
+        (Layer::Over, Kind::Rule) => {
+            let r = p.rect(n.area);
+            let t = p.style.line(p.m);
+            let rule = p.theme.rule;
+            p.fill(Rect::new(r.x, r.y + p.m.cell_h, r.w, t), rule);
+        }
+        (Layer::Over, Kind::Keys) => {
+            let r = p.rect(n.area);
+            if n.enabled {
+                keycap(p, (r.x, r.y), text, true);
+            } else {
+                let (style, muted) = (p.m.sans(400.0), p.theme.muted);
+                p.text(text, style, (r.x, r.y), None, muted);
+            }
+        }
+        (Layer::Over, Kind::Gauge { filled, meter }) => gauge(p, &n, text, filled, meter),
+        (Layer::Over, Kind::Placeholder { rows }) => {
+            let r = p.rect(n.area);
+            let field = p.theme.field;
+            let inset = (p.m.cell_h * 0.25).round();
+            for k in 0..rows.min(n.area.rows) {
+                let share = [1.0, 0.85, 0.6][k as usize % 3];
+                let w = ((r.w * share) / p.m.cell_w).floor() * p.m.cell_w;
+                p.fill(Rect::new(r.x, r.y + k as f32 * p.m.cell_h + inset, w, p.m.cell_h - inset * 2.0), field);
+            }
+        }
+        (Layer::Over, Kind::Tag) => {
+            let cell = p.rect(n.area);
+            let inset = (p.m.cell_h * 0.1).round();
+            let cols = n.area.cols.min(text.chars().count() as i32 + 1);
+            let r = Rect::new(cell.x, cell.y + inset, cols as f32 * p.m.cell_w, p.m.cell_h - inset * 2.0);
+            let (t, theme) = (p.style.line(p.m), p.theme);
+            border(p, r, t, theme.rule);
+            let style = p.m.sans(400.0);
+            p.text(text, style, ((r.x + p.m.cell_w * 0.5).round(), cell.y), Some(r.w - p.m.cell_w * 0.5), theme.ink);
+        }
+        (Layer::Over, Kind::Avatar) => {
+            let cell = p.rect(n.area);
+            let theme = p.theme;
+            p.fill(cell, theme.muted);
+            let mono = crate::text::TextStyle { weight: 600.0, ..p.m.mono() };
+            p.text(text, mono, ((cell.x + p.m.cell_w * 0.5).round(), cell.y), None, theme.bg);
+        }
+        (Layer::Over, Kind::Callout { ink }) => {
+            let r = p.rect(n.area);
+            let (t, color) = (p.style.line(p.m), p.theme.get(ink));
+            p.fill(Rect::new(r.x, r.y, t * 2.0, r.h), color);
+            let icon = match ink {
+                Ink::Danger => &crate::picture::icons::ERROR,
+                Ink::Warn => &crate::picture::icons::WARNING,
+                Ink::Ok => &crate::picture::icons::SUCCESS,
+                _ => &crate::picture::icons::INFO,
+            };
+            draw_picture(p, p.rect(Area::new(n.area.col + 1, n.area.row, 2, 1)), icon, Some(color));
+        }
+        (Layer::Over, Kind::Card) => {
+            let r = p.rect(n.area);
+            let (t, theme) = (p.style.line(p.m), p.theme);
+            border(p, r, t, theme.rule);
+            let style = p.m.sans(600.0);
+            p.write(Area::new(n.area.col + 2, n.area.row + 1, n.area.cols - 4, 1), text, style, theme.ink);
+        }
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);
@@ -428,6 +490,20 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         }
         _ => {}
     }
+}
+
+fn gauge(p: &mut Painter, n: &Node, label: &str, filled: u16, meter: bool) {
+    let cols = (n.area.cols - 1 - label.chars().count() as i32).max(1);
+    let cell = p.rect(Area::new(n.area.col, n.area.row, cols, 1));
+    let (t, theme) = (p.style.line(p.m), p.theme);
+    let inset = (p.m.cell_h * 0.3).round();
+    let track = Rect::new(cell.x, cell.y + inset, cell.w, p.m.cell_h - inset * 2.0);
+    border(p, track, t, theme.rule);
+    let w = (track.w * f32::from(filled.min(1000)) / 1000.0).round();
+    p.fill(Rect::new(track.x, track.y, w, track.h), if meter { theme.ink } else { theme.link });
+    let mono = p.m.mono();
+    let x = cell.right() + p.m.cell_w;
+    p.text(label, mono, (x, cell.y), None, theme.muted);
 }
 
 /// Draws a picture scaled to fit `r` and centred in it, each layer in its ink or all of them in `tint`, from the atlas once it has been drawn at this size.

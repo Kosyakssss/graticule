@@ -1,0 +1,49 @@
+window		0 0 120 30	
+  page	Progress	0 0 120 25	
+    list		2 3 116 21	14 items
+      list item		2 3 114 1	
+        text	How far a piece of work has come, as a bar with the count beside it: 37 of 120. The bar fills in the link ink.	2 3 79 1	
+      list item		2 4 114 1	
+      list item		2 5 114 1	
+        heading	Use it for	2 5 7 1	strong
+      list item		2 6 114 2	
+        text	Work the app counts itself, such as files copied so far. A job's own progress is in the status line already, with its name, so a page needs this only when the work is the page's subject. Nothing moves while nothing changes: there is no bar that moves by itself, since the status line says when work is running.	2 6 114 2	
+      list item		2 8 114 1	
+      list item		2 9 114 1	
+        heading	Code	2 9 4 1	strong
+      list item		2 10 114 1	
+        text	ui.progress(37, 120);	2 10 21 1	mono
+      list item		2 11 114 1	
+        group		2 11 114 1	
+          column		2 11 14 1	
+            text	Live	2 11 14 1	muted
+          column		18 11 98 1	
+            progress bar	37 of 120	18 11 98 1	30.8 %
+      list item		2 12 114 1	
+      list item		2 13 114 1	
+        heading	Narrow windows	2 13 14 1	strong
+      list item		2 14 114 1	
+        text	The bar shrinks to eight columns; the count always stays beside it.	2 14 50 1	
+      list item		2 15 114 1	
+      list item		2 16 114 1	
+        heading	Screen reader	2 16 11 1	strong
+      list item		2 17 114 1	
+        text	A progress bar, with its percentage and the count.	2 17 37 1	
+  alert		2 25 116 1	
+  status		2 26 116 1	
+  toolbar		2 27 116 3	
+    button	Press	2 27 7 1	
+    button	Follow the link	11 27 13 1	
+    button	Tick or untick the box	26 27 18 1	
+    button	Say it	46 27 7 1	unavailable (Type something first)
+    button	Back to all components	55 27 20 1	
+    button	Change the light appearance	77 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	2 28 24 1	
+    button	Use the next weight of lines	28 28 23 1	
+    button	Deepen the shadow	53 28 17 1	
+    button	Make the shadow shallower	72 28 23 1	
+    button	Use the other check mark	2 29 22 1	
+    button	Save the theme and the style	26 29 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	52 29 13 1	unavailable (Nothing to undo)
+    button	Redo	67 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	88 29 15 1	

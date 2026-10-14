@@ -5,12 +5,12 @@ window		0 0 120 30
         text	Vector art made ahead of time: an icon, an ornament, a logo. Pictures are drawn as SVG files and compiled into the app by Engraver, so they cost nothing to load. Each is drawn once at the size it is shown and comes from the GPU's atlas after that. Its colors are the theme's inks, so it follows the appearance like everything else. The box sits on the grid; the shape inside it is free.	2 3 114 3	
       list item		2 6 114 1	
       list item		2 7 114 1	
-        text	Use it for	2 7 7 1	strong
+        heading	Use it for	2 7 7 1	strong
       list item		2 8 114 2	
         text	Something that is quicker to see than to read: a warning beside a message, a folder beside a name, a play button. Graticule ships a set of icons for everyday things; an app adds its own from a folder of SVG files.	2 8 114 2	
       list item		2 10 114 1	
       list item		2 11 114 1	
-        text	Code	2 11 4 1	strong
+        heading	Code	2 11 4 1	strong
       list item		2 12 114 2	
         text	ui.picture(&icons::WARNING);\nui.picture(&icons::STAR).height(3);	2 12 64 2	mono
       list item		2 14 114 3	
@@ -26,7 +26,7 @@ window		0 0 120 30
         text	It is one row tall beside text unless .height(rows) makes it taller, and as wide as its shape needs.	2 17 72 1	
       list item		2 18 114 1	
       list item		2 19 114 1	
-        text	Your own pictures	2 19 14 1	strong
+        heading	Your own pictures	2 19 14 1	strong
       list item		2 20 114 4	
         text	Draw them in the light theme's colors, each of which stands for an ink: ink #1a1a1d, muted #636368, faint #7f8085, rule #b7b7ba, link #2b58b1, visited #7241a0, danger #a9231e, warn #825100, ok #197037, field #efeeec, background #f9f8f6. Black means ink and white means background. Give each file a <title>, which becomes its label. Engraver refuses a file without a title, or one with any other color, a gradient, transparency or text that is still text, and says which and why. cargo run -p engraver -- FOLDER shows what it makes of a folder.	2 20 114 4	
   alert		2 25 116 1	

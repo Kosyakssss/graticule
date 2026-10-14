@@ -14,7 +14,15 @@ fn role(kind: Kind) -> Role {
         Kind::Check { .. } => Role::CheckBox,
         Kind::Link => Role::Link,
         Kind::Button | Kind::Action => Role::Button,
-        Kind::Text { .. } | Kind::Value { .. } => Role::Label,
+        Kind::Text { strong: true, .. } => Role::Heading,
+        Kind::Text { .. } | Kind::Value { .. } | Kind::Tag | Kind::Keys => Role::Label,
+        Kind::Rule | Kind::Placeholder { .. } => Role::GenericContainer,
+        Kind::Gauge { meter: false, .. } => Role::ProgressIndicator,
+        Kind::Gauge { meter: true, .. } => Role::Meter,
+        Kind::Avatar => Role::Image,
+        Kind::Callout { ink: crate::ink::Ink::Danger | crate::ink::Ink::Warn } => Role::Alert,
+        Kind::Callout { .. } => Role::Note,
+        Kind::Card => Role::Group,
         Kind::Bar => Role::Toolbar,
         Kind::Status => Role::Status,
         Kind::Note => Role::Alert,
@@ -49,6 +57,13 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 }
             }
             Kind::ListRow { selected, .. } => node.set_selected(selected),
+            Kind::Gauge { filled, .. } => {
+                node.set_label(text);
+                node.set_numeric_value(f64::from(filled) / 10.0);
+                node.set_min_numeric_value(0.0);
+                node.set_max_numeric_value(100.0);
+            }
+            Kind::Placeholder { .. } => node.set_label("Loading"),
             Kind::Choice { chosen } => {
                 node.set_label(text);
                 node.set_selected(chosen);

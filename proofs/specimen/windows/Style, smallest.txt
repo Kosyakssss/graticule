@@ -2,7 +2,7 @@ window		0 0 68 15
   page	Style	0 0 68 7	
     list		2 3 64 3	33 items
       list item		2 3 62 1	
-        text	Inks	2 3 4 1	strong
+        heading	Inks	2 3 4 1	strong
   alert		2 7 64 1	
   status		2 8 64 1	
   toolbar		2 9 64 6	

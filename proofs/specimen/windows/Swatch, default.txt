@@ -5,12 +5,12 @@ window		0 0 120 30
         text	A small box filled with one of the theme's inks: a label's color, a series in a legend, a choice of color. The ink is named, not mixed, so the swatch follows the theme and the appearance like everything else.	2 3 114 2	
       list item		2 5 114 1	
       list item		2 6 114 1	
-        text	Use it for	2 6 7 1	strong
+        heading	Use it for	2 6 7 1	strong
       list item		2 7 114 1	
         text	Showing which color stands for what. Every ink is shown this way in Specimen's Style place.	2 7 69 1	
       list item		2 8 114 1	
       list item		2 9 114 1	
-        text	Code	2 9 4 1	strong
+        heading	Code	2 9 4 1	strong
       list item		2 10 114 1	
         text	ui.swatch(Ink::Danger);	2 10 23 1	mono
       list item		2 11 114 1	
@@ -25,7 +25,7 @@ window		0 0 120 30
               swatch	selection	36 11 4 1	
       list item		2 12 114 1	
       list item		2 13 114 1	
-        text	Screen reader	2 13 11 1	strong
+        heading	Screen reader	2 13 11 1	strong
       list item		2 14 114 1	
         text	An image, named after its ink ("danger").	2 14 31 1	
   alert		2 25 116 1	

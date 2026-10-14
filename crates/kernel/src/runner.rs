@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use ledger::{Change, Choose, Edit, ErasedPath, History, Op, Store, Transaction, Value};
 use winit::event::{Ime, KeyEvent};
 
-use crate::app::{App, Cx, Moment, Said};
+use crate::app::{App, Cx, Effect, Failure, Moment, Path, Said};
 use crate::builtin::Builtin;
 use crate::command::{Available, Commands, Form};
 use crate::components::Look;
@@ -105,6 +105,13 @@ pub enum Slice {
 
 const SLICE: Duration = Duration::from_micros(300);
 
+/// Background work an effect started: its name for the status line, and what turns its result into the app's command. A result of `None` means the user called it off, and nothing comes back.
+struct Job<C> {
+    name: String,
+    receive: mpsc::Receiver<Option<Result<Path, Failure>>>,
+    reply: fn(Result<Path, Failure>) -> C,
+}
+
 /// Runs an app in a window: builds its tree from the facts, lays it out, keeps its quads and turns input into commands.
 pub struct Runner<A: App> {
     pub facts: A,
@@ -143,6 +150,8 @@ pub struct Runner<A: App> {
     background: VecDeque<Background>,
     waker: Option<Waker>,
     replaying: bool,
+    effects: Vec<Effect<A::Cmd>>,
+    jobs: Vec<Job<A::Cmd>>,
 }
 
 impl<A: App> Runner<A> {
@@ -186,14 +195,13 @@ impl<A: App> Runner<A> {
             background: VecDeque::new(),
             waker: None,
             replaying: false,
+            effects: Vec::new(),
+            jobs: Vec::new(),
         }
     }
 
     /// Opens the facts kept in `folder`, or makes them with `fresh` on the first launch, puts the user back where they were and saves every change there from now on. If the folder can't be used, the app runs unsaved and the message line says why.
-    pub fn open(folder: &std::path::Path, fresh: impl Fn() -> A) -> Self
-    where
-        A: Send,
-    {
+    pub fn open(folder: &std::path::Path, fresh: impl Fn() -> A) -> Self {
         match Store::open(folder, &fresh) {
             Ok((store, opened)) => {
                 let mut runner = Self::new(opened.facts);
@@ -679,6 +687,9 @@ impl<A: App> Runner<A> {
         }
         self.counter = cx.counter;
         self.said = cx.said.pop();
+        if !self.replaying {
+            self.effects.append(&mut cx.effects);
+        }
         if cfg!(debug_assertions) && !changed && !ops.is_empty() {
             self.said = Some(Said::Failure(format!("{label} returned Outcome::Nothing but changed the facts")));
         }
@@ -949,7 +960,7 @@ impl<A: App> Runner<A> {
     }
 
     fn progress(&self) -> Option<String> {
-        let background = self.background.front()?;
+        let Some(background) = self.background.front() else { return self.jobs.first().map(|job| job.name.clone()) };
         let part = background.parts.front()?;
         Some(match &part.found {
             Found::Searching(_) => format!("{}: searching", background.label),
@@ -961,6 +972,72 @@ impl<A: App> Runner<A> {
     pub fn wake_with(mut self, waker: Waker) -> Self {
         self.waker = Some(waker);
         self
+    }
+
+    /// The effects the last commands asked for that haven't started yet. Specimen shows these instead of running them.
+    pub fn effects(&self) -> &[Effect<A::Cmd>] {
+        &self.effects
+    }
+
+    fn start(&mut self, effect: Effect<A::Cmd>, window: &winit::window::Window) {
+        match effect {
+            Effect::SaveAs { name, write, reply } => {
+                let dialog = rfd::AsyncFileDialog::new().set_file_name(&name).set_parent(window).save_file();
+                let facts = self.facts.clone();
+                let (send, receive) = mpsc::channel();
+                let waker = self.waker.clone();
+                let file = name.clone();
+                let started = std::thread::Builder::new().name("graticule job".into()).spawn(move || {
+                    let result = pollster::block_on(dialog).map(|chosen| {
+                        let path = chosen.path().to_path_buf();
+                        let contents = write(&facts as &dyn Any);
+                        std::fs::write(&path, contents).map(|()| Path(path)).map_err(|e| Failure::new(format!("“{file}” couldn't be saved: {e}")))
+                    });
+                    let _ = send.send(result);
+                    if let Some(waker) = waker {
+                        waker.wake();
+                    }
+                });
+                match started {
+                    Ok(_) => self.jobs.push(Job { name: format!("Saving “{name}”"), receive, reply }),
+                    Err(e) => {
+                        self.run(reply(Err(Failure::new(format!("“{name}” couldn't be saved: {e}")))));
+                    }
+                }
+            }
+            Effect::Open { target } => {
+                let opener = if cfg!(target_os = "macos") {
+                    "open"
+                } else if cfg!(windows) {
+                    "explorer"
+                } else {
+                    "xdg-open"
+                };
+                if let Err(e) = std::process::Command::new(opener).arg(&target).spawn() {
+                    self.said = Some(Said::Failure(format!("{target} couldn't be opened: {e}")));
+                }
+            }
+            Effect::Copy { text } => self.copy(text),
+        }
+        self.stale = true;
+    }
+
+    fn collect(&mut self) {
+        let mut results = Vec::new();
+        self.jobs.retain(|job| match job.receive.try_recv() {
+            Ok(result) => {
+                results.extend(result.map(job.reply));
+                false
+            }
+            Err(mpsc::TryRecvError::Empty) => true,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                results.push((job.reply)(Err(Failure::new(format!("{} stopped before it finished", job.name)))));
+                false
+            }
+        });
+        for cmd in results {
+            self.run(cmd);
+        }
     }
 
     fn marks(&self) -> Vec<(Id, u128, u32)> {
@@ -1501,6 +1578,9 @@ impl<A: App> Face for Runner<A> {
     }
 
     fn painted(&mut self, frame: &mut Frame) {
+        for effect in std::mem::take(&mut self.effects) {
+            self.start(effect, frame.window);
+        }
         if self.background.front().and_then(|b| b.parts.front()).is_some_and(|p| matches!(p.found, Found::Ready(_)))
             && let Some(waker) = &self.waker
         {
@@ -1623,6 +1703,7 @@ impl<A: App> Face for Runner<A> {
                 true
             }
             Input::Woken => {
+                self.collect();
                 self.slice(Slice::Time(SLICE));
                 true
             }

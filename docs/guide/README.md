@@ -89,6 +89,8 @@ The app keeps what you did. Every change is saved as it happens, so closing the 
 
 Clearing the finished items of a very long list doesn't freeze the window. The search happens in the background, the items go a few hundred at a time between frames, and the line above the bar counts them down ("“Clear finished”: 10000 of 33333"). Undo while it runs stops it and puts everything back; once it's done, it is one step like any other.
 
+Export… asks where to save the list, the way every app on the computer does, and then writes it in the background as a Markdown checklist. The line above the bar says "Saving “To do.md”" while it works and the message line says where it went. Calling off the save panel does nothing at all.
+
 `cargo run -p todo -- --render <folder>` draws every named state of the app, light and dark, at its normal size and at the smallest window it allows, into pictures in that folder. The smallest window is worked out from the layout itself, so nothing is ever cut off by making the window small.
 
 ## How speed is measured

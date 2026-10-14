@@ -10,7 +10,7 @@ use crate::message::Message;
 use crate::ui::Ui;
 
 /// An app: its facts, the commands that change them, what can happen right now and how the facts look.
-pub trait App: Facts {
+pub trait App: Facts + Send {
     type Cmd: Commands<Self>;
 
     /// Whether a command can run right now, and if not, why. Name every command; a catch-all would let a new command become available by accident.

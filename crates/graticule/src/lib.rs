@@ -12,7 +12,7 @@ pub mod prelude {
 }
 
 /// Opens the app's window with the facts it kept last time (fresh ones on the first launch) and runs it until the window closes, saving every change. With `--render <folder>`, it instead renders every named state in both appearances into that folder as pictures, and prints how long each took to paint.
-pub fn run<A: kernel::App + Default + Send>(title: kernel::Message) {
+pub fn run<A: kernel::App + Default>(title: kernel::Message) {
     let mut args = std::env::args().skip(1);
     if let Some("--render") = args.next().as_deref() {
         let folder = std::path::PathBuf::from(args.next().unwrap_or_else(|| ".".into()));

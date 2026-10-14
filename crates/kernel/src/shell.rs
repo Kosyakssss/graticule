@@ -98,6 +98,14 @@ pub trait Face: 'static {
     fn paint(&mut self, painter: &mut Painter, seen: Seen);
     fn input(&mut self, input: Input, frame: &mut Frame) -> bool;
     fn painted(&mut self, _: &mut Frame) {}
+    /// The context menu for what is under the pointer, asked for on a right click: the registry's commands for it, in the order the bar shows them.
+    fn menu(&mut self, _: &mut Frame) -> Vec<crate::menu::MenuItem> {
+        Vec::new()
+    }
+    /// A menu entry was chosen, by its id.
+    fn choose(&mut self, _: u64) -> bool {
+        false
+    }
     /// The moment this face would look different with no input at all: when a date written as how long ago next reads differently. The shell sleeps until then and not a moment sooner.
     fn changes(&self) -> Option<crate::app::Moment> {
         None
@@ -156,6 +164,7 @@ pub enum Signal {
     Wake,
     Reload,
     Looks(Box<Looks>),
+    Menu(u64),
     Access(accesskit_winit::Event),
 }
 
@@ -232,6 +241,7 @@ struct Running<F: Face> {
     title: String,
     looks: Looks,
     _watcher: Option<notify::RecommendedWatcher>,
+    _menu: Option<crate::menu::MenuBar>,
 }
 
 #[derive(Default)]
@@ -406,6 +416,12 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
         let watcher = crate::look::watch(&crate::look::folder(), move |looks| {
             let _ = to.send_event(Signal::Looks(Box::new(looks)));
         });
+        let to = self.proxy.clone();
+        let menu = crate::menu::install(event_loop, &self.config.title, move |id| {
+            if let Ok(id) = id.parse() {
+                let _ = to.send_event(Signal::Menu(id));
+            }
+        });
         face.offered(&looks);
         let scope = std::env::var_os("GRATICULE_SCOPE").is_some_and(|v| v != "0");
         let mut running = Running {
@@ -428,6 +444,7 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             title: self.config.title.clone(),
             looks,
             _watcher: watcher,
+            _menu: menu,
         };
         running.render();
         running.window.set_visible(true);
@@ -459,6 +476,12 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
                     r.looks = *looks;
                     r.face.offered(&r.looks);
                     r.wants(Cause::Appearance, since);
+                }
+            }
+            Signal::Menu(id) => {
+                let since = Instant::now();
+                if r.face.choose(id) {
+                    r.wants(Cause::Click, since);
                 }
             }
             Signal::Reload => {
@@ -535,6 +558,13 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
                         let (x, y) = r.pointer.unwrap_or_default();
                         let clicks = if button == Button::Left { r.clicks.press(x, y) } else { 1 };
                         r.input(Input::Press { button, clicks });
+                        if button == Button::Right {
+                            let since = Instant::now();
+                            let items = r.face.menu(&mut frame!(r));
+                            r.recorder.wanted(Cause::Click, micros(since));
+                            r.render();
+                            crate::menu::popup(&r.window, &items);
+                        }
                     }
                     ElementState::Released => r.input(Input::Release { button }),
                 }

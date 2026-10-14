@@ -19,6 +19,10 @@ pub struct Look {
     pub focused: bool,
     pub caret: u32,
     pub anchor: u32,
+    /// What an input method is composing in this field, in the tree's text.
+    pub composing: crate::tree::Range32,
+    /// The bytes of this node's text chosen with the pointer, as a start and an end.
+    pub chosen: (u32, u32),
 }
 
 /// The two lists a frame is drawn from: what lies under, then what lies on top. Boxes on the grid never overlap, so this is the only ordering painting needs.
@@ -202,35 +206,46 @@ fn link(p: &mut Painter, n: &Node, label: &str, look: Look, ink: Color) {
     }
 }
 
-fn field(p: &mut Painter, n: &Node, value: &str, placeholder: &str, look: Look) {
+fn field(p: &mut Painter, n: &Node, value: &str, placeholder: &str, composing: &str, look: Look) {
     let r = p.rect(n.area);
     let theme = p.theme;
     p.fill(r, theme.field);
     let clip = p.clip_to(r);
     let mono = p.m.mono();
     let tx = r.x + p.m.cell_w * 0.5;
-    if value.is_empty() {
+    let bar = (p.m.scale * 2.0).round().max(1.0);
+    if value.is_empty() && composing.is_empty() {
         p.text(placeholder, mono, (tx, r.y), Some(r.w - p.m.cell_w), theme.faint);
         if look.focused {
-            p.fill(Rect::new(tx.floor(), r.y + p.m.cell_h * 0.15, (p.m.scale * 2.0).round().max(1.0), p.m.cell_h * 0.7), theme.ink);
+            p.fill(Rect::new(tx.floor(), r.y + p.m.cell_h * 0.15, bar, p.m.cell_h * 0.7), theme.ink);
         }
     } else {
         let caret = (look.caret as usize).min(value.len());
         let caret = (0..=caret).rev().find(|&i| value.is_char_boundary(i)).unwrap_or(0);
-        let before = p.measure(&value[..caret], mono);
+        let before = p.advance(&value[..caret], mono);
+        let composed = p.advance(composing, mono);
         let room = r.w - p.m.cell_w * 1.5;
-        let shift = if look.focused { (before - room).max(0.0) } else { 0.0 };
+        let shift = if look.focused { (before + composed - room).max(0.0) } else { 0.0 };
         let x0 = tx - shift;
         let anchor = (look.anchor as usize).min(value.len());
         let anchor = (0..=anchor).rev().find(|&i| value.is_char_boundary(i)).unwrap_or(0);
-        if look.focused && anchor != caret {
-            let other = p.measure(&value[..anchor], mono);
+        if look.focused && anchor != caret && composing.is_empty() {
+            let other = p.advance(&value[..anchor], mono);
             let (a, b) = (before.min(other), before.max(other));
             p.fill(Rect::new((x0 + a).floor(), r.y, (b - a).ceil(), p.m.cell_h), theme.selection);
         }
-        p.text(value, mono, (x0, r.y), None, if n.enabled { theme.ink } else { theme.faint });
+        let ink = if n.enabled { theme.ink } else { theme.faint };
+        if composing.is_empty() {
+            p.text(value, mono, (x0, r.y), None, ink);
+        } else {
+            p.text(&value[..caret], mono, (x0, r.y), None, ink);
+            p.text(composing, mono, (x0 + before, r.y), None, ink);
+            p.text(&value[caret..], mono, (x0 + before + composed, r.y), None, ink);
+            let t = p.style.line(p.m);
+            p.fill(Rect::new((x0 + before).floor(), (r.y + p.m.cell_h * 0.85).round(), composed.ceil(), t), ink);
+        }
         if look.focused {
-            p.fill(Rect::new((x0 + before).floor(), r.y + p.m.cell_h * 0.15, (p.m.scale * 2.0).round().max(1.0), p.m.cell_h * 0.7), theme.ink);
+            p.fill(Rect::new((x0 + before + composed).floor(), r.y + p.m.cell_h * 0.15, bar, p.m.cell_h * 0.7), theme.ink);
         }
     }
     p.set_clip(clip);
@@ -309,7 +324,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
                 border(p, r, t, cursor);
             }
         }
-        (Layer::Over, Kind::Field) => field(p, &n, text, tree.str(n.name), look),
+        (Layer::Over, Kind::Field) => field(p, &n, text, tree.str(n.name), tree.str(look.composing), look),
         (Layer::Under, Kind::ListRow { selected, focused, .. }) => {
             let theme = p.theme;
             if selected {
@@ -329,6 +344,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             scrollbar(p, track, first, shown, count);
         }
         (Layer::Over, Kind::Empty) => {}
+        (Layer::Under, Kind::Text { .. } | Kind::Value { .. }) if look.chosen.0 < look.chosen.1 => chosen(p, &n, text, look.chosen.0 as usize..look.chosen.1 as usize),
         (Layer::Under, Kind::Swatch { ink }) => {
             let r = p.rect(n.area);
             let (color, rule) = (p.theme.get(ink), p.theme.rule);
@@ -444,4 +460,31 @@ fn typed(p: &mut Painter, n: &Node, value: Value, text: &str) {
     let room = r.w - p.m.cell_w;
     let x = if w > room { r.x + p.m.cell_w / 2.0 } else { (r.x + (r.w - w) / 2.0).round() };
     p.text(text, style, (x, cell.y), Some(room.max(0.0)), color);
+}
+
+/// The highlight under text chosen with the pointer: the chosen bytes of a text, or the whole of a value.
+fn chosen(p: &mut Painter, n: &Node, text: &str, range: std::ops::Range<usize>) {
+    let r = p.rect(n.area);
+    let selection = p.theme.selection;
+    let (style, mono) = match n.kind {
+        Kind::Value { .. } => {
+            p.fill(r, selection);
+            return;
+        }
+        Kind::Text { mono: true, .. } => (p.m.mono(), true),
+        Kind::Text { strong: true, .. } => (p.m.sans(600.0), false),
+        _ => (p.m.sans(400.0), false),
+    };
+    let range = range.start.min(text.len())..range.end.min(text.len());
+    if mono || n.area.rows <= 1 {
+        let x = p.advance(&text[..range.start], style);
+        let w = p.advance(&text[range.clone()], style);
+        p.fill(Rect::new((r.x + x).floor(), r.y, w.ceil().min(r.w - x), p.m.cell_h), selection);
+        return;
+    }
+    let spans = [(text, SpanStyle { weight: style.weight as u16, ..SpanStyle::plain(style.face) })];
+    let line = p.m.cell_h;
+    for [x, y, w, h] in p.text.range_rects(&spans, style.size, line, r.w, range) {
+        p.fill(Rect::new((r.x + x).floor(), (r.y + y).floor(), w.ceil(), h.ceil()), selection);
+    }
 }

@@ -16,6 +16,7 @@ pub mod kept;
 pub mod keys;
 pub mod layout;
 pub mod look;
+pub mod menu;
 pub mod message;
 pub mod metrics;
 pub mod offscreen;

@@ -28,6 +28,7 @@ use crate::value::{Calendar, Dates};
 
 const CHOICES: usize = 12;
 const PALETTE: Id = Id(0x9a1e_77e5_0000_0001);
+const COPY: Id = Id(0x9a1e_77e5_0000_0002);
 
 /// Where the user was: the focused component and its caret. Each undo step keeps it, so undo puts the user back.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -51,6 +52,13 @@ enum Target<C> {
     One(C),
     Many(Vec<C>, usize),
     Refused(Option<C>, Message),
+}
+
+/// Text chosen with the pointer across the page's text and values: where the drag started and where it is now, each a node and a byte in its text. Kept by id, so it stays on the same text when the tree is built again, and dropped when that text is gone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Reading {
+    anchor: (Id, usize),
+    head: (Id, usize),
 }
 
 /// The list commands act on right now, and the keys they act on.
@@ -152,7 +160,10 @@ pub struct Runner<A: App> {
     carets: HashMap<Id, Caret>,
     kill: String,
     typing: Option<(Id, field::Kind, bool)>,
-    composing: bool,
+    composing: String,
+    composed: Range32,
+    reading: Option<Reading>,
+    reading_drag: bool,
     drag: Option<Id>,
     pending: Vec<Chord>,
     keymap: Keymap,
@@ -207,7 +218,10 @@ impl<A: App> Runner<A> {
             carets: HashMap::new(),
             kill: String::new(),
             typing: None,
-            composing: false,
+            composing: String::new(),
+            composed: Range32::default(),
+            reading: None,
+            reading_drag: false,
             drag: None,
             pending: Vec::new(),
             keymap,
@@ -290,6 +304,7 @@ impl<A: App> Runner<A> {
         self.tree.reindex();
         self.resolve();
         self.status();
+        self.composed = if self.composing.is_empty() { Range32::default() } else { self.tree.put(&self.composing) };
         self.stale = false;
         self.laid = false;
     }
@@ -574,6 +589,8 @@ impl<A: App> Runner<A> {
     fn look(&self) -> impl Fn(Id) -> Look + use<A> {
         let (hover, pressed) = (self.hover, self.pressed);
         let focus = if self.palette.is_some() { Some(PALETTE) } else { self.focus };
+        let composed = self.composed;
+        let chosen: HashMap<Id, (u32, u32)> = self.chosen().into_iter().map(|(i, r)| (self.tree.nodes[i as usize].id, (r.start as u32, r.end as u32))).collect();
         let caret = match &self.palette {
             Some(p) => Some((PALETTE, p.caret)),
             None => self.focus.and_then(|f| self.carets.get(&f).map(|c| (f, *c))),
@@ -586,6 +603,8 @@ impl<A: App> Runner<A> {
                 focused: focus == Some(id),
                 caret: at.map_or(u32::MAX, |c| c.caret as u32),
                 anchor: at.map_or(u32::MAX, |c| c.anchor as u32),
+                composing: if focus == Some(id) { composed } else { Range32::default() },
+                chosen: chosen.get(&id).copied().unwrap_or_default(),
             }
         }
     }
@@ -656,6 +675,7 @@ impl<A: App> Runner<A> {
     fn builtin_available(&self, b: Builtin) -> Available {
         match b {
             Builtin::Undo if self.undo_label().is_none() => Available::No(Message::from("Nothing to undo")),
+            Builtin::Copy if self.chosen().is_empty() => Available::No(Message::from("No text is chosen: drag across text to choose some")),
             Builtin::Redo if !self.background.is_empty() => Available::No(Message::from("Wait for the change in progress to finish")),
             Builtin::Redo if self.history.redo_label().is_none() => Available::No(Message::from("Nothing to redo")),
             Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::First | Builtin::Last | Builtin::SelectAll if self.tree.lists.is_empty() => {
@@ -1259,6 +1279,11 @@ impl<A: App> Runner<A> {
             Builtin::Undo | Builtin::Redo => self.undo(b == Builtin::Undo),
             Builtin::Next | Builtin::Previous => self.cycle(b == Builtin::Next),
             Builtin::Cancel => self.cancel(),
+            Builtin::Copy => {
+                let text = self.chosen_text();
+                self.copy(text);
+                false
+            }
             Builtin::LightAppearance | Builtin::DarkAppearance | Builtin::SystemAppearance | Builtin::NextTheme | Builtin::NextStyle | Builtin::AbsoluteDates | Builtin::RelativeDates => {
                 self.switch = b.switch();
                 true
@@ -1352,6 +1377,9 @@ impl<A: App> Runner<A> {
             self.stale = true;
             return true;
         }
+        if self.reading.take().is_some() {
+            return true;
+        }
         match self.current_list() {
             Some(list) if list.chosen > 1 => match list.focused {
                 Some(k) => self.select(&list, Choose::Focus(k)),
@@ -1388,8 +1416,10 @@ impl<A: App> Runner<A> {
 
     fn key(&mut self, event: &KeyEvent, mods: Mods) -> bool {
         let Some(chord) = Chord::of(event, mods) else { return false };
-        let text = event.text.as_deref().filter(|_| !self.composing);
-        self.press(chord, text)
+        if !self.composing.is_empty() {
+            return false;
+        }
+        self.press(chord, event.text.as_deref())
     }
 
     /// Handles a key and the text it types: the palette when it is open, then the focused field, then a focused control's own keys, then the keymap, then the platform's conventions.
@@ -1645,6 +1675,126 @@ impl<A: App> Runner<A> {
         self.hits.at(col, row).filter(|&i| (i as usize) < self.tree.nodes.len())
     }
 
+    fn readable(&self, frame: &Frame) -> Option<u32> {
+        let (x, y) = frame.pointer?;
+        let (col, row) = frame.metrics.cell_at(x, y);
+        self.tree.nodes.iter().rposition(|n| matches!(n.kind, Kind::Text { .. } | Kind::Value { .. }) && n.area.contains(col, row)).map(|i| i as u32)
+    }
+
+    /// The bytes of a text or value node under the pointer: a point for one click, the word for two, all of it for three. A value is chosen whole.
+    fn read_at(&self, frame: &mut Frame, i: u32, clicks: u32) -> std::ops::Range<usize> {
+        let n = self.tree.nodes[i as usize];
+        let s = self.tree.str(n.text);
+        let (m, (x, y)) = (frame.metrics, frame.pointer.unwrap_or_default());
+        let r = m.rect(n.area);
+        let style = match n.kind {
+            Kind::Text { mono: true, .. } | Kind::Value { .. } => m.mono(),
+            Kind::Text { strong: true, .. } => m.sans(600.0),
+            _ => m.sans(400.0),
+        };
+        if clicks >= 3 || (clicks == 2 && matches!(n.kind, Kind::Value { .. })) {
+            return 0..s.len();
+        }
+        if let Kind::Value { .. } = n.kind {
+            let at = if x < r.x + r.w / 2.0 { 0 } else { s.len() };
+            return at..at;
+        }
+        if style.face == crate::text::Face::Mono {
+            let local = x - r.x;
+            let at = s
+                .char_indices()
+                .map(|(i, _)| i)
+                .chain([s.len()])
+                .map(|k| (k, (crate::paint::advance(frame.text, m, &s[..k], style) - local).abs()))
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .map_or(0, |(k, _)| k);
+            return if clicks == 2 { field::word_at(s, at).selection() } else { at..at };
+        }
+        let spans = [(s, crate::text::SpanStyle { weight: style.weight as u16, ..crate::text::SpanStyle::plain(style.face) })];
+        if clicks == 2 {
+            return frame.text.word_at(&spans, style.size, m.cell_h, r.w, x - r.x, y - r.y);
+        }
+        let at = frame.text.byte_at(&spans, style.size, m.cell_h, r.w, x - r.x, y - r.y).min(s.len());
+        at..at
+    }
+
+    /// The text and value nodes the chosen text covers, in reading order, with the bytes chosen in each.
+    fn chosen(&self) -> Vec<(u32, std::ops::Range<usize>)> {
+        let Some(reading) = self.reading else { return Vec::new() };
+        let (Some(a), Some(h)) = (self.tree.find(reading.anchor.0), self.tree.find(reading.head.0)) else { return Vec::new() };
+        let ((from, start), (to, end)) = if (a, reading.anchor.1) <= (h, reading.head.1) { ((a, reading.anchor.1), (h, reading.head.1)) } else { ((h, reading.head.1), (a, reading.anchor.1)) };
+        (from..=to)
+            .filter(|&i| matches!(self.tree.nodes[i as usize].kind, Kind::Text { .. } | Kind::Value { .. }))
+            .filter_map(|i| {
+                let len = self.tree.str(self.tree.nodes[i as usize].text).len();
+                let range = if i == from { start.min(len) } else { 0 }..if i == to { end.min(len) } else { len };
+                (range.start < range.end).then_some((i, range))
+            })
+            .collect()
+    }
+
+    /// The context menu for the cell at `col`, `row`: on a list row, that row's commands, choosing the row first unless it is chosen already, so a menu on one of several chosen rows acts on all of them; anywhere else, the commands that need no subject. Copy comes first while text is chosen. Each entry is the bar's own control, with its label, availability and key; one that can't run says why in its label, since a native menu has no status line.
+    pub fn menu_at(&mut self, col: i32, row: i32) -> Vec<crate::menu::MenuItem> {
+        let on_row = self.tree.nodes.iter().rposition(|n| matches!(n.kind, Kind::ListRow { .. }) && n.area.contains(col, row));
+        if let Some(i) = on_row
+            && let Kind::ListRow { key, selected: false, .. } = self.tree.nodes[i].kind
+            && let Some(list) = self.tree.ancestor(i as u32, |n| matches!(n.kind, Kind::List { .. })).and_then(|l| self.tree.lists.get(self.tree.nodes[l as usize].list as usize).copied())
+        {
+            self.select(&list, Choose::Only(key));
+        }
+        if self.stale {
+            self.build();
+        }
+        let mut items = Vec::new();
+        if !self.chosen().is_empty() {
+            items.push(crate::menu::MenuItem { id: COPY.0, label: Builtin::Copy.label().into(), keys: Builtin::Copy.convention().first().copied(), enabled: true });
+        }
+        let Some(bar) = self.tree.nodes.iter().position(|n| n.kind == Kind::Bar) else { return items };
+        for i in self.tree.children(bar as u32).collect::<Vec<_>>() {
+            let n = self.tree.nodes[i as usize];
+            if n.kind != Kind::Action || n.builtin.is_some() {
+                continue;
+            }
+            let entry = (n.cmd != NONE).then(|| self.tree.commands[n.cmd as usize].name()).and_then(|name| A::Cmd::entries().iter().find(|e| e.name == name));
+            if entry.is_some_and(|e| e.subject) != on_row.is_some() {
+                continue;
+            }
+            let keys = entry.and_then(|e| self.keymap.keys_for(e.name)).filter(|k| k.len() == 1).map(|k| k[0]);
+            let (name, why) = (self.tree.str(n.name), self.tree.str(n.reason));
+            let label = if n.enabled || why.is_empty() { name.to_string() } else { format!("{name}: {why}") };
+            items.push(crate::menu::MenuItem { id: n.id.0, label, keys, enabled: n.enabled });
+        }
+        items
+    }
+
+    /// Runs the menu entry with this id, as clicking its control in the bar would.
+    pub fn choose_from_menu(&mut self, id: u64) -> bool {
+        if Id(id) == COPY {
+            let text = self.chosen_text();
+            self.copy(text);
+            return false;
+        }
+        match self.tree.find(Id(id)) {
+            Some(i) => self.activate(i, Mods::default()),
+            None => false,
+        }
+    }
+
+    /// The chosen text as it reads: pieces on one row joined by a space, rows by a new line.
+    fn chosen_text(&self) -> String {
+        let mut out = String::new();
+        let mut row = None;
+        for (i, range) in self.chosen() {
+            let n = self.tree.nodes[i as usize];
+            if let Some(r) = row {
+                out.push(if r == n.area.row { ' ' } else { '\n' });
+            }
+            out.push_str(&self.tree.str(n.text)[range]);
+            row = Some(n.area.row);
+        }
+        out
+    }
+
     fn hovered(&self, frame: &Frame) -> Option<Id> {
         let (x, y) = frame.pointer?;
         let (col, row) = frame.metrics.cell_at(x, y);
@@ -1656,12 +1806,12 @@ impl<A: App> Runner<A> {
         let value = self.tree.str(n.text);
         let r = m.rect(n.area);
         let mono = m.mono();
-        let before = text.measure(&value[..self.caret(i).caret.min(value.len())], mono, m.cell_h);
+        let before = crate::paint::advance(text, m, &value[..self.caret(i).caret.min(value.len())], mono);
         let shift = if self.focus == Some(n.id) { (before - (r.w - m.cell_w * 1.5)).max(0.0) } else { 0.0 };
         let local = x - (r.x + m.cell_w * 0.5) + shift;
         let mut best = (0, f32::MAX);
         for at in value.char_indices().map(|(i, _)| i).chain([value.len()]) {
-            let d = (text.measure(&value[..at], mono, m.cell_h) - local).abs();
+            let d = (crate::paint::advance(text, m, &value[..at], mono) - local).abs();
             if d < best.1 {
                 best = (at, d);
             }
@@ -1771,8 +1921,14 @@ impl<A: App> Face for Runner<A> {
             self.ime = want;
         }
         if let Some(i) = field {
-            let r = frame.metrics.rect(self.tree.nodes[i as usize].area);
-            frame.window.set_ime_cursor_area(winit::dpi::PhysicalPosition::new(r.x as f64, r.y as f64), winit::dpi::PhysicalSize::new(r.w as f64, r.h as f64));
+            let (m, n) = (frame.metrics, self.tree.nodes[i as usize]);
+            let r = m.rect(n.area);
+            let value = self.tree.str(n.text);
+            let caret = field::boundary(value, self.caret(i).caret.min(value.len()));
+            let before = crate::paint::advance(frame.text, m, &value[..caret], m.mono());
+            let composed = crate::paint::advance(frame.text, m, &self.composing, m.mono());
+            let x = r.x + m.cell_w * 0.5 + before - (before + composed - (r.w - m.cell_w * 1.5)).max(0.0);
+            frame.window.set_ime_cursor_area(winit::dpi::PhysicalPosition::new(x as f64, r.y as f64), winit::dpi::PhysicalSize::new(m.cell_w as f64, r.h as f64));
         }
     }
 
@@ -1808,6 +1964,16 @@ impl<A: App> Face for Runner<A> {
         self.minimum
     }
 
+    fn menu(&mut self, frame: &mut Frame) -> Vec<crate::menu::MenuItem> {
+        let Some((x, y)) = frame.pointer else { return Vec::new() };
+        let (col, row) = frame.metrics.cell_at(x, y);
+        self.menu_at(col, row)
+    }
+
+    fn choose(&mut self, id: u64) -> bool {
+        self.choose_from_menu(id)
+    }
+
     fn changes(&self) -> Option<Moment> {
         self.tree.changes.filter(|_| self.calendar.live)
     }
@@ -1832,6 +1998,15 @@ impl<A: App> Face for Runner<A> {
     fn input(&mut self, input: Input, frame: &mut Frame) -> bool {
         match input {
             Input::Moved { x, .. } => {
+                if self.reading_drag
+                    && let Some(i) = self.readable(frame)
+                {
+                    let head = (self.tree.nodes[i as usize].id, self.read_at(frame, i, 1).start);
+                    let Some(reading) = &mut self.reading else { return false };
+                    let moved = reading.head != head;
+                    reading.head = head;
+                    return moved;
+                }
                 if let Some(id) = self.drag
                     && let Some(i) = self.tree.find(id)
                 {
@@ -1858,10 +2033,19 @@ impl<A: App> Face for Runner<A> {
             }
             Input::Press { button: Button::Left, clicks } => {
                 self.pressed = self.hovered(frame);
+                if self.pressed.is_none() {
+                    let had = self.reading.take().is_some();
+                    let Some(i) = self.readable(frame) else { return had };
+                    let (id, range) = (self.tree.nodes[i as usize].id, self.read_at(frame, i, clicks));
+                    self.reading = Some(Reading { anchor: (id, range.start), head: (id, range.end) });
+                    self.reading_drag = clicks == 1;
+                    return true;
+                }
                 let Some(i) = self.pressed.and_then(|id| self.tree.find(id)) else { return false };
                 let n = self.tree.nodes[i as usize];
                 if n.kind == Kind::Field && n.path.is_some() {
                     let (x, _) = frame.pointer.unwrap_or_default();
+                    self.reading = None;
                     let at = self.caret_at(frame.text, frame.metrics, i, x);
                     let before = self.caret(i);
                     let was = self.focus == Some(n.id);
@@ -1880,6 +2064,9 @@ impl<A: App> Face for Runner<A> {
             }
             Input::Release { button: Button::Left } => {
                 self.drag = None;
+                if std::mem::take(&mut self.reading_drag) && self.reading.is_some_and(|r| r.anchor == r.head) {
+                    self.reading = None;
+                }
                 let Some(pressed) = self.pressed.take() else { return false };
                 if self.hovered(frame) != Some(pressed) {
                     return true;
@@ -1897,11 +2084,16 @@ impl<A: App> Face for Runner<A> {
             }
             Input::Key(event) => self.key(&event, frame.mods),
             Input::Ime(Ime::Preedit(text, _)) => {
-                self.composing = !text.is_empty();
-                false
+                if text == self.composing {
+                    return false;
+                }
+                self.composing = text;
+                self.stale = true;
+                true
             }
             Input::Ime(Ime::Commit(text)) => {
-                self.composing = false;
+                self.composing.clear();
+                self.stale = true;
                 self.typed(&text)
             }
             Input::Appearance(_) => {

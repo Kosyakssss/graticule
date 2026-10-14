@@ -36,3 +36,6 @@ allocation-counter = "0.8.1"
 
 [build-dependencies]
 engraver.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+muda = { version = "0.21.2", default-features = false }

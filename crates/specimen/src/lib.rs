@@ -246,6 +246,15 @@ impl<A: App> Face for Specimen<A> {
         }
     }
 
+    fn menu(&mut self, frame: &mut Frame) -> Vec<kernel::menu::MenuItem> {
+        self.face().menu(frame)
+    }
+
+    fn choose(&mut self, id: u64) -> bool {
+        let chosen = self.face().choose(id);
+        self.switch() || chosen
+    }
+
     fn changes(&self) -> Option<kernel::Moment> {
         match self.showing() {
             Showing::Screen => self.screens[self.state].changes(),

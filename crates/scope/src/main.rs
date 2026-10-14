@@ -168,6 +168,15 @@ impl Face for Window {
         self.runner.changes()
     }
 
+    fn menu(&mut self, frame: &mut ShellFrame) -> Vec<kernel::menu::MenuItem> {
+        self.runner.menu(frame)
+    }
+
+    fn choose(&mut self, id: u64) -> bool {
+        let chosen = self.runner.choose(id);
+        self.follow() || chosen
+    }
+
     fn kept(&mut self) -> Option<&mut Kept> {
         self.runner.kept()
     }

@@ -19,6 +19,7 @@ pub enum Builtin {
     Last,
     SelectAll,
     Cancel,
+    Copy,
     LightAppearance,
     DarkAppearance,
     SystemAppearance,
@@ -29,7 +30,7 @@ pub enum Builtin {
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 20] = [
+    pub const ALL: [Builtin; 21] = [
         Builtin::Palette,
         Builtin::Undo,
         Builtin::Redo,
@@ -43,6 +44,7 @@ impl Builtin {
         Builtin::Last,
         Builtin::SelectAll,
         Builtin::Cancel,
+        Builtin::Copy,
         Builtin::LightAppearance,
         Builtin::DarkAppearance,
         Builtin::SystemAppearance,
@@ -67,6 +69,7 @@ impl Builtin {
             Builtin::Last => "last",
             Builtin::SelectAll => "select-all",
             Builtin::Cancel => "cancel",
+            Builtin::Copy => "copy",
             Builtin::LightAppearance => "light-appearance",
             Builtin::DarkAppearance => "dark-appearance",
             Builtin::SystemAppearance => "system-appearance",
@@ -92,6 +95,7 @@ impl Builtin {
             Builtin::Last => "Go to the bottom of the list",
             Builtin::SelectAll => "Choose everything in the list",
             Builtin::Cancel => "Cancel",
+            Builtin::Copy => "Copy the chosen text",
             Builtin::LightAppearance => "Use the light appearance",
             Builtin::DarkAppearance => "Use the dark appearance",
             Builtin::SystemAppearance => "Follow the system's appearance",
@@ -159,6 +163,10 @@ impl Builtin {
             }
             Builtin::Cancel => {
                 const K: &[Chord] = &[c(Key::Escape, false, false)];
+                K
+            }
+            Builtin::Copy => {
+                const K: &[Chord] = &[c(Key::Char('c'), false, true)];
                 K
             }
             Builtin::Palette

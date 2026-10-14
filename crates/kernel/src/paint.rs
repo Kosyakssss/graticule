@@ -125,7 +125,7 @@ impl<'a> Painter<'a> {
     pub fn text(&mut self, s: &str, style: TextStyle, at: (f32, f32), limit: Option<f32>, color: Color) -> Drawn {
         if style.face == Face::Mono {
             let cols = limit.map_or(i32::MAX, |l| (l / self.m.cell_w).floor() as i32);
-            if s.chars().any(|c| chars::drawn(c) || !c.is_ascii()) && !s.chars().any(crate::text::shaped) {
+            if by_cells(s) {
                 let width = self.cells(at, cols, s, style, color);
                 return Drawn { key: 0, width, height: self.m.cell_h, underlines: Vec::new() };
             }
@@ -145,8 +145,25 @@ impl<'a> Painter<'a> {
         self.text.draw_spans(self.quads, Block { spans: &[(s, span)], size: style.size, line, wrap: None }, Paint { origin: at, limit, colors: &[color], clip })
     }
 
+    /// How far `s` reaches when drawn by `text`: monospace text with characters drawn cell by cell takes whole cells, two for a wide character.
+    pub fn advance(&mut self, s: &str, style: TextStyle) -> f32 {
+        advance(self.text, self.m, s, style)
+    }
+
     pub fn measure(&mut self, s: &str, style: TextStyle) -> f32 {
         let line = self.m.cell_h;
         self.text.measure(s, style, line)
     }
+}
+
+fn by_cells(s: &str) -> bool {
+    s.chars().any(|c| chars::drawn(c) || !c.is_ascii()) && !s.chars().any(crate::text::shaped)
+}
+
+/// How far `s` reaches when the painter draws it in `style`, so a caret placed by measuring lands where the text was drawn.
+pub fn advance(text: &mut Text, m: Metrics, s: &str, style: TextStyle) -> f32 {
+    if style.face == Face::Mono && by_cells(s) {
+        return s.chars().map(|c| if chars::drawn(c) { 1 } else { crate::text::cells(c) }).sum::<usize>() as f32 * m.cell_w;
+    }
+    text.measure(s, style, m.cell_h)
 }

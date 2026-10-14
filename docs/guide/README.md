@@ -79,6 +79,12 @@ The build plan, at the end of the spec, is one list from top to bottom, and anyo
 5. **The demo apps**, each one using every component it touches.
 6. **Linux, then Windows.**
 
+## What runs today
+
+`cargo run -p todo` opens the to-do app. It shows its page: the field, the list and the buttons, with the action bar along the bottom listing every command, and a status line that says what the thing under the pointer does and, when it can't, why. A button that can't run right now is drawn faint instead of hidden. Ticking an item, removing one, clearing the finished ones and scrolling a long list work with the mouse; typing into the field comes next.
+
+`cargo run -p todo -- --render <folder>` draws every named state of the app, light and dark, at its normal size and at the smallest window it allows, into pictures in that folder. The smallest window is worked out from the layout itself, so nothing is ever cut off by making the window small.
+
 ## How speed is measured
 
 A screen refreshes 60 to 1000 times a second; at 1000, there is one millisecond per picture. Graticule's goal is to finish its work for an ordinary interaction in a tenth of that, and to do nothing at all when nothing is happening, which is what saves battery. Times are measured automatically and judged by the slowest frames, not the average, because the slow ones are the ones you notice.

@@ -87,19 +87,47 @@ pub trait Face: 'static {
     fn paint(&mut self, painter: &mut Painter, seen: Seen);
     fn input(&mut self, input: Input, frame: &mut Frame) -> bool;
     fn painted(&mut self, _: &mut Frame) {}
+    /// The smallest window this face fits in, in cells, once it knows.
+    fn minimum(&self) -> Option<(i32, i32)> {
+        None
+    }
+    /// The kept quads this face paints into, when it keeps them between frames instead of painting every quad each frame.
+    fn kept(&mut self) -> Option<&mut crate::kept::Kept> {
+        None
+    }
     fn quit(&self) -> bool {
         false
+    }
+    /// The accessibility tree for this frame, asked for only while a screen reader or another assistive tool is listening.
+    fn access(&mut self, _: Metrics, _: &str) -> Option<accesskit::TreeUpdate> {
+        None
+    }
+    /// An assistive tool asked a node to act, by its id.
+    fn act(&mut self, _: u64, _: accesskit::Action) -> bool {
+        false
+    }
+}
+
+/// What wakes the event loop: the app's own threads, or an assistive tool.
+pub enum Signal {
+    Wake,
+    Access(accesskit_winit::Event),
+}
+
+impl From<accesskit_winit::Event> for Signal {
+    fn from(e: accesskit_winit::Event) -> Self {
+        Signal::Access(e)
     }
 }
 
 #[derive(Clone)]
 pub struct Waker {
-    proxy: EventLoopProxy<()>,
+    proxy: EventLoopProxy<Signal>,
 }
 
 impl Waker {
     pub fn wake(&self) {
-        let _ = self.proxy.send_event(());
+        let _ = self.proxy.send_event(Signal::Wake);
     }
 }
 
@@ -109,7 +137,7 @@ pub struct Launch {
 
 pub fn run<F: Face>(config: Config, make: impl FnOnce(Waker) -> F + 'static) -> Result<(), String> {
     let started = Instant::now();
-    let event_loop = EventLoop::<()>::with_user_event().build().map_err(|e| e.to_string())?;
+    let event_loop = EventLoop::<Signal>::with_user_event().build().map_err(|e| e.to_string())?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
     let mut shell = Shell::<F> { config, proxy, running: None, failed: None, make: Some(Box::new(make)), started, loop_ready: Instant::now() };
@@ -121,7 +149,7 @@ type Make<F> = Box<dyn FnOnce(Waker) -> F>;
 
 struct Shell<F: Face> {
     config: Config,
-    proxy: EventLoopProxy<()>,
+    proxy: EventLoopProxy<Signal>,
     running: Option<Running<F>>,
     failed: Option<String>,
     make: Option<Make<F>>,
@@ -143,6 +171,9 @@ struct Running<F: Face> {
     appearance: Appearance,
     scope: bool,
     launch: Vec<(&'static str, f32)>,
+    minimum: Option<(i32, i32)>,
+    access: accesskit_winit::Adapter,
+    title: String,
 }
 
 #[derive(Default)]
@@ -180,10 +211,37 @@ impl<F: Face> Running<F> {
         for u in self.text.uploads.drain(..) {
             self.gpu.upload(u.x, u.y, u.w, u.h, &u.data);
         }
-        self.gpu.render(&self.quads, theme.bg);
+        match self.face.kept() {
+            Some(kept) => {
+                let [under, over] = &mut kept.layers;
+                self.gpu.keep([&under.quads, &over.quads], [under.dirty.take(), over.dirty.take()]);
+                self.gpu.render_kept(theme.bg);
+            }
+            None => self.gpu.render(&self.quads, theme.bg),
+        }
+        if let Some((cols, rows)) = self.face.minimum()
+            && self.minimum != Some((cols, rows))
+        {
+            self.minimum = Some((cols, rows));
+            let m = self.metrics;
+            self.window.set_min_inner_size(Some(winit::dpi::PhysicalSize::new(cols as f32 * m.cell_w, rows as f32 * m.cell_h)));
+        }
         let mut frame = frame!(self);
         self.face.painted(&mut frame);
+        self.update_access();
         profiling::finish_frame!();
+    }
+
+    fn update_access(&mut self) {
+        let (face, metrics, title) = (&mut self.face, self.metrics, self.title.as_str());
+        self.access.update_if_active(|| {
+            face.access(metrics, title).unwrap_or_else(|| accesskit::TreeUpdate {
+                nodes: vec![(accesskit::NodeId(0), accesskit::Node::new(accesskit::Role::Window))],
+                tree: Some(accesskit::TreeInfo::new(accesskit::NodeId(0))),
+                tree_id: accesskit::TreeId::ROOT,
+                focus: accesskit::NodeId(0),
+            })
+        });
     }
 
     fn input(&mut self, input: Input) {
@@ -194,7 +252,7 @@ impl<F: Face> Running<F> {
     }
 }
 
-impl<F: Face> ApplicationHandler for Shell<F> {
+impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.running.is_some() {
             return;
@@ -213,6 +271,7 @@ impl<F: Face> ApplicationHandler for Shell<F> {
                 return;
             }
         };
+        let access = accesskit_winit::Adapter::with_event_loop_proxy(event_loop, &window, self.proxy.clone());
         marks.push(("window", Instant::now()));
         let size = window.inner_size();
         let gpu = Gpu::new(Some(window.clone()), (size.width, size.height));
@@ -220,7 +279,7 @@ impl<F: Face> ApplicationHandler for Shell<F> {
         let mut text = Text::new();
         let wake = self.proxy.clone();
         text.set_wake(move || {
-            let _ = wake.send_event(());
+            let _ = wake.send_event(Signal::Wake);
         });
         let metrics = Metrics::measure(&mut text, window.scale_factor() as f32, size.width, size.height);
         marks.push(("fonts", Instant::now()));
@@ -232,7 +291,24 @@ impl<F: Face> ApplicationHandler for Shell<F> {
             _ => Appearance::Light,
         };
         let scope = std::env::var_os("GRATICULE_SCOPE").is_some_and(|v| v != "0");
-        let mut running = Running { face, window, gpu, text, metrics, quads: Vec::with_capacity(8192), pace: Pace::Idle, modifiers: ModifiersState::empty(), pointer: None, clicks: Clicks::default(), appearance, scope, launch: Vec::new() };
+        let mut running = Running {
+            face,
+            window,
+            gpu,
+            text,
+            metrics,
+            quads: Vec::with_capacity(8192),
+            pace: Pace::Idle,
+            modifiers: ModifiersState::empty(),
+            pointer: None,
+            clicks: Clicks::default(),
+            appearance,
+            scope,
+            launch: Vec::new(),
+            minimum: None,
+            access,
+            title: self.config.title.clone(),
+        };
         running.render();
         running.window.set_visible(true);
         marks.push(("first frame", Instant::now()));
@@ -252,9 +328,20 @@ impl<F: Face> ApplicationHandler for Shell<F> {
         self.running = Some(running);
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, _: ()) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, signal: Signal) {
         let Some(r) = self.running.as_mut() else { return };
-        r.input(Input::Woken);
+        match signal {
+            Signal::Wake => r.input(Input::Woken),
+            Signal::Access(e) => match e.window_event {
+                accesskit_winit::WindowEvent::InitialTreeRequested => r.update_access(),
+                accesskit_winit::WindowEvent::ActionRequested(request) => {
+                    if r.face.act(request.target_node.0, request.action) && r.pace.want() {
+                        r.window.request_redraw();
+                    }
+                }
+                accesskit_winit::WindowEvent::AccessibilityDeactivated => {}
+            },
+        }
         if r.face.quit() {
             event_loop.exit();
         }
@@ -262,6 +349,7 @@ impl<F: Face> ApplicationHandler for Shell<F> {
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         let Some(r) = self.running.as_mut() else { return };
+        r.access.process_event(&r.window, &event);
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
@@ -273,6 +361,7 @@ impl<F: Face> ApplicationHandler for Shell<F> {
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 let size = r.window.inner_size();
                 r.metrics = Metrics::measure(&mut r.text, scale_factor as f32, size.width, size.height);
+                r.minimum = None;
                 r.input(Input::Resized);
             }
             WindowEvent::RedrawRequested => r.render(),

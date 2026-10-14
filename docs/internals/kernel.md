@@ -131,15 +131,15 @@ Two nodes with the same id in one frame are a bug in the kernel; a law checks it
 
 ### 5.3 Building
 
-The view is called once per frame that needs it. `Ui<'a, C, S>` holds the tree being built, a reference to the facts (as `&dyn Any`, downcast once by each path; the facts' type is always the app's), the app's `available` answers for this frame, the kernel's interaction state, and the current subject.
+The view is called once per frame that needs it. `Ui<'a, C, S>` holds the tree being built, a reference to the facts (as `&dyn Any`, downcast by each path; the facts' type is always the app's), the scroll positions from the last frame, and the current subject. It is generic only over the command type: labels and availability are filled in by the runner after the view returns, because the runner knows the app's type and `Ui` doesn't need to. Hover, press and focus are not in `Ui` at all; they repaint a node without building the tree again.
 
 Each method pushes a node and returns a small builder that refers to it by index, so `ui.field(…).on_submit(Cmd::Add)` changes the node in place, with no drop logic and no allocation.
 
-A command shown on screen is asked `available` once per frame that built it, and the answer is cached until the next commit, because `available` is a pure function of the facts.
+A command shown on screen is asked `available` once per build of the tree, which happens only after a commit or a scroll, because `available` is a pure function of the facts.
 
 ### 5.4 Lists build only what shows
 
-`ui.list(&self.items, …)` calls the row closure only for the rows that are visible, plus one on each side. The list knows its height from the last layout. If layout finds that the height changed (a resize), the kernel runs the view again before painting, at most once a frame; the view is pure, so running it twice is safe. Rows can be any whole number of cells tall: their heights are kept per key, and a row never measured counts as the average, so the scrollbar is an estimate that sharpens as you scroll. The scroll position is a key and an offset into that row, moved in from Feedreader (§18), so items arriving above never move what you're reading.
+`ui.list(&self.items, …)` calls the row closure only for the rows that fit the list's height in the last layout, plus one. If layout finds that the height changed (a resize, or the first frame), the kernel runs the view again before painting, at most once a frame; the view is pure, so running it twice is safe. The list scrolls by whole items: its position is the key of the item at its top, with that item's index kept as a fallback for when it is removed, so items arriving above never move what you're reading. A row taller than the whole list is shown cut at the list's bottom rather than left out. Scrolling by lines inside a tall row, and a scrollbar estimated from measured row heights, come with the components that need them (build-plan item 4).
 
 This is what keeps a 10,000-item to-do list at the same frame cost as five items.
 
@@ -158,7 +158,7 @@ The containers the to-do app needs:
 
 - `page`: the app's area inside the window's own chrome (title, action bar, status line, message line, which the kernel draws around every app).
 - `row`: children left to right; widths from their minimums, `Fill` takes the rest.
-- column (the default inside `page` and list rows): children top to bottom.
+- column (the default inside `page`): children top to bottom. A list row lays its components left to right, like a `row`, because a row of a list is read across: the to-do row is a checkbox and a link side by side.
 - `columns` and `column(width)`: fixed widths, `Fill`, `.min()`, `.max()`.
 - `list`: a scroll area of rows (§5.4).
 
@@ -190,13 +190,17 @@ The window's surface textures are not guaranteed to keep their contents from fra
 
 CPU work is proportional to the damage. The GPU redraws everything, which is what GPUs are for: a full screen of text is tens of thousands of quads. This replaces an earlier draft that painted the damage into a kept texture of the whole window and copied it to the surface each frame. At 5K that texture is about 60 MB, so the copy reads 60 MB and writes 60 MB every frame, while drawing the quads writes the surface once; on Apple's tile-based GPUs, overlapping quads are resolved in on-chip memory, so drawing everything costs about half of copying. Boxes on the grid don't overlap, so drawing order matters only for overlays, which are a second list drawn after the first. S3 measures the GPU time at 5K on the M1.
 
-A further step, which the owner asked to have measured: most of a Graticule screen is cells, so the grid's frames, rules and mono text could be kept the way terminals keep theirs, as one small record per cell (a character, its inks, its style) that a single shader turns into pixels; a 200 × 60 cell window is about 200 KB, and changing a row rewrites a few hundred bytes. Quads would then be needed only for what isn't cell-shaped. S3 studies how Ghostty's renderer keeps and uploads its cells (MIT-licensed, so it can be learned from and ported with its notice), builds the cell buffer beside the quad list, and measures both at 5K on the M1, CPU and GPU time and memory; the faster one becomes the renderer, and the numbers go here.
+A further step, which the owner asked to have measured: most of a Graticule screen is cells, so the grid's frames, rules and mono text could be kept the way terminals keep theirs, as one small record per cell (a character, its inks, its style) that a single shader turns into pixels, with quads only for what isn't cell-shaped (Ghostty's renderer, MIT-licensed, is the model to learn from).
 
-A law (§19) checks that patching the quad list gives the same pixels as building it from scratch.
+**Measured in S3, on the Windows development machine, release build, a 5K window at 2x (5120 × 2880, 263 nodes, 5,054 quads):** building the tree 0.05 ms, layout 0.08 ms; a frame where one item was toggled repaints one node and uploads 16 quads (1 KB) in 0.006 ms; a frame where nothing changed paints nothing; the first full frame paints 253 nodes in 0.9 ms and uploads 393 KB. The kept quad list is the renderer. A cell buffer could only win on GPU time, which at this size is one instanced draw per layer; that comparison, and the GPU time at 5K, need the M1 reference machine and are still open in the build plan.
+
+The quads are kept in two layers, under and over: a list row's selection and hover fills go under, everything a component draws of itself goes over, because a row's fill must lie beneath its children's text even when the children's ranges come first in the buffer. Each node owns a range in each layer; a node that changed rewrites its range, or moves to a bigger free one, and blanks what it no longer uses; a node that is gone frees its ranges. Only the span between the first and last changed quad is sent to the GPU. When the glyph atlas fills up and starts over, every kept glyph quad points at the wrong pixels, so the kept list starts over with it.
+
+A law (§19) checks that patching the quad list gives the same pixels as building it from scratch. It compares the quads themselves, layer by layer, which is enough because boxes on the grid never overlap.
 
 ## 8. Hit testing
 
-After layout, the kernel fills a grid of the window's size in cells, each cell holding the index of the topmost node with an interaction there (a button, a check, a link, a field, a list row). It is refilled only in damaged cells. Finding what is under the pointer is one array read, well under the 1 µs budget. Hit targets are at least one cell, which the taste laws require anyway.
+After layout, the kernel fills a grid of the window's size in cells, each cell holding the index of the topmost node with an interaction there (a button, a check, a link, a field, a list row). It is refilled after every layout: at 200 × 60 cells that is 12,000 writes, a few microseconds, so tracking damaged cells isn't worth its code yet. Finding what is under the pointer is one array read, well under the 1 µs budget. Hit targets are at least one cell, which the taste laws require anyway.
 
 A hit gives a node; the kernel walks up to the nearest node that acts (a check's command, a field's focus, a row's selection) and collects the nearest row's subject on the way. A canvas, later, gets the point inside its box and tests its own shapes against their outlines (spec §6.3).
 
@@ -269,9 +273,9 @@ Changing only the selection is not an undo step (spec §13.2), but every step re
 
 ### 11.1 The one door
 
-The kernel changes the app's facts in exactly one way: it sends `Edit` through the app's `update`. An `Edit` holds an erased path, a change and a gesture id:
+The kernel changes the app's facts in exactly one way: it sends `Edit` through the app's `update`. An `Edit` holds an erased path, a change and a gesture id, boxed so that it is one pointer wide and an app's command enum stays small:
 
-- `Change::Text(Splice)`: replace a byte range of a `Text` with a string (stored inline when short, so ordinary typing doesn't allocate);
+- `Change::Splice`: replace a byte range of a `Text` with a string;
 - `Change::Select(…)`: set, extend, toggle, focus or clear a selection;
 - `Change::Set(Value)`: a form's value (later).
 

@@ -23,14 +23,7 @@ impl Metrics {
         let cell_w_pt = advance.round().max(1.0);
         let font_pt = FONT_POINTS * cell_w_pt / advance;
         let cell_h_pt = (font_pt * LINE).round();
-        Self {
-            scale,
-            size: font_pt * scale,
-            cell_w: (cell_w_pt * scale).round(),
-            cell_h: (cell_h_pt * scale).round(),
-            width: width as f32,
-            height: height as f32,
-        }
+        Self { scale, size: font_pt * scale, cell_w: (cell_w_pt * scale).round(), cell_h: (cell_h_pt * scale).round(), width: width as f32, height: height as f32 }
     }
 
     pub fn cols(&self) -> i32 {

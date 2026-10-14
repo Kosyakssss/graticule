@@ -28,7 +28,19 @@ pub struct Family {
     pub files: Files,
 }
 
-const HAN_RANGES: &[(u32, u32)] = &[(0x2E80, 0x2FDF), (0x3000, 0x303F), (0x31C0, 0x31EF), (0x3200, 0x33FF), (0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF), (0xFE30, 0xFE4F), (0xFF00, 0xFF60), (0xFFE0, 0xFFEF), (0x20000, 0x3134F)];
+const HAN_RANGES: &[(u32, u32)] = &[
+    (0x2E80, 0x2FDF),
+    (0x3000, 0x303F),
+    (0x31C0, 0x31EF),
+    (0x3200, 0x33FF),
+    (0x3400, 0x4DBF),
+    (0x4E00, 0x9FFF),
+    (0xF900, 0xFAFF),
+    (0xFE30, 0xFE4F),
+    (0xFF00, 0xFF60),
+    (0xFFE0, 0xFFEF),
+    (0x20000, 0x3134F),
+];
 
 const JP: usize = 5;
 const KR: usize = 6;
@@ -40,25 +52,45 @@ pub const EXTRA: [Family; 9] = [
         name: "IBM Plex Sans Arabic",
         scripts: &[*b"Arab"],
         ranges: &[(0x0600, 0x06FF), (0x0750, 0x077F), (0x0870, 0x08FF), (0xFB50, 0xFDFF), (0xFE70, 0xFEFF)],
-        files: Files::Bundled(&[include_bytes!("../assets/fonts/IBMPlexSansArabic-Regular.ttf"), include_bytes!("../assets/fonts/IBMPlexSansArabic-Medium.ttf"), include_bytes!("../assets/fonts/IBMPlexSansArabic-SemiBold.ttf"), include_bytes!("../assets/fonts/IBMPlexSansArabic-Bold.ttf")]),
+        files: Files::Bundled(&[
+            include_bytes!("../assets/fonts/IBMPlexSansArabic-Regular.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansArabic-Medium.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansArabic-SemiBold.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansArabic-Bold.ttf"),
+        ]),
     },
     Family {
         name: "IBM Plex Sans Devanagari",
         scripts: &[*b"Deva"],
         ranges: &[(0x0900, 0x097F), (0x1CD0, 0x1CFF), (0xA8E0, 0xA8FF)],
-        files: Files::Bundled(&[include_bytes!("../assets/fonts/IBMPlexSansDevanagari-Regular.ttf"), include_bytes!("../assets/fonts/IBMPlexSansDevanagari-Medium.ttf"), include_bytes!("../assets/fonts/IBMPlexSansDevanagari-SemiBold.ttf"), include_bytes!("../assets/fonts/IBMPlexSansDevanagari-Bold.ttf")]),
+        files: Files::Bundled(&[
+            include_bytes!("../assets/fonts/IBMPlexSansDevanagari-Regular.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansDevanagari-Medium.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansDevanagari-SemiBold.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansDevanagari-Bold.ttf"),
+        ]),
     },
     Family {
         name: "IBM Plex Sans Hebrew",
         scripts: &[*b"Hebr"],
         ranges: &[(0x0590, 0x05FF), (0xFB1D, 0xFB4F)],
-        files: Files::Bundled(&[include_bytes!("../assets/fonts/IBMPlexSansHebrew-Regular.ttf"), include_bytes!("../assets/fonts/IBMPlexSansHebrew-Medium.ttf"), include_bytes!("../assets/fonts/IBMPlexSansHebrew-SemiBold.ttf"), include_bytes!("../assets/fonts/IBMPlexSansHebrew-Bold.ttf")]),
+        files: Files::Bundled(&[
+            include_bytes!("../assets/fonts/IBMPlexSansHebrew-Regular.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansHebrew-Medium.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansHebrew-SemiBold.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansHebrew-Bold.ttf"),
+        ]),
     },
     Family {
         name: "IBM Plex Sans Thai",
         scripts: &[*b"Thai"],
         ranges: &[(0x0E00, 0x0E7F)],
-        files: Files::Bundled(&[include_bytes!("../assets/fonts/IBMPlexSansThai-Regular.ttf"), include_bytes!("../assets/fonts/IBMPlexSansThai-Medium.ttf"), include_bytes!("../assets/fonts/IBMPlexSansThai-SemiBold.ttf"), include_bytes!("../assets/fonts/IBMPlexSansThai-Bold.ttf")]),
+        files: Files::Bundled(&[
+            include_bytes!("../assets/fonts/IBMPlexSansThai-Regular.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansThai-Medium.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansThai-SemiBold.ttf"),
+            include_bytes!("../assets/fonts/IBMPlexSansThai-Bold.ttf"),
+        ]),
     },
     Family {
         name: "IBM Plex Math",
@@ -211,10 +243,7 @@ impl Fonts {
     fn open(&mut self, i: usize) -> Option<&[Blob<u8>]> {
         if let (Opened::NotYet, Files::Fetched(names)) = (&self.opened[i], &EXTRA[i].files) {
             let dirs = fetched_dirs();
-            let read: Option<Vec<Blob<u8>>> = names
-                .iter()
-                .map(|name| dirs.iter().find_map(|d| std::fs::read(d.join(name)).ok()).map(|bytes| Blob::new(Arc::new(bytes))))
-                .collect();
+            let read: Option<Vec<Blob<u8>>> = names.iter().map(|name| dirs.iter().find_map(|d| std::fs::read(d.join(name)).ok()).map(|bytes| Blob::new(Arc::new(bytes)))).collect();
             self.opened[i] = read.map_or(Opened::Missing, Opened::Ready);
         }
         match &self.opened[i] {

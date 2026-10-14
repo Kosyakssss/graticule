@@ -1,6 +1,6 @@
 use crate::chars::{self, Pen, Shape};
-use crate::grid::Area;
 use crate::gpu::Quad;
+use crate::grid::Area;
 use crate::ink::{Color, Theme};
 use crate::metrics::Metrics;
 use crate::px::Rect;

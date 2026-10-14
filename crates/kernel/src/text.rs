@@ -2,10 +2,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 
-use parley::{
-    Alignment, AlignmentOptions, FontFamily, FontStyle, FontWeight, Layout,
-    LayoutContext, LineHeight, PositionedLayoutItem, StyleProperty,
-};
+use parley::{Alignment, AlignmentOptions, FontFamily, FontStyle, FontWeight, Layout, LayoutContext, LineHeight, PositionedLayoutItem, StyleProperty};
 use swash::scale::{Render, ScaleContext, Source, StrikeWith};
 use swash::zeno::{Format, Vector};
 
@@ -44,13 +41,7 @@ pub struct SpanStyle {
 
 impl SpanStyle {
     pub fn plain(face: Face) -> Self {
-        Self {
-            face,
-            weight: 400,
-            italic: false,
-            underline: false,
-            color: 0,
-        }
+        Self { face, weight: 400, italic: false, underline: false, color: 0 }
     }
 }
 
@@ -86,7 +77,20 @@ impl Scratch {
 /// How many cells a character takes in mono text: two for Chinese, Japanese and Korean, as in a terminal.
 pub fn cells(c: char) -> usize {
     match c as u32 {
-        0x1100..=0x115F | 0x2E80..=0x303E | 0x3041..=0x33FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xA000..=0xA4CF | 0xAC00..=0xD7A3 | 0xF900..=0xFAFF | 0xFE30..=0xFE4F | 0xFF00..=0xFF60 | 0xFFE0..=0xFFE6 | 0x1F300..=0x1F64F | 0x1F900..=0x1F9FF | 0x20000..=0x3FFFD => 2,
+        0x1100..=0x115F
+        | 0x2E80..=0x303E
+        | 0x3041..=0x33FF
+        | 0x3400..=0x4DBF
+        | 0x4E00..=0x9FFF
+        | 0xA000..=0xA4CF
+        | 0xAC00..=0xD7A3
+        | 0xF900..=0xFAFF
+        | 0xFE30..=0xFE4F
+        | 0xFF00..=0xFF60
+        | 0xFFE0..=0xFFE6
+        | 0x1F300..=0x1F64F
+        | 0x1F900..=0x1F9FF
+        | 0x20000..=0x3FFFD => 2,
         _ => 1,
     }
 }
@@ -169,6 +173,7 @@ pub struct Text {
     frame: u64,
     scratch: Scratch,
     pub(crate) pen: Vec<crate::px::Rect>,
+    pub(crate) atlas: u64,
 }
 
 pub struct Drawn {
@@ -228,6 +233,7 @@ impl Text {
             frame: 0,
             scratch: Scratch::default(),
             pen: Vec::new(),
+            atlas: 0,
         }
     }
 
@@ -290,6 +296,7 @@ impl Text {
         self.glyphs.clear();
         self.shapes.clear();
         self.shelf = Shelf { x: 0, y: 0, row: 0 };
+        self.atlas += 1;
     }
 
     fn key_of(spans: &[(&str, SpanStyle)], size: f32, line: f32, wrap: Option<f32>) -> u64 {
@@ -363,11 +370,7 @@ impl Text {
         let Some((layout, _, _)) = self.layouts.get(&key) else { return Vec::new() };
         let a = parley::Cursor::from_byte_index(layout, range.start, parley::Affinity::Downstream);
         let b = parley::Cursor::from_byte_index(layout, range.end, parley::Affinity::Upstream);
-        parley::Selection::new(a, b)
-            .geometry(layout)
-            .into_iter()
-            .map(|(bb, _)| [bb.x0 as f32, bb.y0 as f32, (bb.x1 - bb.x0) as f32, (bb.y1 - bb.y0) as f32])
-            .collect()
+        parley::Selection::new(a, b).geometry(layout).into_iter().map(|(bb, _)| [bb.x0 as f32, bb.y0 as f32, (bb.x1 - bb.x0) as f32, (bb.y1 - bb.y0) as f32]).collect()
     }
 
     pub fn pick(&self, key: u64, x: f32, y: f32, clicks: u32) -> Option<Range<usize>> {
@@ -429,11 +432,7 @@ impl Text {
         let layout = self.layout(spans, size, line, Some(wrap));
         let a = parley::Cursor::from_byte_index(layout, range.start, parley::Affinity::Downstream);
         let b = parley::Cursor::from_byte_index(layout, range.end, parley::Affinity::Upstream);
-        parley::Selection::new(a, b)
-            .geometry(layout)
-            .into_iter()
-            .map(|(bb, _)| [bb.x0 as f32, bb.y0 as f32, (bb.x1 - bb.x0) as f32, (bb.y1 - bb.y0) as f32])
-            .collect()
+        parley::Selection::new(a, b).geometry(layout).into_iter().map(|(bb, _)| [bb.x0 as f32, bb.y0 as f32, (bb.x1 - bb.x0) as f32, (bb.y1 - bb.y0) as f32]).collect()
     }
 
     #[profiling::function]
@@ -536,17 +535,8 @@ impl Text {
     #[profiling::function]
     fn rasterize(&mut self, key: GlyphKey, font: &parley::FontData, coords: &[i16]) -> Option<Slot> {
         let font_ref = swash::FontRef::from_index(font.data.data(), font.index as usize)?;
-        let mut scaler = self
-            .scale
-            .builder(font_ref)
-            .size(f32::from_bits(key.size))
-            .hint(false)
-            .normalized_coords(coords.iter())
-            .build();
-        let image = Render::new(&[Source::Outline, Source::Bitmap(StrikeWith::BestFit)])
-            .format(Format::Alpha)
-            .offset(Vector::new(key.sub as f32 / 4.0, 0.0))
-            .render(&mut scaler, key.glyph as u16)?;
+        let mut scaler = self.scale.builder(font_ref).size(f32::from_bits(key.size)).hint(false).normalized_coords(coords.iter()).build();
+        let image = Render::new(&[Source::Outline, Source::Bitmap(StrikeWith::BestFit)]).format(Format::Alpha).offset(Vector::new(key.sub as f32 / 4.0, 0.0)).render(&mut scaler, key.glyph as u16)?;
         self.store(image.placement, image.data)
     }
 
@@ -561,6 +551,7 @@ impl Text {
                 self.glyphs.clear();
                 self.shapes.clear();
                 self.shelf = Shelf { x: 0, y: 0, row: 0 };
+                self.atlas += 1;
                 self.shelf.alloc(w, h)?
             }
         };

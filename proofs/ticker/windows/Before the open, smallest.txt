@@ -1,0 +1,29 @@
+window		0 0 24 23	
+  page	Ticker	0 0 24 18	
+    text	Waiting for the market to open	2 3 20 2	muted
+    split		2 6 20 11	
+      pane	Watchlist	2 6 20 6	
+        list		2 6 20 3	6 items
+          column heads		2 6 18 1	
+            column head	Symbol	2 6 8 1	
+          list item		2 7 18 1	
+            cell	ALDR	2 7 8 1	
+          list item		2 8 18 1	
+            cell	DUNE	2 8 8 1	
+        list		2 9 20 3	16 items
+          column heads		2 9 18 1	
+            column head	Symbol	2 9 8 1	
+          list item		2 10 18 1	
+            cell	ALDR	2 10 8 1	
+          list item		2 11 18 1	
+            cell	BRCK	2 11 8 1	
+      pane	Chart	2 12 20 2	
+        text	Choose a stock on the watchlist to see its chart	2 12 20 2	muted
+      pane	Tape	2 14 20 3	
+        list		2 14 20 3	0 items
+  alert		2 18 20 1	
+  status		2 19 20 1	
+  toolbar		2 20 20 3	
+    button	Undo	2 20 13 1	unavailable (Nothing to undo)
+    button	Redo	2 21 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 22 15 1	

@@ -1,0 +1,183 @@
+window		0 0 120 30	
+  page	Ticker	0 0 120 27	
+    text	A simulated exchange, 14:55:04 on its clock, 1,000,000 trades today	2 3 116 1	muted
+    split		2 5 116 21	
+      pane	Watchlist	2 5 35 21	
+        list		2 5 35 10	6 items
+          column heads		2 5 33 1	
+            column head	Symbol	2 5 8 1	
+            column head	Last	12 5 9 1	
+            column head	Change	23 5 8 1	
+          list item		2 6 33 1	
+            cell	ALDR	2 6 8 1	
+            cell	32.97	12 6 9 1	
+            cell	−9.13	23 6 8 1	danger
+          list item		2 7 33 1	
+            cell	DUNE	2 7 8 1	
+            cell	129.31	12 7 9 1	
+            cell	-0.19	23 7 8 1	danger
+          list item		2 8 33 1	
+            cell	GLYF	2 8 8 1	
+            cell	176.52	12 8 9 1	
+            cell	−54.68	23 8 8 1	danger
+          list item		2 9 33 1	
+            cell	IRIS	2 9 8 1	
+            cell	65.06	12 9 9 1	
+            cell	10.91	23 9 8 1	ok
+          list item		2 10 33 1	chosen, focused
+            cell	MOSS	2 10 8 1	
+            cell	158.87	12 10 9 1	
+            cell	4.07	23 10 8 1	ok
+          list item		2 11 33 1	
+            cell	NOVA	2 11 8 1	
+            cell	93.74	12 11 9 1	
+            cell	16.64	23 11 8 1	ok
+        list		2 15 35 11	16 items
+          column heads		2 15 33 1	
+            column head	Symbol	2 15 8 1	
+            column head	Name	12 15 13 1	
+            column head	Last	27 15 8 1	
+          list item		2 16 33 1	
+            cell	ALDR	2 16 8 1	
+            cell	Alder Freight	12 16 13 1	
+            cell	32.97	27 16 8 1	
+          list item		2 17 33 1	
+            cell	BRCK	2 17 8 1	
+            cell	Brick & Mortar	12 17 13 1	
+            cell	17.56	27 17 8 1	
+          list item		2 18 33 1	
+            cell	CNDL	2 18 8 1	
+            cell	Candlewick Energy	12 18 13 1	
+            cell	74.55	27 18 8 1	
+          list item		2 19 33 1	
+            cell	DUNE	2 19 8 1	
+            cell	Dune Labs	12 19 13 1	
+            cell	129.31	27 19 8 1	
+          list item		2 20 33 1	
+            cell	EMBR	2 20 8 1	
+            cell	Ember Foods	12 20 13 1	
+            cell	27.06	27 20 8 1	
+          list item		2 21 33 1	
+            cell	FERN	2 21 8 1	
+            cell	Fernhill Health	12 21 13 1	
+            cell	79.80	27 21 8 1	
+          list item		2 22 33 1	
+            cell	GLYF	2 22 8 1	
+            cell	Glyph Systems	12 22 13 1	
+            cell	176.52	27 22 8 1	
+          list item		2 23 33 1	
+            cell	HRBR	2 23 8 1	
+            cell	Harbour Shipping	12 23 13 1	
+            cell	33.76	27 23 8 1	
+          list item		2 24 33 1	
+            cell	IRIS	2 24 8 1	
+            cell	Iris Optics	12 24 13 1	
+            cell	65.06	27 24 8 1	
+          list item		2 25 33 1	
+            cell	JUNO	2 25 8 1	
+            cell	Juno Mining	12 25 13 1	
+            cell	3.94	27 25 8 1	
+      divider	Between “Watchlist” and “Chart”	39 5 1 21	
+      pane	Chart	42 5 35 21	
+        heading	MOSS — Moss Biotech	42 5 35 1	strong
+        chart		42 6 35 13	
+          group		42 6 35 12	
+            scale	130, 140, 150, 160, 170, 180	42 6 4 12	
+            canvas	MOSS — Moss Biotech	48 6 29 12	
+          group		42 18 35 1	
+            text		42 18 4 1	
+            scale	11:00, 11:05, 11:10, 11:15, 11:20, 11:25, 11:30, 11:35, 11:40, 11:45, 11:50, 11:55, 12:00, 12:05, 12:10, 12:15, 12:20, 12:25, 12:30, 12:35, 12:40, 12:45, 12:50, 12:55, 13:00, 13:05, 13:10, 13:15, 13:20, 13:25, 13:30, 13:35, 13:40, 13:45, 13:50, 13:55, 14:00, 14:05, 14:10, 14:15, 14:20, 14:25, 14:30, 14:35, 14:40, 14:45, 14:50, 14:55	48 18 29 1	
+      divider	Between “Chart” and “Tape”	79 5 1 21	
+      pane	Tape	82 5 36 21	
+        list		82 5 36 21	1000000 items
+          column heads		82 5 34 1	
+            column head	Time	82 5 9 1	
+            column head	Symbol	93 5 8 1	
+            column head	Price	103 5 10 1	
+          list item		82 6 34 1	
+            cell	14:55:04	82 6 9 1	
+            cell	GLYF	93 6 8 1	
+            cell	176.52	103 6 10 1	
+          list item		82 7 34 1	
+            cell	14:55:04	82 7 9 1	
+            cell	CNDL	93 7 8 1	
+            cell	74.55	103 7 10 1	
+          list item		82 8 34 1	
+            cell	14:55:04	82 8 9 1	
+            cell	OPAL	93 8 8 1	
+            cell	19.41	103 8 10 1	
+          list item		82 9 34 1	
+            cell	14:55:04	82 9 9 1	
+            cell	OPAL	93 9 8 1	
+            cell	19.42	103 9 10 1	
+          list item		82 10 34 1	
+            cell	14:55:04	82 10 9 1	
+            cell	NOVA	93 10 8 1	
+            cell	93.74	103 10 10 1	
+          list item		82 11 34 1	
+            cell	14:55:04	82 11 9 1	
+            cell	MOSS	93 11 8 1	
+            cell	158.87	103 11 10 1	
+          list item		82 12 34 1	
+            cell	14:55:04	82 12 9 1	
+            cell	CNDL	93 12 8 1	
+            cell	74.61	103 12 10 1	
+          list item		82 13 34 1	
+            cell	14:55:04	82 13 9 1	
+            cell	PIKE	93 13 8 1	
+            cell	50.58	103 13 10 1	
+          list item		82 14 34 1	
+            cell	14:55:04	82 14 9 1	
+            cell	ALDR	93 14 8 1	
+            cell	32.97	103 14 10 1	
+          list item		82 15 34 1	
+            cell	14:55:04	82 15 9 1	
+            cell	IRIS	93 15 8 1	
+            cell	65.06	103 15 10 1	
+          list item		82 16 34 1	
+            cell	14:55:03	82 16 9 1	
+            cell	CNDL	93 16 8 1	
+            cell	74.58	103 16 10 1	
+          list item		82 17 34 1	
+            cell	14:55:03	82 17 9 1	
+            cell	LOOM	93 17 8 1	
+            cell	37.56	103 17 10 1	
+          list item		82 18 34 1	
+            cell	14:55:03	82 18 9 1	
+            cell	CNDL	93 18 8 1	
+            cell	74.58	103 18 10 1	
+          list item		82 19 34 1	
+            cell	14:55:03	82 19 9 1	
+            cell	HRBR	93 19 8 1	
+            cell	33.76	103 19 10 1	
+          list item		82 20 34 1	
+            cell	14:55:03	82 20 9 1	
+            cell	JUNO	93 20 8 1	
+            cell	3.94	103 20 10 1	
+          list item		82 21 34 1	
+            cell	14:55:03	82 21 9 1	
+            cell	ALDR	93 21 8 1	
+            cell	32.96	103 21 10 1	
+          list item		82 22 34 1	
+            cell	14:55:03	82 22 9 1	
+            cell	DUNE	93 22 8 1	
+            cell	129.31	103 22 10 1	
+          list item		82 23 34 1	
+            cell	14:55:03	82 23 9 1	
+            cell	OPAL	93 23 8 1	
+            cell	19.43	103 23 10 1	
+          list item		82 24 34 1	
+            cell	14:55:03	82 24 9 1	
+            cell	CNDL	93 24 8 1	
+            cell	74.61	103 24 10 1	
+          list item		82 25 34 1	
+            cell	14:55:03	82 25 9 1	
+            cell	HRBR	93 25 8 1	
+            cell	33.76	103 25 10 1	
+  alert		2 27 116 1	
+  status		2 28 116 1	
+  toolbar		2 29 116 1	
+    button	Stop watching	2 29 13 1	
+    button	Undo	17 29 13 1	unavailable (Nothing to undo)
+    button	Redo	32 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	53 29 15 1	

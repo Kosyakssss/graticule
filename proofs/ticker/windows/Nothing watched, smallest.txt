@@ -1,0 +1,30 @@
+window		0 0 24 27	
+  page	Ticker	0 0 24 22	
+    text	A simulated exchange, 09:31:18 on its clock, 4,000 trades today	2 3 20 3	muted
+    split		2 7 20 14	
+      pane	Watchlist	2 7 20 9	
+        text	Nothing watched. Choose stocks below and watch them.	2 7 20 3	muted
+        list		2 10 20 3	0 items
+        list		2 13 20 3	16 items
+          column heads		2 13 18 1	
+            column head	Symbol	2 13 8 1	
+          list item		2 14 18 1	
+            cell	ALDR	2 14 8 1	
+          list item		2 15 18 1	
+            cell	BRCK	2 15 8 1	
+      pane	Chart	2 16 20 2	
+        text	Choose a stock on the watchlist to see its chart	2 16 20 2	muted
+      pane	Tape	2 18 20 3	
+        list		2 18 20 3	4000 items
+          column heads		2 18 18 1	
+            column head	Time	2 18 9 1	
+          list item		2 19 18 1	
+            cell	09:31:18	2 19 9 1	
+          list item		2 20 18 1	
+            cell	09:31:18	2 20 9 1	
+  alert		2 22 20 1	
+  status		2 23 20 1	
+  toolbar		2 24 20 3	
+    button	Undo	2 24 13 1	unavailable (Nothing to undo)
+    button	Redo	2 25 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 26 15 1	

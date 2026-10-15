@@ -1,0 +1,144 @@
+window		0 0 120 30	
+  page	Ticker	0 0 120 27	
+    text	A simulated exchange, 09:31:18 on its clock, 4,000 trades today	2 3 116 1	muted
+    split		2 5 116 21	
+      pane	Watchlist	2 5 35 21	
+        text	Nothing watched. Choose stocks below and watch them.	2 5 35 2	muted
+        list		2 7 35 9	0 items
+        list		2 16 35 10	16 items
+          column heads		2 16 33 1	
+            column head	Symbol	2 16 8 1	
+            column head	Name	12 16 13 1	
+            column head	Last	27 16 8 1	
+          list item		2 17 33 1	
+            cell	ALDR	2 17 8 1	
+            cell	Alder Freight	12 17 13 1	
+            cell	42.20	27 17 8 1	
+          list item		2 18 33 1	
+            cell	BRCK	2 18 8 1	
+            cell	Brick & Mortar	12 18 13 1	
+            cell	19.17	27 18 8 1	
+          list item		2 19 33 1	
+            cell	CNDL	2 19 8 1	
+            cell	Candlewick Energy	12 19 13 1	
+            cell	66.96	27 19 8 1	
+          list item		2 20 33 1	
+            cell	DUNE	2 20 8 1	
+            cell	Dune Labs	12 20 13 1	
+            cell	129.38	27 20 8 1	
+          list item		2 21 33 1	
+            cell	EMBR	2 21 8 1	
+            cell	Ember Foods	12 21 13 1	
+            cell	32.87	27 21 8 1	
+          list item		2 22 33 1	
+            cell	FERN	2 22 8 1	
+            cell	Fernhill Health	12 22 13 1	
+            cell	88.40	27 22 8 1	
+          list item		2 23 33 1	
+            cell	GLYF	2 23 8 1	
+            cell	Glyph Systems	12 23 13 1	
+            cell	231.31	27 23 8 1	
+          list item		2 24 33 1	
+            cell	HRBR	2 24 8 1	
+            cell	Harbour Shipping	12 24 13 1	
+            cell	27.66	27 24 8 1	
+          list item		2 25 33 1	
+            cell	IRIS	2 25 8 1	
+            cell	Iris Optics	12 25 13 1	
+            cell	54.95	27 25 8 1	
+      divider	Between “Watchlist” and “Chart”	39 5 1 21	
+      pane	Chart	42 5 35 21	
+        text	Choose a stock on the watchlist to see its chart	42 5 35 1	muted
+      divider	Between “Chart” and “Tape”	79 5 1 21	
+      pane	Tape	82 5 36 21	
+        list		82 5 36 21	4000 items
+          column heads		82 5 34 1	
+            column head	Time	82 5 9 1	
+            column head	Symbol	93 5 8 1	
+            column head	Price	103 5 10 1	
+          list item		82 6 34 1	
+            cell	09:31:18	82 6 9 1	
+            cell	FERN	93 6 8 1	
+            cell	88.40	103 6 10 1	
+          list item		82 7 34 1	
+            cell	09:31:18	82 7 9 1	
+            cell	LOOM	93 7 8 1	
+            cell	37.37	103 7 10 1	
+          list item		82 8 34 1	
+            cell	09:31:18	82 8 9 1	
+            cell	PIKE	93 8 8 1	
+            cell	49.60	103 8 10 1	
+          list item		82 9 34 1	
+            cell	09:31:18	82 9 9 1	
+            cell	FERN	93 9 8 1	
+            cell	88.48	103 9 10 1	
+          list item		82 10 34 1	
+            cell	09:31:18	82 10 9 1	
+            cell	PIKE	93 10 8 1	
+            cell	49.62	103 10 10 1	
+          list item		82 11 34 1	
+            cell	09:31:18	82 11 9 1	
+            cell	EMBR	93 11 8 1	
+            cell	32.87	103 11 10 1	
+          list item		82 12 34 1	
+            cell	09:31:18	82 12 9 1	
+            cell	LOOM	93 12 8 1	
+            cell	37.37	103 12 10 1	
+          list item		82 13 34 1	
+            cell	09:31:18	82 13 9 1	
+            cell	NOVA	93 13 8 1	
+            cell	76.44	103 13 10 1	
+          list item		82 14 34 1	
+            cell	09:31:18	82 14 9 1	
+            cell	KILN	93 14 8 1	
+            cell	15.41	103 14 10 1	
+          list item		82 15 34 1	
+            cell	09:31:18	82 15 9 1	
+            cell	FERN	93 15 8 1	
+            cell	88.52	103 15 10 1	
+          list item		82 16 34 1	
+            cell	09:31:18	82 16 9 1	
+            cell	LOOM	93 16 8 1	
+            cell	37.36	103 16 10 1	
+          list item		82 17 34 1	
+            cell	09:31:18	82 17 9 1	
+            cell	JUNO	93 17 8 1	
+            cell	10.01	103 17 10 1	
+          list item		82 18 34 1	
+            cell	09:31:18	82 18 9 1	
+            cell	LOOM	93 18 8 1	
+            cell	37.38	103 18 10 1	
+          list item		82 19 34 1	
+            cell	09:31:18	82 19 9 1	
+            cell	PIKE	93 19 8 1	
+            cell	49.60	103 19 10 1	
+          list item		82 20 34 1	
+            cell	09:31:18	82 20 9 1	
+            cell	JUNO	93 20 8 1	
+            cell	10.00	103 20 10 1	
+          list item		82 21 34 1	
+            cell	09:31:18	82 21 9 1	
+            cell	MOSS	93 21 8 1	
+            cell	156.34	103 21 10 1	
+          list item		82 22 34 1	
+            cell	09:31:18	82 22 9 1	
+            cell	HRBR	93 22 8 1	
+            cell	27.66	103 22 10 1	
+          list item		82 23 34 1	
+            cell	09:31:18	82 23 9 1	
+            cell	OPAL	93 23 8 1	
+            cell	22.64	103 23 10 1	
+          list item		82 24 34 1	
+            cell	09:31:18	82 24 9 1	
+            cell	OPAL	93 24 8 1	
+            cell	22.63	103 24 10 1	
+          list item		82 25 34 1	
+            cell	09:31:18	82 25 9 1	
+            cell	IRIS	93 25 8 1	
+            cell	54.95	103 25 10 1	
+  alert		2 27 116 1	
+  status		2 28 116 1	
+  toolbar		2 29 116 1	
+    button	Undo	2 29 13 1	unavailable (Nothing to undo)
+    button	Redo	17 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	38 29 15 1	

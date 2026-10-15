@@ -1,0 +1,91 @@
+window		0 0 120 30	
+  page	Ticker	0 0 120 27	
+    text	Waiting for the market to open	2 3 116 1	muted
+    split		2 5 116 21	
+      pane	Watchlist	2 5 35 21	
+        list		2 5 35 10	6 items
+          column heads		2 5 33 1	
+            column head	Symbol	2 5 8 1	
+            column head	Last	12 5 9 1	
+            column head	Change	23 5 8 1	
+          list item		2 6 33 1	
+            cell	ALDR	2 6 8 1	
+            cell	0.00	12 6 9 1	
+            cell	0.00	23 6 8 1	
+          list item		2 7 33 1	
+            cell	DUNE	2 7 8 1	
+            cell	0.00	12 7 9 1	
+            cell	0.00	23 7 8 1	
+          list item		2 8 33 1	
+            cell	GLYF	2 8 8 1	
+            cell	0.00	12 8 9 1	
+            cell	0.00	23 8 8 1	
+          list item		2 9 33 1	
+            cell	IRIS	2 9 8 1	
+            cell	0.00	12 9 9 1	
+            cell	0.00	23 9 8 1	
+          list item		2 10 33 1	
+            cell	MOSS	2 10 8 1	
+            cell	0.00	12 10 9 1	
+            cell	0.00	23 10 8 1	
+          list item		2 11 33 1	
+            cell	NOVA	2 11 8 1	
+            cell	0.00	12 11 9 1	
+            cell	0.00	23 11 8 1	
+        list		2 15 35 11	16 items
+          column heads		2 15 33 1	
+            column head	Symbol	2 15 8 1	
+            column head	Name	12 15 13 1	
+            column head	Last	27 15 8 1	
+          list item		2 16 33 1	
+            cell	ALDR	2 16 8 1	
+            cell	Alder Freight	12 16 13 1	
+            cell	0.00	27 16 8 1	
+          list item		2 17 33 1	
+            cell	BRCK	2 17 8 1	
+            cell	Brick & Mortar	12 17 13 1	
+            cell	0.00	27 17 8 1	
+          list item		2 18 33 1	
+            cell	CNDL	2 18 8 1	
+            cell	Candlewick Energy	12 18 13 1	
+            cell	0.00	27 18 8 1	
+          list item		2 19 33 1	
+            cell	DUNE	2 19 8 1	
+            cell	Dune Labs	12 19 13 1	
+            cell	0.00	27 19 8 1	
+          list item		2 20 33 1	
+            cell	EMBR	2 20 8 1	
+            cell	Ember Foods	12 20 13 1	
+            cell	0.00	27 20 8 1	
+          list item		2 21 33 1	
+            cell	FERN	2 21 8 1	
+            cell	Fernhill Health	12 21 13 1	
+            cell	0.00	27 21 8 1	
+          list item		2 22 33 1	
+            cell	GLYF	2 22 8 1	
+            cell	Glyph Systems	12 22 13 1	
+            cell	0.00	27 22 8 1	
+          list item		2 23 33 1	
+            cell	HRBR	2 23 8 1	
+            cell	Harbour Shipping	12 23 13 1	
+            cell	0.00	27 23 8 1	
+          list item		2 24 33 1	
+            cell	IRIS	2 24 8 1	
+            cell	Iris Optics	12 24 13 1	
+            cell	0.00	27 24 8 1	
+          list item		2 25 33 1	
+            cell	JUNO	2 25 8 1	
+            cell	Juno Mining	12 25 13 1	
+            cell	0.00	27 25 8 1	
+      divider	Between “Watchlist” and “Chart”	39 5 1 21	
+      pane	Chart	42 5 35 21	
+        text	Choose a stock on the watchlist to see its chart	42 5 35 1	muted
+      divider	Between “Chart” and “Tape”	79 5 1 21	
+      pane	Tape	82 5 36 21	
+        list		82 5 36 21	0 items
+  alert		2 27 116 1	
+  status		2 28 116 1	
+  toolbar		2 29 116 1	
+    button	Undo	2 29 13 1	unavailable (Nothing to undo)
+    button	Redo	17 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	38 29 15 1	

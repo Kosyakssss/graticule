@@ -1,0 +1,43 @@
+window		0 0 24 37	
+  page	Ticker	0 0 24 31	
+    text	A simulated exchange, 10:35:00 on its clock, 200,000 trades today	2 3 20 3	muted
+    split		2 7 20 23	
+      pane	Watchlist	2 7 20 6	
+        list		2 7 20 3	6 items
+          column heads		2 7 18 1	
+            column head	Symbol	2 7 8 1	
+          list item		2 8 18 1	
+            cell	ALDR	2 8 8 1	
+          list item		2 9 18 1	
+            cell	DUNE	2 9 8 1	
+        list		2 10 20 3	16 items
+          column heads		2 10 18 1	
+            column head	Symbol	2 10 8 1	
+          list item		2 11 18 1	
+            cell	ALDR	2 11 8 1	
+          list item		2 12 18 1	
+            cell	BRCK	2 12 8 1	
+      pane	Chart	2 13 20 14	
+        heading	GLYF — Glyph Systems	2 13 20 1	strong
+        chart		2 14 20 13	
+          group		2 14 20 12	
+            scale	210, 220, 230, 240, 250, 260	2 14 4 12	
+            canvas	GLYF — Glyph Systems	8 14 14 12	
+          group		2 26 20 1	
+            text		2 26 4 1	
+            scale	09:30, 09:35, 09:40, 09:45, 09:50, 09:55, 10:00, 10:05, 10:10, 10:15, 10:20, 10:25, 10:30, 10:35	8 26 14 1	
+      pane	Tape	2 27 20 3	
+        list		2 27 20 3	200000 items
+          column heads		2 27 18 1	
+            column head	Time	2 27 9 1	
+          list item		2 28 18 1	
+            cell	10:35:00	2 28 9 1	
+          list item		2 29 18 1	
+            cell	10:35:00	2 29 9 1	
+  alert		2 31 20 1	
+  status		2 32 20 1	
+  toolbar		2 33 20 4	
+    button	Stop watching	2 33 13 1	
+    button	Undo	2 34 13 1	unavailable (Nothing to undo)
+    button	Redo	2 35 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 36 15 1	

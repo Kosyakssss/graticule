@@ -1,0 +1,43 @@
+window		0 0 24 37	
+  page	Ticker	0 0 24 31	
+    text	A simulated exchange, 14:55:04 on its clock, 1,000,000 trades today	2 3 20 3	muted
+    split		2 7 20 23	
+      pane	Watchlist	2 7 20 6	
+        list		2 7 20 3	6 items
+          column heads		2 7 18 1	
+            column head	Symbol	2 7 8 1	
+          list item		2 8 18 1	
+            cell	ALDR	2 8 8 1	
+          list item		2 9 18 1	
+            cell	DUNE	2 9 8 1	
+        list		2 10 20 3	16 items
+          column heads		2 10 18 1	
+            column head	Symbol	2 10 8 1	
+          list item		2 11 18 1	
+            cell	ALDR	2 11 8 1	
+          list item		2 12 18 1	
+            cell	BRCK	2 12 8 1	
+      pane	Chart	2 13 20 14	
+        heading	MOSS — Moss Biotech	2 13 20 1	strong
+        chart		2 14 20 13	
+          group		2 14 20 12	
+            scale	130, 140, 150, 160, 170, 180	2 14 4 12	
+            canvas	MOSS — Moss Biotech	8 14 14 12	
+          group		2 26 20 1	
+            text		2 26 4 1	
+            scale	11:00, 11:05, 11:10, 11:15, 11:20, 11:25, 11:30, 11:35, 11:40, 11:45, 11:50, 11:55, 12:00, 12:05, 12:10, 12:15, 12:20, 12:25, 12:30, 12:35, 12:40, 12:45, 12:50, 12:55, 13:00, 13:05, 13:10, 13:15, 13:20, 13:25, 13:30, 13:35, 13:40, 13:45, 13:50, 13:55, 14:00, 14:05, 14:10, 14:15, 14:20, 14:25, 14:30, 14:35, 14:40, 14:45, 14:50, 14:55	8 26 14 1	
+      pane	Tape	2 27 20 3	
+        list		2 27 20 3	1000000 items
+          column heads		2 27 18 1	
+            column head	Time	2 27 9 1	
+          list item		2 28 18 1	
+            cell	14:55:04	2 28 9 1	
+          list item		2 29 18 1	
+            cell	14:55:04	2 29 9 1	
+  alert		2 31 20 1	
+  status		2 32 20 1	
+  toolbar		2 33 20 4	
+    button	Stop watching	2 33 13 1	
+    button	Undo	2 34 13 1	unavailable (Nothing to undo)
+    button	Redo	2 35 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 36 15 1	

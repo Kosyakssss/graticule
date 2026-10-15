@@ -42,6 +42,8 @@ With `c.camera(path)` the canvas looks through a `Camera` fact onto an endless p
 
 A canvas also says how big it was when last laid out: `c.size()` in points, and, with a camera, `c.showing()`, the part of the page in view. A map of a larger canvas looks through `c.look(camera)`, a camera the view works out rather than a fact, so the wheel leaves it alone, and `c.steers(path)` makes a press on it, or a drag let go on it, move the camera at `path` so that point is in the middle of its canvas. Plotter's map is built this way. `c.pans()` makes a drag on a canvas with a camera pan it: the canvas shows the camera moving while the drag is under way, and letting go makes it one change to the fact, "Pan", which undo takes back; a press that doesn't move still runs the canvas's drag command. Atlas is built this way.
 
+A camera set to `Camera::WHOLE` shows whatever `c.fits(area)` names, whole and centred, worked out from the canvas's size each time it is laid out, so a picture just opened fits any window; the first zoom or pan starts from that view and keeps a camera of its own. `c.fits` comes before `c.camera`. `c.looking()` gives the camera as the canvas shows it, `WHOLE` worked out and a pan under way included, for a paint hook that draws through the same camera. Words drawn with `.backed()` sit on a patch of the background, so they read over a picture. Lightbox is built this way.
+
 ## Keys
 
 A canvas with shapes to press is one tab stop. The arrows move between those shapes, in the order their presses were given, Home and End go to the first and last, and Return runs the command of the one reached, which is ringed.

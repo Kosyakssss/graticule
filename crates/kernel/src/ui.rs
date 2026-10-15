@@ -1325,9 +1325,10 @@ impl<'a, C, S> Ui<'a, C, S> {
         let r = self.tree.put(label.as_ref());
         let n = &mut self.tree.nodes[i as usize];
         (n.name, n.span) = (r, crate::tree::Fill);
-        let mut canvas = Canvas { ui: self, drawing: Drawing::new(), board: Board { node: i, paint: None, drawings: Vec::new(), presses: Vec::new(), camera: None, space: [0.0, 1.0, 0.0, 1.0] } };
+        let mut canvas =
+            Canvas { ui: self, drawing: Drawing::new(), board: Board { node: i, paint: None, drawings: Vec::new(), presses: Vec::new(), camera: None, space: [0.0, 1.0, 0.0, 1.0] }, whole: None };
         f(&mut canvas);
-        let Canvas { ui, drawing, mut board } = canvas;
+        let Canvas { ui, drawing, mut board, .. } = canvas;
         board.space = drawing.bounds_of_space();
         if !drawing.is_empty() {
             board.drawings.push(Arc::new(drawing));
@@ -1799,6 +1800,7 @@ pub struct Canvas<'u, 'a, C, S> {
     ui: &'u mut Ui<'a, C, S>,
     drawing: Drawing,
     board: Board,
+    whole: Option<[f64; 4]>,
 }
 
 impl<C, S> Canvas<'_, '_, C, S> {
@@ -1816,12 +1818,26 @@ impl<C, S> Canvas<'_, '_, C, S> {
     pub fn camera<F: Field>(&mut self, path: FactPath<F, crate::canvas::Camera>) {
         if let Some(camera) = self.ui.facts::<F>().and_then(|f| path.get(f)).copied() {
             let id = self.ui.tree.nodes[self.board.node as usize].id;
+            let camera = match (camera == crate::canvas::Camera::WHOLE, self.whole) {
+                (true, Some(area)) => crate::canvas::Camera::fitting(area, self.size().unwrap_or((area[1] - area[0], area[3] - area[2]))),
+                _ => camera,
+            };
             let camera = match self.ui.tree.panning {
                 Some((panned, (dx, dy))) if panned == id => camera.panned(dx, dy),
                 _ => camera,
             };
             self.board.camera = Some((Some(path.erased()), camera));
         }
+    }
+
+    /// The page a camera at [`Camera::WHOLE`](crate::canvas::Camera::WHOLE) shows whole and centred: left, right, top and bottom, in page units. Give it before the camera.
+    pub fn fits(&mut self, area: [f64; 4]) {
+        self.whole = Some(area);
+    }
+
+    /// The camera the canvas looks through as it is shown: its fact's, worked out for [`fits`](Self::fits) and moved by a drag that pans it, for a paint hook that draws through the same camera.
+    pub fn looking(&self) -> Option<crate::canvas::Camera> {
+        self.board.camera.map(|(_, camera)| camera)
     }
 
     /// Makes a drag on this canvas pan its camera, shown moving while the drag is under way and kept as one change to the camera when it is let go. A press that doesn't move still runs the canvas's drag command, if it has one.

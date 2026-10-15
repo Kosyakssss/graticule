@@ -89,6 +89,7 @@ struct Out {
 "#;
 
 pub struct Gpu {
+    id: u64,
     surface: Option<wgpu::Surface<'static>>,
     format: wgpu::TextureFormat,
     device: wgpu::Device,
@@ -266,7 +267,9 @@ impl Gpu {
         let instances = Self::instance_buffer(&device, capacity);
         let kept = std::array::from_fn(|_| (Self::instance_buffer(&device, capacity), capacity, 0));
 
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         Self {
+            id: NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             surface,
             format,
             device,
@@ -401,7 +404,16 @@ impl Gpu {
                 continue;
             }
             let view = self.target(h.id, h.width, h.height);
-            h.paint.paint(&crate::canvas::Target { device: &self.device, queue: &self.queue, view: &view, format: wgpu::TextureFormat::Rgba8Unorm, width: h.width, height: h.height, theme: h.theme });
+            h.paint.paint(&crate::canvas::Target {
+                gpu: self.id,
+                device: &self.device,
+                queue: &self.queue,
+                view: &view,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                width: h.width,
+                height: h.height,
+                theme: h.theme,
+            });
         }
         for r in std::mem::take(&mut self.pending) {
             if r.scale.width > 0 && r.scale.height > 0 {

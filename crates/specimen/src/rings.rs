@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::sync::Mutex;
 
 use kernel::wgpu;
 use kernel::{Paint, Target};
@@ -24,7 +24,7 @@ struct Inks { background: vec4<f32>, link: vec4<f32>, size: vec4<f32> };
 /// Rings painted by a shader of Specimen's own, in the theme's background and link inks: the paint hook's example.
 #[derive(Default)]
 pub struct Rings {
-    made: OnceLock<(wgpu::RenderPipeline, wgpu::BindGroupLayout)>,
+    made: Mutex<Option<(u64, wgpu::RenderPipeline, wgpu::BindGroupLayout)>>,
 }
 
 impl Paint for Rings {
@@ -33,36 +33,11 @@ impl Paint for Rings {
     }
 
     fn paint(&self, t: &Target) {
-        let (pipeline, layout) = self.made.get_or_init(|| {
-            let module = t.device.create_shader_module(wgpu::ShaderModuleDescriptor { label: None, source: wgpu::ShaderSource::Wgsl(SHADER.into()) });
-            let layout = t.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
-                    count: None,
-                }],
-            });
-            let pipeline_layout = t.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[Some(&layout)], immediate_size: 0 });
-            let pipeline = t.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState { module: &module, entry_point: Some("vs"), compilation_options: Default::default(), buffers: &[] },
-                fragment: Some(wgpu::FragmentState {
-                    module: &module,
-                    entry_point: Some("fs"),
-                    compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState { format: t.format, blend: None, write_mask: wgpu::ColorWrites::ALL })],
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
-            });
-            (pipeline, layout)
-        });
+        let mut made = self.made.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if made.as_ref().is_none_or(|m| m.0 != t.gpu) {
+            *made = Some(make(t));
+        }
+        let Some((_, pipeline, layout)) = made.as_ref() else { return };
         let inks: Vec<f32> = [t.theme.bg, t.theme.link, [t.width as f32, t.height as f32, 0.0, 0.0]].concat();
         let buffer = t.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -94,4 +69,35 @@ impl Paint for Rings {
         }
         t.queue.submit([encoder.finish()]);
     }
+}
+
+fn make(t: &Target) -> (u64, wgpu::RenderPipeline, wgpu::BindGroupLayout) {
+    let module = t.device.create_shader_module(wgpu::ShaderModuleDescriptor { label: None, source: wgpu::ShaderSource::Wgsl(SHADER.into()) });
+    let layout = t.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+            count: None,
+        }],
+    });
+    let pipeline_layout = t.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[Some(&layout)], immediate_size: 0 });
+    let pipeline = t.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState { module: &module, entry_point: Some("vs"), compilation_options: Default::default(), buffers: &[] },
+        fragment: Some(wgpu::FragmentState {
+            module: &module,
+            entry_point: Some("fs"),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::ColorTargetState { format: t.format, blend: None, write_mask: wgpu::ColorWrites::ALL })],
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+    (t.gpu, pipeline, layout)
 }

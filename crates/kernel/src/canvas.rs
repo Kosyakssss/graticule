@@ -31,6 +31,17 @@ impl Camera {
     /// The least and most a camera zooms.
     pub const ZOOMS: (f64, f64) = (0.05, 16.0);
 
+    /// A camera that shows what the canvas [`fits`](crate::ui::Canvas::fits) whole and centred, worked out from the canvas's size each time it is laid out, so a picture just opened fits whatever the window. The wheel, a pan or a zoom starts from that view and keeps a camera of its own. Its zoom is 0, so work out nothing from it but this.
+    pub const WHOLE: Camera = Camera { x: 0.0, y: 0.0, zoom: 0.0 };
+
+    /// The camera that shows `area`, left, right, top and bottom in page units, whole and centred on a canvas `size` points wide and tall.
+    pub fn fitting(area: [f64; 4], (width, height): (f64, f64)) -> Camera {
+        let (w, h) = ((area[1] - area[0]).max(1e-9), (area[3] - area[2]).max(1e-9));
+        let zoom = (width / w).min(height / h).clamp(Self::ZOOMS.0, Self::ZOOMS.1);
+        let (cx, cy) = ((area[0] + area[1]) / 2.0, (area[2] + area[3]) / 2.0);
+        Camera { x: cx - width / 2.0 / zoom, y: cy - height / 2.0 / zoom, zoom }
+    }
+
     /// The page point under a point of the canvas, in points from its top left.
     pub fn to_page(&self, (x, y): (f64, f64)) -> (f64, f64) {
         (self.x + x / self.zoom, self.y + y / self.zoom)
@@ -70,6 +81,7 @@ impl Field for Camera {
     fn from_value(value: &Value) -> Option<Self> {
         match value {
             Value::List(parts) => match parts.as_slice() {
+                [Value::Float(x), Value::Float(y), Value::Float(zoom)] if *zoom == 0.0 => Some(Camera { x: *x, y: *y, zoom: 0.0 }),
                 [Value::Float(x), Value::Float(y), Value::Float(zoom)] => Some(Camera { x: *x, y: *y, zoom: zoom.clamp(Self::ZOOMS.0, Self::ZOOMS.1) }),
                 _ => None,
             },
@@ -205,6 +217,7 @@ pub struct Label {
     text: Range<u32>,
     ink: Ink,
     clip: Option<[Point; 2]>,
+    backed: bool,
 }
 
 impl Label {
@@ -217,6 +230,12 @@ impl Label {
     /// Shows only the part of it inside the box from `from` to `to`, in the drawing's space.
     pub fn clip(&mut self, from: (f32, f32), to: (f32, f32)) -> &mut Self {
         self.clip = Some([from.into(), to.into()]);
+        self
+    }
+
+    /// Sets it on a patch of the background, so it reads over a picture or a busy drawing.
+    pub fn backed(&mut self) -> &mut Self {
+        self.backed = true;
         self
     }
 }
@@ -384,7 +403,7 @@ impl Drawing {
         self.stamp = OnceLock::new();
         let start = self.text.len() as u32;
         self.text.push_str(text);
-        self.labels.push(Label { at: at.into(), text: start..self.text.len() as u32, ink: Ink::Muted, clip: None });
+        self.labels.push(Label { at: at.into(), text: start..self.text.len() as u32, ink: Ink::Muted, clip: None, backed: false });
         let last = self.labels.len() - 1;
         &mut self.labels[last]
     }
@@ -423,7 +442,7 @@ impl Drawing {
                 }
             }
             for l in &self.labels {
-                (l.at.x.to_bits(), l.at.y.to_bits(), l.ink, &self.text[l.text.start as usize..l.text.end as usize], l.clip.map(|c| c.map(|p| (p.x.to_bits(), p.y.to_bits())))).hash(&mut h);
+                (l.at.x.to_bits(), l.at.y.to_bits(), l.ink, &self.text[l.text.start as usize..l.text.end as usize], l.clip.map(|c| c.map(|p| (p.x.to_bits(), p.y.to_bits()))), l.backed).hash(&mut h);
             }
             h.finish()
         })
@@ -441,9 +460,9 @@ impl Drawing {
         (across(x, x0, x1, scale.width), across(y, y0, y1, scale.height))
     }
 
-    /// Its words, each with where it starts in a box drawn at `scale`, its ink and the box it is clipped to, in pixels as left, top, right and bottom.
-    pub fn labels<'d>(&'d self, scale: &'d Scale) -> impl Iterator<Item = (&'d str, (f32, f32), Ink, Option<[f32; 4]>)> {
-        self.labels.iter().map(move |l| (&self.text[l.text.start as usize..l.text.end as usize], self.place((l.at.x, l.at.y), scale), l.ink, self.limit(l.clip, scale)))
+    /// Its words, each with where it starts in a box drawn at `scale`, its ink, the box it is clipped to, in pixels as left, top, right and bottom, and whether it sits on a patch of the background.
+    pub fn labels<'d>(&'d self, scale: &'d Scale) -> impl Iterator<Item = (&'d str, (f32, f32), Ink, Option<[f32; 4]>, bool)> {
+        self.labels.iter().map(move |l| (&self.text[l.text.start as usize..l.text.end as usize], self.place((l.at.x, l.at.y), scale), l.ink, self.limit(l.clip, scale), l.backed))
     }
 
     fn limit(&self, clip: Option<[Point; 2]>, scale: &Scale) -> Option<[f32; 4]> {
@@ -555,7 +574,7 @@ impl Raster {
         let mut scale = ScaleContext::new();
         let line = (size * 1.4).round();
         for d in &self.drawings {
-            for (words, (x, y), ink, clip) in d.labels(&self.scale) {
+            for (words, (x, y), ink, clip, backed) in d.labels(&self.scale) {
                 let limit = pixels(clip, (w, h));
                 let color = self.theme.get(ink);
                 let mut b = layouts.ranged_builder(&mut fonts.cx, words, 1.0, true);
@@ -565,6 +584,19 @@ impl Raster {
                 let mut layout = b.build(words);
                 layout.break_all_lines(None);
                 let top = y - line / 2.0;
+                if backed {
+                    let pad = (size * 0.3).round();
+                    let x0 = ((x - pad).max(0.0) as i32).max(limit[0]);
+                    let x1 = ((x + layout.full_width() + pad).ceil() as i32).min(limit[2]).min(w as i32);
+                    let y0 = (top.max(0.0) as i32).max(limit[1]);
+                    let y1 = ((top + line).ceil() as i32).min(limit[3]).min(h as i32);
+                    let bg = self.theme.bg;
+                    for row in y0..y1 {
+                        for col in x0..x1 {
+                            over(&mut out[(row as usize * w + col as usize) * 4..][..4], bg, bg[3]);
+                        }
+                    }
+                }
                 for item in layout.lines().flat_map(|l| l.items().collect::<Vec<_>>()) {
                     let PositionedLayoutItem::GlyphRun(run) = item else { continue };
                     let font = run.run().font();
@@ -713,6 +745,8 @@ pub trait Paint: Send + Sync {
 
 /// Where a [`Paint`] paints: the GPU, a texture the size of its box, and the theme to follow.
 pub struct Target<'a> {
+    /// A number that names the GPU device, different for each one made, so a hook can keep what it made on a device, a pipeline or an uploaded texture, and make it again for another.
+    pub gpu: u64,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub view: &'a wgpu::TextureView,

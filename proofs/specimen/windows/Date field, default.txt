@@ -1,37 +1,36 @@
 window		0 0 120 30	
   page	Date field	0 0 120 24	
-    list		2 3 116 20	18 items
+    list		2 3 116 20	19 items
       list item		2 3 114 1	
         text	A field for a day, typed as a date or in words.	2 3 33 1	
       list item		2 4 114 1	
-      list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
-      list item		2 6 114 1	
-        text	A day the person knows: a deadline, a birthday, the day an invoice is due. A date picker adds a calendar beside it for when where the day falls matters.	2 6 112 1	
+      list item		2 5 114 2	
+        group		2 5 114 2	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 2	
+            labelled	Due	18 5 98 2	
+              date field		18 6 12 1	holds “2026-06-03”
       list item		2 7 114 1	
       list item		2 8 114 1	
-        heading	Code	2 8 4 1	strong
+        heading	Use it for	2 8 7 1	strong
       list item		2 9 114 1	
-        text	ui.labelled("Due", |ui| ui.date_field(Catalog::due));	2 9 53 1	mono
-      list item		2 10 114 2	
-        group		2 10 114 2	
-          column		2 10 14 1	
-            text	Live	2 10 14 1	muted
-          column		18 10 98 2	
-            labelled	Due	18 10 98 2	
-              date field		18 11 12 1	holds “2026-06-03”
-      list item		2 12 114 5	
-        text	It accepts 2026-06-03, today, tomorrow, yesterday, a weekday (tue is the coming one, today included; next tue the first after today; last tue the last before it), +3 or -2, in 3 days, 2 weeks ago, next week, next month, and a month and a day in either order with an optional year (jun 3, 3rd june 2027). Like a number field, what is typed stays the field's own until Return or until another field is reached; then it is read and the day is set by one edit, or what doesn't read is said and stays to be fixed. It is always shown as 2026-06-03. Days are counted from today in the user's time zone. A day and a time together in one field (next tue 3pm) is not done.	2 12 114 5	
-      list item		2 17 114 1	
+        text	A day the person knows: a deadline, a birthday, the day an invoice is due. A date picker adds a calendar beside it for when where the day falls matters.	2 9 112 1	
+      list item		2 10 114 1	
+      list item		2 11 114 1	
+        heading	Code	2 11 4 1	strong
+      list item		2 12 114 1	
+        text	ui.labelled("Due", |ui| ui.date_field(Catalog::due));	2 12 53 1	mono
+      list item		2 13 114 5	
+        text	It accepts 2026-06-03, today, tomorrow, yesterday, a weekday (tue is the coming one, today included; next tue the first after today; last tue the last before it), +3 or -2, in 3 days, 2 weeks ago, next week, next month, and a month and a day in either order with an optional year (jun 3, 3rd june 2027). Like a number field, what is typed stays the field's own until Return or until another field is reached; then it is read and the day is set by one edit, or what doesn't read is said and stays to be fixed. It is always shown as 2026-06-03. Days are counted from today in the user's time zone. A day and a time together in one field (next tue 3pm) is not done.	2 13 114 5	
       list item		2 18 114 1	
-        heading	Keys	2 18 4 1	strong
       list item		2 19 114 1	
-        text	Up and Down step the day by one. Return reads what is typed; Escape puts back what was there.	2 19 72 1	
+        heading	Keys	2 19 4 1	strong
       list item		2 20 114 1	
+        text	Up and Down step the day by one. Return reads what is typed; Escape puts back what was there.	2 20 72 1	
       list item		2 21 114 1	
-        heading	Narrow windows	2 21 14 1	strong
       list item		2 22 114 1	
-        text	Twelve columns, enough for the date it shows.	2 22 35 1	
+        heading	Narrow windows	2 22 14 1	strong
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

@@ -83,7 +83,7 @@ struct Played {
     broke: Option<(Law, String)>,
     done: Vec<String>,
     ran: Vec<&'static str>,
-    seen: Vec<(&'static str, usize)>,
+    seen: Vec<(&'static str, usize, Option<u32>)>,
 }
 
 pub fn run<A: App>(starts: &[(String, A)], plan: Plan) -> Universal {
@@ -119,9 +119,9 @@ pub fn run<A: App>(starts: &[(String, A)], plan: Plan) -> Universal {
             .collect();
         let played = play(facts, &steps, &mut screen, Some((&mut measure, from)));
         ran.extend(played.ran);
-        for (name, at) in played.seen {
+        for (name, at, pick) in played.seen {
             if !seen.iter().any(|(n, ..)| *n == name) {
-                seen.push((name, start, steps[..at].to_vec()));
+                seen.push((name, start, steps[..at].iter().copied().chain(pick.map(Step::Click)).collect()));
             }
         }
         let Some((law, said)) = played.broke else { continue };
@@ -282,7 +282,10 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
                 format!("from {from}, after step {}: {}", n + 1, played.done[n])
                     + &format!(" (update {took} µs, view {}, layout {}, paint {})", runner.stages().view, runner.stages().layout, runner.stages().paint),
             ));
+            let mut acting = 0u32;
             for node in &runner.tree.nodes {
+                let pick = node.kind.acts().then_some(acting);
+                acting += u32::from(node.kind.acts());
                 if node.cmd == NONE {
                     continue;
                 }
@@ -290,8 +293,8 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
                 let asked = Instant::now();
                 let available = std::hint::black_box(runner.facts.available(cmd));
                 let ns = asked.elapsed().as_nanos().min(u32::MAX as u128) as u32;
-                if available.is_yes() && !played.seen.iter().any(|(name, _)| *name == cmd.name()) {
-                    played.seen.push((cmd.name(), n + 1));
+                if available.is_yes() && !played.seen.iter().any(|(name, ..)| *name == cmd.name()) {
+                    played.seen.push((cmd.name(), n + 1, pick));
                 }
                 measure.available.push((ns, format!("for “{}” from {from}", cmd.name())));
             }

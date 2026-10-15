@@ -3,6 +3,7 @@
 pub mod access;
 pub mod app;
 pub mod builtin;
+pub mod canvas;
 pub mod chars;
 pub mod color;
 pub mod command;
@@ -14,6 +15,7 @@ pub mod form;
 pub mod gpu;
 pub mod grid;
 pub mod hit;
+pub mod image;
 pub mod ink;
 pub mod kept;
 pub mod keys;
@@ -40,10 +42,12 @@ pub mod value;
 
 pub use accesskit;
 pub use app::{App, Cx, Effect, Failure, Jobs, Moment, Path, Reply, Said, States};
+pub use canvas::{Drawing, Paint, PaintHook, Target, Weight};
 pub use color::{Channel, Oklch};
 pub use command::{Arg, Argument, Available, Commands, Entry, Form, Subject, no_if, read_arg};
 pub use days::{Day, Time};
 pub use form::{Control, Setting, Settings};
+pub use image::Image;
 pub use ink::Ink;
 pub use live::{Derived, Feed, Live};
 pub use message::Message;
@@ -51,6 +55,7 @@ pub use picture::{Layer, Picture, icons};
 pub use tree::{Fill, Span, cols};
 pub use ui::{Bind, Ui};
 pub use value::{Dates, Integer};
+pub use wgpu;
 
 #[cfg(test)]
 mod laws;

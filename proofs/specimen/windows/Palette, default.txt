@@ -1,29 +1,30 @@
 window		0 0 120 30	
   page	Palette	0 0 120 24	
-    list		2 3 116 20	11 items
+    list		2 3 116 20	12 items
       list item		2 3 114 3	
         text	Every command, found by typing. It opens over the page with the palette command, lists every command the app has with its keys, narrows as you type, and runs the highlighted one with Return; one that can't run says why. With several items chosen, a command that takes many says how many ("Remove 4 items").	2 3 114 3	
       list item		2 6 114 1	
-        group		2 6 114 1	
-          column		2 6 14 1	
-            text	Live	2 6 14 1	muted
-          column		18 6 98 1	
-            text	Open it from the bar	18 6 98 1	muted
       list item		2 7 114 1	
+        group		2 7 114 1	
+          column		2 7 14 1	
+            text	Live	2 7 14 1	muted
+          column		18 7 98 1	
+            text	Open it from the bar	18 7 98 1	muted
       list item		2 8 114 1	
-        heading	Code	2 8 4 1	strong
       list item		2 9 114 1	
-        text	None: the kernel draws it for every app.	2 9 30 1	
+        heading	Code	2 9 4 1	strong
       list item		2 10 114 1	
+        text	None: the kernel draws it for every app.	2 10 30 1	
       list item		2 11 114 1	
-        heading	Keys	2 11 4 1	strong
       list item		2 12 114 1	
-        text	The palette command opens it, the arrows move the highlight, Return runs it, Escape closes it.	2 12 70 1	
+        heading	Keys	2 12 4 1	strong
       list item		2 13 114 1	
+        text	The palette command opens it, the arrows move the highlight, Return runs it, Escape closes it.	2 13 70 1	
       list item		2 14 114 1	
-        heading	Screen reader	2 14 11 1	strong
       list item		2 15 114 1	
-        text	A dialog with a text field and a list of options.	2 15 34 1	
+        heading	Screen reader	2 15 11 1	strong
+      list item		2 16 114 1	
+        text	A dialog with a text field and a list of options.	2 16 34 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

@@ -1,6 +1,6 @@
 window		0 0 40 22	
   page	Panel stack	0 0 40 7	
-    list		2 3 36 3	18 items
+    list		2 3 36 3	19 items
       list item		2 3 34 3	
         text	Drilling into something and back, in place: each level replaces the one before it, and the trail above says how to get back.	2 3 34 3	
   alert		2 7 36 1	

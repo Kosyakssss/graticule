@@ -1,41 +1,42 @@
 window		0 0 120 30	
   page	Scroll edges	0 0 120 24	
-    list		2 3 116 20	18 items
+    list		2 3 116 20	19 items
       list item		2 3 114 1	
         text	A rule at the top or bottom of a list that says there is more beyond it, above or below.	2 3 63 1	
       list item		2 4 114 1	
       list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
+        group		2 5 114 1	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 1	
+            text	This page's list shows them: scroll it, and a rule marks the edge with more beyond	18 5 98 1	muted
       list item		2 6 114 1	
-        text	Nothing: every list has them. A list with more rows above draws one at its top; one with more below draws one at its bottom.	2 6 93 1	
       list item		2 7 114 1	
+        heading	Use it for	2 7 7 1	strong
       list item		2 8 114 1	
-        heading	Code	2 8 4 1	strong
+        text	Nothing: every list has them. A list with more rows above draws one at its top; one with more below draws one at its bottom.	2 8 93 1	
       list item		2 9 114 1	
-        text	ui.list(&self.items, Notes::chosen, |ui, item| ui.text(&item.title));	2 9 69 1	mono
       list item		2 10 114 1	
-        group		2 10 114 1	
-          column		2 10 14 1	
-            text	Live	2 10 14 1	muted
-          column		18 10 98 1	
-            text	This page's list shows them: scroll it, and a rule marks the edge with more beyond	18 10 98 1	muted
+        heading	Code	2 10 4 1	strong
       list item		2 11 114 1	
-        text	There is nothing to write. The rules come with the list, alongside its scroll bar.	2 11 58 1	
+        text	ui.list(&self.items, Notes::chosen, |ui, item| ui.text(&item.title));	2 11 69 1	mono
       list item		2 12 114 1	
+        text	There is nothing to write. The rules come with the list, alongside its scroll bar.	2 12 58 1	
       list item		2 13 114 1	
-        heading	Keys	2 13 4 1	strong
       list item		2 14 114 1	
-        text	None of their own.	2 14 14 1	
+        heading	Keys	2 14 4 1	strong
       list item		2 15 114 1	
+        text	None of their own.	2 15 14 1	
       list item		2 16 114 1	
-        heading	Narrow windows	2 16 14 1	strong
       list item		2 17 114 1	
-        text	They span the list's width, beside the scroll bar.	2 17 36 1	
+        heading	Narrow windows	2 17 14 1	strong
       list item		2 18 114 1	
+        text	They span the list's width, beside the scroll bar.	2 18 36 1	
       list item		2 19 114 1	
-        heading	Screen reader	2 19 11 1	strong
       list item		2 20 114 1	
-        text	Nothing extra: a screen reader says how many rows a list has and which one is focused.	2 20 65 1	
+        heading	Screen reader	2 20 11 1	strong
+      list item		2 21 114 1	
+        text	Nothing extra: a screen reader says how many rows a list has and which one is focused.	2 21 65 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

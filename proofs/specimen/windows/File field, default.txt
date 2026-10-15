@@ -1,43 +1,42 @@
 window		0 0 120 30	
   page	File field	0 0 120 24	
-    list		2 3 116 20	18 items
+    list		2 3 116 20	19 items
       list item		2 3 114 1	
         text	A file's path, typed or pasted into a field, or chosen with the system's own file panel.	2 3 63 1	
       list item		2 4 114 1	
       list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
+        group		2 5 114 1	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 1	
+            group		18 5 98 1	
+              text field	Attachment	18 5 86 1	
+              button	Choose…	106 5 10 1	
       list item		2 6 114 1	
-        text	A setting or an argument that names one file: an attachment, a template, where something is read from.	2 6 78 1	
       list item		2 7 114 1	
+        heading	Use it for	2 7 7 1	strong
       list item		2 8 114 1	
-        heading	Code	2 8 4 1	strong
+        text	A setting or an argument that names one file: an attachment, a template, where something is read from.	2 8 78 1	
       list item		2 9 114 1	
-        text	ui.file_field("Attachment", Catalog::attachment);	2 9 49 1	mono
       list item		2 10 114 1	
-        group		2 10 114 1	
-          column		2 10 14 1	
-            text	Live	2 10 14 1	muted
-          column		18 10 98 1	
-            group		18 10 98 1	
-              text field	Attachment	18 10 86 1	
-              button	Choose…	106 10 10 1	
-      list item		2 11 114 3	
-        text	The fact is a Text holding the path. Typing edits it like any field. "Choose…" opens the system's file panel; the window stays live while it is open, and the chosen path is set by one edit and one undo step, named for the file ("Attachment: notes.md"). Closing the panel without choosing changes nothing. Only one file panel opens at a time.	2 11 114 3	
-      list item		2 14 114 1	
+        heading	Code	2 10 4 1	strong
+      list item		2 11 114 1	
+        text	ui.file_field("Attachment", Catalog::attachment);	2 11 49 1	mono
+      list item		2 12 114 3	
+        text	The fact is a Text holding the path. Typing edits it like any field. "Choose…" opens the system's file panel; the window stays live while it is open, and the chosen path is set by one edit and one undo step, named for the file ("Attachment: notes.md"). Closing the panel without choosing changes nothing. Only one file panel opens at a time.	2 12 114 3	
       list item		2 15 114 1	
-        heading	Keys	2 15 4 1	strong
       list item		2 16 114 1	
-        text	The field's own text editing; Tab reaches "Choose…", and Space or Return opens the panel.	2 16 68 1	
+        heading	Keys	2 16 4 1	strong
       list item		2 17 114 1	
+        text	The field's own text editing; Tab reaches "Choose…", and Space or Return opens the panel.	2 17 68 1	
       list item		2 18 114 1	
-        heading	Narrow windows	2 18 14 1	strong
       list item		2 19 114 1	
-        text	The field takes the room left beside the button and scrolls a long path inside it.	2 19 59 1	
+        heading	Narrow windows	2 19 14 1	strong
       list item		2 20 114 1	
+        text	The field takes the room left beside the button and scrolls a long path inside it.	2 20 59 1	
       list item		2 21 114 1	
-        heading	Screen reader	2 21 11 1	strong
       list item		2 22 114 1	
-        text	A text field named by the label, and a button named "Choose a file for" the label.	2 22 60 1	
+        heading	Screen reader	2 22 11 1	strong
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

@@ -1,41 +1,42 @@
 window		0 0 120 30	
   page	Editable text	0 0 120 24	
-    list		2 3 116 20	18 items
+    list		2 3 116 20	19 items
       list item		2 3 114 1	
         text	Text that reads as text, with a faint line under it to say it can be changed, and becomes a field when it is clicked or reached with Tab.	2 3 98 1	
       list item		2 4 114 1	
       list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
+        group		2 5 114 1	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 1	
+            editable text	Untitled	18 5 11 1	holds “Groceries”
       list item		2 6 114 1	
-        text	A name or a title shown where it is used, changed in place: the title of a document, the name of a list.	2 6 75 1	
       list item		2 7 114 1	
+        heading	Use it for	2 7 7 1	strong
       list item		2 8 114 1	
-        heading	Code	2 8 4 1	strong
+        text	A name or a title shown where it is used, changed in place: the title of a document, the name of a list.	2 8 75 1	
       list item		2 9 114 1	
-        text	ui.editable(Catalog::title, Message::from("Untitled"));	2 9 55 1	mono
       list item		2 10 114 1	
-        group		2 10 114 1	
-          column		2 10 14 1	
-            text	Live	2 10 14 1	muted
-          column		18 10 98 1	
-            editable text	Untitled	18 10 11 1	holds “Groceries”
+        heading	Code	2 10 4 1	strong
       list item		2 11 114 1	
-        text	It types into a Text in the facts, an edit a word at a time, like any field. Return finishes the edit and leaves it.	2 11 80 1	
+        text	ui.editable(Catalog::title, Message::from("Untitled"));	2 11 55 1	mono
       list item		2 12 114 1	
+        text	It types into a Text in the facts, an edit a word at a time, like any field. Return finishes the edit and leaves it.	2 12 80 1	
       list item		2 13 114 1	
-        heading	Keys	2 13 4 1	strong
       list item		2 14 114 1	
-        text	Tab reaches it; then it is a field, with the platform's own text editing. Return or Escape leaves it.	2 14 71 1	
+        heading	Keys	2 14 4 1	strong
       list item		2 15 114 1	
+        text	Tab reaches it; then it is a field, with the platform's own text editing. Return or Escape leaves it.	2 15 71 1	
       list item		2 16 114 1	
-        heading	Narrow windows	2 16 14 1	strong
       list item		2 17 114 1	
-        text	It is as wide as its text, down to eight columns; longer text scrolls inside it while it is being edited.	2 17 73 1	
+        heading	Narrow windows	2 17 14 1	strong
       list item		2 18 114 1	
+        text	It is as wide as its text, down to eight columns; longer text scrolls inside it while it is being edited.	2 18 73 1	
       list item		2 19 114 1	
-        heading	Screen reader	2 19 11 1	strong
       list item		2 20 114 1	
-        text	Says "text field" and the text, since that is what it is to someone not looking.	2 20 57 1	
+        heading	Screen reader	2 20 11 1	strong
+      list item		2 21 114 1	
+        text	Says "text field" and the text, since that is what it is to someone not looking.	2 21 57 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

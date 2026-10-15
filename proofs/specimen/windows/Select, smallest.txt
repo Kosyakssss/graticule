@@ -1,6 +1,6 @@
 window		0 0 42 22	
   page	Select	0 0 42 7	
-    list		2 3 38 3	18 items
+    list		2 3 38 3	19 items
       list item		2 3 36 3	
         text	One of several named options, as a button that shows the chosen one and opens the options in place under it. Nothing floats: the options push what is below them down while they are open.	2 3 36 3	
   alert		2 7 38 1	

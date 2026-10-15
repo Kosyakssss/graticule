@@ -1,6 +1,6 @@
 window		0 0 52 17	
   page	Form	0 0 52 7	
-    list		2 3 48 3	18 items
+    list		2 3 48 3	19 items
       list item		2 3 46 2	
         text	Settings drawn from a struct of facts: one control for each labelled field, chosen by its type.	2 3 46 2	
       list item		2 5 46 1	

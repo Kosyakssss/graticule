@@ -177,6 +177,8 @@ pub enum Kind {
     Day { on: bool, today: bool, outside: bool },
     Turn { forward: bool },
     ColorArea { l: u16, c: u16, h: u16 },
+    Canvas { rows: i32, pressable: bool },
+    Image { rows: i32, width: u32, height: u32 },
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -220,6 +222,7 @@ impl Kind {
                 | Kind::Day { .. }
                 | Kind::Turn { .. }
                 | Kind::ColorArea { .. }
+                | Kind::Canvas { pressable: true, .. }
         )
     }
 
@@ -269,6 +272,8 @@ impl Kind {
             Kind::Turn { .. } => "button",
             Kind::Field { holds: Holds::Color } => "color field",
             Kind::ColorArea { .. } => "color area",
+            Kind::Canvas { .. } => "canvas",
+            Kind::Image { .. } => "image",
             Kind::Field { holds: Holds::Tags } => "tag field",
             Kind::Field { holds: Holds::Code { .. } } => "code field",
             Kind::Field { .. } => "text field",
@@ -471,6 +476,21 @@ pub struct Tree<C> {
     pub months: HashMap<Id, i32>,
     /// The sliders that set a part of a color, each drawn with the colors it sets.
     pub shades: Vec<(u32, crate::color::Oklch, crate::color::Channel)>,
+    /// The canvases, each with what it draws and the shapes that run a command when pressed.
+    pub canvases: Vec<Board>,
+    /// The shape the keyboard has reached in a canvas, by the canvas's id and the shape's key.
+    pub aim: Option<(Id, u64)>,
+    /// The raster images, each with the node that shows it.
+    pub images: Vec<(u32, crate::image::Image)>,
+}
+
+/// What a canvas node draws: what it paints with its own GPU commands, its drawings in order over that, and the keys of its shapes that run a command when pressed, each with the command.
+#[derive(Clone)]
+pub struct Board {
+    pub node: u32,
+    pub paint: Option<std::sync::Arc<dyn crate::canvas::Paint>>,
+    pub drawings: Vec<std::sync::Arc<crate::canvas::Drawing>>,
+    pub presses: Vec<(u64, u32)>,
 }
 
 impl<C> Default for Tree<C> {
@@ -493,6 +513,9 @@ impl<C> Default for Tree<C> {
             focus: None,
             months: HashMap::new(),
             shades: Vec::new(),
+            canvases: Vec::new(),
+            aim: None,
+            images: Vec::new(),
         }
     }
 }
@@ -508,6 +531,8 @@ impl<C> Tree<C> {
         self.moves.clear();
         self.numbers.clear();
         self.shades.clear();
+        self.canvases.clear();
+        self.images.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;
@@ -626,6 +651,20 @@ impl<C> Tree<C> {
         self.text[n.reason.start as usize..n.reason.end as usize].hash(&mut h);
         self.text[n.text.start as usize..n.text.end as usize].hash(&mut h);
         self.text[n.name.start as usize..n.name.end as usize].hash(&mut h);
+        if let Some(&(_, color, channel)) = self.shades.iter().find(|s| s.0 == i as u32) {
+            (color, channel).hash(&mut h);
+        }
+        if let Some(b) = self.canvases.iter().find(|b| b.node == i as u32) {
+            for d in &b.drawings {
+                d.stamp().hash(&mut h);
+            }
+            b.presses.hash(&mut h);
+            b.paint.as_ref().map(|p| p.stamp()).hash(&mut h);
+            self.aim.filter(|a| a.0 == n.id).hash(&mut h);
+        }
+        if let Some((_, image)) = self.images.iter().find(|m| m.0 == i as u32) {
+            image.hash(&mut h);
+        }
         let hash = h.finish();
         self.nodes[i].hash = hash;
     }

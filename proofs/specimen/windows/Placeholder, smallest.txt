@@ -1,6 +1,6 @@
 window		0 0 24 26	
   page	Placeholder	0 0 24 7	
-    list		2 3 20 3	11 items
+    list		2 3 20 3	12 items
       list item		2 3 18 3	
         text	Rows kept for content that hasn't arrived yet, drawn as faint lines of different lengths. When the content comes, it takes the same rows, so nothing on the page jumps.	2 3 18 3	
   alert		2 7 20 1	

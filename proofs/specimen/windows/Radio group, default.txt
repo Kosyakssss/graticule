@@ -1,40 +1,40 @@
 window		0 0 120 30	
   page	Radio group	0 0 120 24	
-    list		2 3 116 20	18 items
+    list		2 3 116 20	19 items
       list item		2 3 114 1	
         text	One of a few named options, as radio buttons one under another under a heading. Every option is visible, and choosing one is a single click.	2 3 104 1	
       list item		2 4 114 1	
-      list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
-      list item		2 6 114 1	
-        text	Choosing one of a handful of options where each deserves its own line, or where there are too many for segments.	2 6 85 1	
-      list item		2 7 114 1	
-      list item		2 8 114 1	
-        heading	Code	2 8 4 1	strong
+      list item		2 5 114 4	
+        group		2 5 114 4	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 4	
+            fieldset	Show as	18 5 98 4	
+              radio button	List	18 6 98 1	
+              radio button	Grid	18 7 98 1	
+              radio button	Board	18 8 98 1	
       list item		2 9 114 1	
-        text	ui.radio("Show as", Catalog::shape);	2 9 36 1	mono
-      list item		2 10 114 4	
-        group		2 10 114 4	
-          column		2 10 14 1	
-            text	Live	2 10 14 1	muted
-          column		18 10 98 4	
-            fieldset	Show as	18 10 98 4	
-              radio button	List	18 11 98 1	
-              radio button	Grid	18 12 98 1	
-              radio button	Board	18 13 98 1	
-      list item		2 14 114 2	
-        text	The fact is an enum with derive(Choice), whose options are labelled by #[label("…")] or by their names in words. Choosing one is an edit of it and one undo step.	2 14 114 2	
-      list item		2 16 114 1	
+      list item		2 10 114 1	
+        heading	Use it for	2 10 7 1	strong
+      list item		2 11 114 1	
+        text	Choosing one of a handful of options where each deserves its own line, or where there are too many for segments.	2 11 85 1	
+      list item		2 12 114 1	
+      list item		2 13 114 1	
+        heading	Code	2 13 4 1	strong
+      list item		2 14 114 1	
+        text	ui.radio("Show as", Catalog::shape);	2 14 36 1	mono
+      list item		2 15 114 2	
+        text	The fact is an enum with derive(Choice), whose options are labelled by #[label("…")] or by their names in words. Choosing one is an edit of it and one undo step.	2 15 114 2	
       list item		2 17 114 1	
-        heading	Keys	2 17 4 1	strong
       list item		2 18 114 1	
-        text	Tab reaches each option; Space or Return chooses it.	2 18 40 1	
+        heading	Keys	2 18 4 1	strong
       list item		2 19 114 1	
+        text	Tab reaches each option; Space or Return chooses it.	2 19 40 1	
       list item		2 20 114 1	
-        heading	Narrow windows	2 20 14 1	strong
       list item		2 21 114 1	
-        text	Each label wraps beside its button.	2 21 27 1	
+        heading	Narrow windows	2 21 14 1	strong
       list item		2 22 114 1	
+        text	Each label wraps beside its button.	2 22 27 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

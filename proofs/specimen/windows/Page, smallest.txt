@@ -1,6 +1,6 @@
 window		0 0 30 23	
   page	Page	0 0 30 7	
-    list		2 3 26 3	14 items
+    list		2 3 26 3	15 items
       list item		2 3 24 3	
         text	The app's area inside the window: its title at the top, then its components from top to bottom, one blank row between them. The kernel draws the window's own lines (message line, status line, action bar) below it.	2 3 24 3	
   alert		2 7 26 1	

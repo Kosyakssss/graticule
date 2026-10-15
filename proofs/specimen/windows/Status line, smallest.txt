@@ -1,6 +1,6 @@
 window		0 0 30 23	
   page	Status line	0 0 30 7	
-    list		2 3 26 3	8 items
+    list		2 3 26 3	9 items
       list item		2 3 24 3	
         text	The line above the bar. It says what the thing under the pointer, or the focused thing, does, and when it can't, why. Work running in the background shows here first, with its progress ("“Clear finished”: 10000 of 33333").	2 3 24 3	
   alert		2 7 26 1	

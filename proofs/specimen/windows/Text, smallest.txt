@@ -1,6 +1,6 @@
 window		0 0 43 21	
   page	Text	0 0 43 7	
-    list		2 3 39 3	22 items
+    list		2 3 39 3	23 items
       list item		2 3 37 3	
         text	Words on the page, wrapped at the width they are given. Three tones: plain text in the proportional face; mono, the monospace face, for data such as numbers, codes and paths; and muted, for text that says less than the text around it.	2 3 37 3	
   alert		2 7 39 1	

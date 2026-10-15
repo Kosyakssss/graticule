@@ -298,10 +298,22 @@ impl<F: Face> Running<F> {
             stages.paint = micros(started);
         }
         let painted = Instant::now();
-        let (uploads, kept, quads) = (&mut self.text.uploads, self.face.kept(), &self.quads);
+        let (text, kept, quads) = (&mut self.text, self.face.kept(), &self.quads);
         self.gpu.stage(|gpu| {
-            for u in uploads.drain(..) {
+            for u in text.uploads.drain(..) {
                 gpu.upload(u.x, u.y, u.w, u.h, &u.data);
+            }
+            for id in text.released.drain(..) {
+                gpu.remove_image(id);
+            }
+            for r in text.rasters.drain(..) {
+                gpu.raster(r);
+            }
+            for image in text.images.drain(..) {
+                gpu.picture(image);
+            }
+            for h in text.hooks.drain(..) {
+                gpu.hook(h);
             }
             match kept {
                 Some(kept) => {

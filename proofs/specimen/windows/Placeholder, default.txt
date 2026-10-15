@@ -1,29 +1,30 @@
 window		0 0 120 30	
   page	Placeholder	0 0 120 24	
-    list		2 3 116 20	11 items
+    list		2 3 116 20	12 items
       list item		2 3 114 2	
         text	Rows kept for content that hasn't arrived yet, drawn as faint lines of different lengths. When the content comes, it takes the same rows, so nothing on the page jumps.	2 3 114 2	
       list item		2 5 114 1	
-      list item		2 6 114 1	
-        heading	Use it for	2 6 7 1	strong
-      list item		2 7 114 2	
-        text	What a page shows in the moment before data that arrives late, such as an article fetched from the network. Show it only for as long as nothing is there: once the data comes, the placeholder is gone, and while it is missing the status line says what is being fetched.	2 7 114 2	
+      list item		2 6 114 3	
+        group		2 6 114 3	
+          column		2 6 14 1	
+            text	Live	2 6 14 1	muted
+          column		18 6 98 3	
+            placeholder		18 6 98 3	
       list item		2 9 114 1	
       list item		2 10 114 1	
-        heading	Code	2 10 4 1	strong
-      list item		2 11 114 1	
-        text	ui.placeholder(3);	2 11 18 1	mono
-      list item		2 12 114 3	
-        group		2 12 114 3	
-          column		2 12 14 1	
-            text	Live	2 12 14 1	muted
-          column		18 12 98 3	
-            placeholder		18 12 98 3	
+        heading	Use it for	2 10 7 1	strong
+      list item		2 11 114 2	
+        text	What a page shows in the moment before data that arrives late, such as an article fetched from the network. Show it only for as long as nothing is there: once the data comes, the placeholder is gone, and while it is missing the status line says what is being fetched.	2 11 114 2	
+      list item		2 13 114 1	
+      list item		2 14 114 1	
+        heading	Code	2 14 4 1	strong
       list item		2 15 114 1	
+        text	ui.placeholder(3);	2 15 18 1	mono
       list item		2 16 114 1	
-        heading	Screen reader	2 16 11 1	strong
       list item		2 17 114 1	
-        text	"Loading".	2 17 8 1	
+        heading	Screen reader	2 17 11 1	strong
+      list item		2 18 114 1	
+        text	"Loading".	2 18 8 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

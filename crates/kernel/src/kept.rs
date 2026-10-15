@@ -5,7 +5,7 @@ use crate::components::{self, Layer, Look};
 use crate::gpu::Quad;
 use crate::grid::Area;
 use crate::paint::Painter;
-use crate::tree::{Id, Tree};
+use crate::tree::{Id, Kind, Tree};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Slot {
@@ -22,6 +22,7 @@ struct Entry {
     hash: u64,
     look: Look,
     frame: u64,
+    canvas: bool,
 }
 
 /// One layer's quads, kept between frames. Each node owns a range; a node that changed rewrites only its range, and the GPU gets only the bytes that changed.
@@ -161,12 +162,16 @@ impl Kept {
                 slots[k] = self.layers[base + k].write(old[k], &out);
                 self.scratch[k] = out;
             }
-            self.entries.insert(n.id, Entry { slots, base, area: n.area, hash: n.hash, look: l, frame });
+            self.entries.insert(n.id, Entry { slots, base, area: n.area, hash: n.hash, look: l, frame, canvas: matches!(n.kind, Kind::Canvas { .. }) });
         }
         let layers = &mut self.layers;
-        self.entries.retain(|_, e| {
+        self.entries.retain(|id, e| {
             if e.frame == frame {
                 return true;
+            }
+            if e.canvas {
+                p.text.release(components::texture(*id));
+                p.text.release(components::hook_texture(*id));
             }
             for (k, slot) in e.slots.into_iter().enumerate() {
                 layers[e.base + k].release(slot);

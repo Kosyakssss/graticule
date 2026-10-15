@@ -1,6 +1,6 @@
 window		0 0 114 13	
   page	Tag	0 0 114 7	
-    list		2 3 110 3	19 items
+    list		2 3 110 3	20 items
       list item		2 3 108 2	
         text	A short word that sorts something into a group, such as design or urgent, in a thin box. Unlike a typed value, a tag's word is the user's own. Like a typed value, it says what something is, never what to do, so clicking it does nothing; tags you can remove are the tag field's, in wave 2.	2 3 108 2	
       list item		2 5 108 1	

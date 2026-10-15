@@ -1,6 +1,6 @@
 window		0 0 41 22	
   page	Button	0 0 41 7	
-    list		2 3 37 3	22 items
+    list		2 3 37 3	23 items
       list item		2 3 35 3	
         text	A button for a command. Its label comes from the command's label, so a button always says what it will do, in the same words as the bar, the palette and the menus. When the command can't run right now, the button is drawn faint and the status line says why.	2 3 35 3	
   alert		2 7 37 1	

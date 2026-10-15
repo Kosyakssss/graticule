@@ -1,6 +1,6 @@
 window		0 0 38 22	
   page	Slider	0 0 38 7	
-    list		2 3 34 3	18 items
+    list		2 3 34 3	19 items
       list item		2 3 32 2	
         text	A whole number within a range, as a handle on a track with the number after it.	2 3 32 2	
       list item		2 5 32 1	

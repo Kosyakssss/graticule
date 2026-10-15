@@ -2,7 +2,7 @@ use graticule_macros::{Choice, Commands, Facts, Form};
 use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
-use kernel::{App, Available, Channel, Cx, Day, Failure, Ink, Message, Oklch, Path, States, Time, Ui};
+use kernel::{App, Available, Channel, Cx, Day, Failure, Image, Ink, Message, Oklch, PaintHook, Path, States, Time, Ui};
 use ledger::{Edit, Key, List, Outcome, Selection, Text};
 
 use crate::style::{self, Mark, Mix, Nudge, Reach, Reaches, Side, Weight};
@@ -190,6 +190,10 @@ pub struct Catalog {
     zone: Text,
     #[session]
     accent: Oklch,
+    #[resource]
+    hills: Image,
+    #[resource]
+    rings: PaintHook,
 }
 
 const CITIES: [&str; 12] = ["Amsterdam", "Athens", "Berlin", "Lisbon", "London", "Madrid", "Oslo", "Paris", "Prague", "Rome", "Vienna", "Warsaw"];
@@ -334,10 +338,13 @@ pub enum Component {
     ColorField,
     ColorArea,
     ColorPicker,
+    Canvas,
+    Image,
+    PaintHook,
 }
 
 impl Component {
-    const ALL: [Component; 68] = [
+    const ALL: [Component; 71] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -406,6 +413,9 @@ impl Component {
         Component::ColorField,
         Component::ColorArea,
         Component::ColorPicker,
+        Component::Canvas,
+        Component::Image,
+        Component::PaintHook,
     ];
 
     fn name(self) -> &'static str {
@@ -478,6 +488,9 @@ impl Component {
             Component::ColorField => "Color field",
             Component::ColorArea => "Color area and slider",
             Component::ColorPicker => "Color picker",
+            Component::Canvas => "Canvas",
+            Component::Image => "Image",
+            Component::PaintHook => "Paint hook",
         }
     }
 
@@ -551,6 +564,9 @@ impl Component {
             Component::ColorField => include_str!("../../../docs/components/color-field.md"),
             Component::ColorArea => include_str!("../../../docs/components/color-area.md"),
             Component::ColorPicker => include_str!("../../../docs/components/color-picker.md"),
+            Component::Canvas => include_str!("../../../docs/components/canvas.md"),
+            Component::Image => include_str!("../../../docs/components/image.md"),
+            Component::PaintHook => include_str!("../../../docs/components/paint-hook.md"),
         }
     }
 
@@ -675,6 +691,8 @@ impl Default for Catalog {
             opens: Time::new(9, 0).unwrap_or_default(),
             zone: Text::from("Europe/Lisbon"),
             accent: Oklch::new(0.63, 0.19, 290.0),
+            hills: hills(),
+            rings: PaintHook::new(crate::rings::Rings::default()),
         }
     }
 }
@@ -1119,6 +1137,28 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::PaintHook => ui.canvas("Rings painted by a shader", 8, |c| {
+                c.paint(&self.rings);
+                c.text((0.02, 0.15), "painted on the GPU");
+            }),
+            Component::Image => ui.image("Green hills under an evening sky", &self.hills, 6),
+            Component::Canvas => ui.canvas("Visits this week", 8, |c| {
+                const LATEST: u64 = 100;
+                let visits = [32.0, 45.0, 41.0, 60.0, 72.0, 58.0, 80.0];
+                let points: Vec<(f32, f32)> = visits.iter().enumerate().map(|(k, v)| (k as f32 + 0.5, *v)).collect();
+                c.space(0.0..7.0, 100.0..0.0);
+                for x in 1..7 {
+                    c.line((x as f32, 0.0), (x as f32, 84.0)).ink(Ink::Rule).stroke(kernel::Weight::Hair);
+                }
+                c.polygon([(0.5, 0.0)].into_iter().chain(points.iter().copied()).chain([(6.5, 0.0)])).ink(Ink::Selection);
+                c.polyline(points.iter().copied()).ink(Ink::Link).stroke(kernel::Weight::Bold);
+                for &p in &points[..6] {
+                    c.dot(p).ink(Ink::Link);
+                }
+                c.dot(points[6]).ink(Ink::Ok).key(LATEST);
+                c.press(LATEST, Cmd::Say);
+                c.text((0.2, 92.0), "80 visits on Sunday");
+            }),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);
@@ -1154,6 +1194,31 @@ fn awkward<S: Copy + 'static>(ui: &mut Ui<Cmd, S>, component: Component, sample:
 }
 
 /// A component's page: its documentation, line by line, with the live example after the code and, for components that show text, the awkward samples at the end.
+/// A picture of hills under an evening sky, made from numbers so the repository holds no photograph.
+fn hills() -> Image {
+    let (w, h) = (480u32, 270u32);
+    let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            let (u, v) = (x as f32 / w as f32, y as f32 / h as f32);
+            let near = 0.78 + 0.06 * (u * 9.0).sin() + 0.03 * (u * 23.0 + 1.0).sin();
+            let far = 0.6 + 0.08 * (u * 5.0 + 2.0).sin();
+            let sun = (((u - 0.7) * 16.0 / 9.0).powi(2) + (v - 0.42).powi(2)).sqrt();
+            let color = if v > near {
+                kernel::ink::oklch(0.55 - (v - near) * 0.5, 0.12, 140.0)
+            } else if v > far {
+                kernel::ink::oklch(0.45 + (v - far) * 0.3, 0.08, 160.0)
+            } else if sun < 0.06 {
+                kernel::ink::oklch(0.95, 0.08, 90.0)
+            } else {
+                kernel::ink::oklch(0.55 + v * 0.35, 0.1 + v * 0.05, 30.0 + v * 50.0)
+            };
+            rgba.extend(color.map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8));
+        }
+    }
+    Image::from_rgba(w, h, rgba).unwrap_or_default()
+}
+
 fn blocks(component: Component) -> List<Block> {
     let mut pieces: Vec<(Piece, String)> = Vec::new();
     let mut code: Option<Vec<&str>> = None;
@@ -1168,9 +1233,6 @@ fn blocks(component: Component) -> List<Block> {
         if let Some(lines) = &mut code {
             if line.starts_with("```") {
                 pieces.push((Piece::Code, lines.join("\n")));
-                if !pieces.iter().any(|(p, _)| *p == Piece::Live) {
-                    pieces.push((Piece::Live, String::new()));
-                }
                 code = None;
             } else {
                 lines.push(line);
@@ -1192,9 +1254,8 @@ fn blocks(component: Component) -> List<Block> {
         }
     }
     flush(&mut pieces, &mut paragraph);
-    if !pieces.iter().any(|(p, _)| *p == Piece::Live) {
-        pieces.insert(pieces.len().min(1), (Piece::Live, String::new()));
-    }
+    let after = pieces.len().min(1);
+    pieces.splice(after..after, [(Piece::Paragraph, String::new()), (Piece::Live, String::new())]);
     if component == Component::Picture {
         pieces.push((Piece::Paragraph, String::new()));
         pieces.push((Piece::Heading, "The built-in icons".to_string()));

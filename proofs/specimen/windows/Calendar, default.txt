@@ -1,78 +1,77 @@
 window		0 0 120 30	
   page	Calendar	0 0 120 24	
-    list		2 3 116 20	18 items
+    list		2 3 116 20	19 items
       list item		2 3 114 2	
         text	A month of days, a week to a row from Monday, with the chosen day filled and today underlined. Days of the months on either side fill the first and last weeks, in the faint ink.	2 3 114 2	
       list item		2 5 114 1	
-      list item		2 6 114 1	
-        heading	Use it for	2 6 7 1	strong
-      list item		2 7 114 2	
-        text	Choosing a day when where it falls in the week matters: a due date, a booking, a day to look at. When the person knows the date, a date field is quicker; a date picker offers both.	2 7 114 2	
-      list item		2 9 114 1	
-      list item		2 10 114 1	
-        heading	Code	2 10 4 1	strong
-      list item		2 11 114 1	
-        text	ui.calendar("Due", Catalog::due);	2 11 33 1	mono
-      list item		2 12 114 8	
-        group		2 12 114 8	
-          column		2 12 14 1	
-            text	Live	2 12 14 1	muted
-          column		18 12 98 8	
-            calendar	Due	18 12 27 8	
-              heading	June 2026	18 12 19 1	strong
-              button	Previous month	38 12 3 1	
-              button	Next month	42 12 3 1	
-              text	Mo	18 13 3 1	mono, muted
-              text	Tu	22 13 3 1	mono, muted
-              text	We	26 13 3 1	mono, muted
-              text	Th	30 13 3 1	mono, muted
-              text	Fr	34 13 3 1	mono, muted
-              text	Sa	38 13 3 1	mono, muted
-              text	Su	42 13 3 1	mono, muted
-              day	1	18 14 3 1	
-              day	2	22 14 3 1	
-              day	3	26 14 3 1	
-              day	4	30 14 3 1	
-              day	5	34 14 3 1	
-              day	6	38 14 3 1	
-              day	7	42 14 3 1	
-              day	8	18 15 3 1	
-              day	9	22 15 3 1	
-              day	10	26 15 3 1	
-              day	11	30 15 3 1	
-              day	12	34 15 3 1	
-              day	13	38 15 3 1	
-              day	14	42 15 3 1	
-              day	15	18 16 3 1	
-              day	16	22 16 3 1	
-              day	17	26 16 3 1	
-              day	18	30 16 3 1	
-              day	19	34 16 3 1	
-              day	20	38 16 3 1	
-              day	21	42 16 3 1	
-              day	22	18 17 3 1	
-              day	23	22 17 3 1	
-              day	24	26 17 3 1	
-              day	25	30 17 3 1	
-              day	26	34 17 3 1	
-              day	27	38 17 3 1	
-              day	28	42 17 3 1	
-              day	29	18 18 3 1	
-              day	30	22 18 3 1	
-              day	1	26 18 3 1	
-              day	2	30 18 3 1	
-              day	3	34 18 3 1	
-              day	4	38 18 3 1	
-              day	5	42 18 3 1	
-              day	6	18 19 3 1	
-              day	7	22 19 3 1	
-              day	8	26 19 3 1	
-              day	9	30 19 3 1	
-              day	10	34 19 3 1	
-              day	11	38 19 3 1	
-              day	12	42 19 3 1	
-      list item		2 20 114 3	
-        text	The fact is a Day, a day with no time and no zone. Taking a day sets it by one edit named after the label, "Due: 2026-06-03". Which month shows is the calendar's own: the month of the chosen day until it is turned, by its buttons or by moving past the month's edge. Turning it is no edit, and taking a day brings it back to following the chosen one. Today is the day in the user's time zone.	2 20 114 3	
+      list item		2 6 114 8	
+        group		2 6 114 8	
+          column		2 6 14 1	
+            text	Live	2 6 14 1	muted
+          column		18 6 98 8	
+            calendar	Due	18 6 27 8	
+              heading	June 2026	18 6 19 1	strong
+              button	Previous month	38 6 3 1	
+              button	Next month	42 6 3 1	
+              text	Mo	18 7 3 1	mono, muted
+              text	Tu	22 7 3 1	mono, muted
+              text	We	26 7 3 1	mono, muted
+              text	Th	30 7 3 1	mono, muted
+              text	Fr	34 7 3 1	mono, muted
+              text	Sa	38 7 3 1	mono, muted
+              text	Su	42 7 3 1	mono, muted
+              day	1	18 8 3 1	
+              day	2	22 8 3 1	
+              day	3	26 8 3 1	
+              day	4	30 8 3 1	
+              day	5	34 8 3 1	
+              day	6	38 8 3 1	
+              day	7	42 8 3 1	
+              day	8	18 9 3 1	
+              day	9	22 9 3 1	
+              day	10	26 9 3 1	
+              day	11	30 9 3 1	
+              day	12	34 9 3 1	
+              day	13	38 9 3 1	
+              day	14	42 9 3 1	
+              day	15	18 10 3 1	
+              day	16	22 10 3 1	
+              day	17	26 10 3 1	
+              day	18	30 10 3 1	
+              day	19	34 10 3 1	
+              day	20	38 10 3 1	
+              day	21	42 10 3 1	
+              day	22	18 11 3 1	
+              day	23	22 11 3 1	
+              day	24	26 11 3 1	
+              day	25	30 11 3 1	
+              day	26	34 11 3 1	
+              day	27	38 11 3 1	
+              day	28	42 11 3 1	
+              day	29	18 12 3 1	
+              day	30	22 12 3 1	
+              day	1	26 12 3 1	
+              day	2	30 12 3 1	
+              day	3	34 12 3 1	
+              day	4	38 12 3 1	
+              day	5	42 12 3 1	
+              day	6	18 13 3 1	
+              day	7	22 13 3 1	
+              day	8	26 13 3 1	
+              day	9	30 13 3 1	
+              day	10	34 13 3 1	
+              day	11	38 13 3 1	
+              day	12	42 13 3 1	
+      list item		2 14 114 1	
+      list item		2 15 114 1	
+        heading	Use it for	2 15 7 1	strong
+      list item		2 16 114 2	
+        text	Choosing a day when where it falls in the week matters: a due date, a booking, a day to look at. When the person knows the date, a date field is quicker; a date picker offers both.	2 16 114 2	
+      list item		2 18 114 1	
+      list item		2 19 114 1	
+        heading	Code	2 19 4 1	strong
+      list item		2 20 114 1	
+        text	ui.calendar("Due", Catalog::due);	2 20 33 1	mono
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

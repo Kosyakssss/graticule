@@ -29,6 +29,9 @@ Several names on either side are the same component. They are merged into one ro
 | Empty | EmptyState | NonIdealState | |
 | Swatch | ColorSwatch | | |
 | Picture | Avatar (image part) | Icon | Engraver's pictures and the built-in icons |
+| Canvas | | | shapes and words in a space of the app's own, drawn off the main thread; shapes can be pressed (spec §6.3, item 16) |
+| Image | Image | | PNG or JPEG, kept as a resource, keeping its shape in a box of cells (item 16) |
+| Paint hook | | | the app's own GPU commands under a canvas (spec §6.4, item 16) |
 | Values | Badge | | count, date, version, state, product code, code, mode, error (§5.2); a state is the badge |
 | Action bar | Toolbar | | the registry along the bottom |
 | Status line | Tooltip | Tooltip | grounded: a hint, never a floating tip |
@@ -49,7 +52,7 @@ Several names on either side are the same component. They are merged into one ro
 | Meter | Meter | | a value within a range |
 | Placeholder | Skeleton | Skeleton | rows reserved while data arrives late |
 | Tag | Chip, Tag, TagGroup | Tag | removable tags are wave 2 |
-| Avatar | Avatar, AvatarGroup | | a person's initials; their picture comes with raster images (item 16) |
+| Avatar | Avatar, AvatarGroup | | a person's initials; their picture cropped into it is not done |
 | Callout | Alert | Callout | a boxed message in the page |
 | Card | Card, Surface | Card, CardList, Section, ControlCard | a boxed group with a heading |
 | Heading | Header | EntityTitle | strong text announced as a heading; with its icon and typed values, a row of them |

@@ -1,6 +1,6 @@
 window		0 0 35 23	
   page	Meter	0 0 35 7	
-    list		2 3 31 3	12 items
+    list		2 3 31 3	13 items
       list item		2 3 29 3	
         text	A level within its range, such as how full a disk is, as a bar with the percentage beside it. Unlike progress, it is not work that finishes: the level can go up and down.	2 3 29 3	
   alert		2 7 31 1	

@@ -1,6 +1,6 @@
 window		0 0 30 23	
   page	Scroll edges	0 0 30 7	
-    list		2 3 26 3	18 items
+    list		2 3 26 3	19 items
       list item		2 3 24 3	
         text	A rule at the top or bottom of a list that says there is more beyond it, above or below.	2 3 24 3	
   alert		2 7 26 1	

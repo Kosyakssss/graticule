@@ -1,6 +1,6 @@
 window		0 0 46 19	
   page	Key label	0 0 46 7	
-    list		2 3 42 3	11 items
+    list		2 3 42 3	12 items
       list item		2 3 40 3	
         text	The keys that run a command, drawn as key caps. They are read from the keymap as it is when the page is drawn, so they change when the keymap does and are never typed by hand. A command with no key says "no key".	2 3 40 3	
   alert		2 7 42 1	

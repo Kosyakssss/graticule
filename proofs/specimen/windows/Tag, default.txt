@@ -1,52 +1,47 @@
 window		0 0 120 30	
   page	Tag	0 0 120 24	
-    list		2 3 116 20	19 items
+    list		2 3 116 20	20 items
       list item		2 3 114 2	
         text	A short word that sorts something into a group, such as design or urgent, in a thin box. Unlike a typed value, a tag's word is the user's own. Like a typed value, it says what something is, never what to do, so clicking it does nothing; tags you can remove are the tag field's, in wave 2.	2 3 114 2	
       list item		2 5 114 1	
       list item		2 6 114 1	
-        heading	Use it for	2 6 7 1	strong
+        group		2 6 114 1	
+          column		2 6 14 1	
+            text	Live	2 6 14 1	muted
+          column		18 6 98 1	
+            group		18 6 98 1	
+              tag	design	18 6 6 1	
+              tag	urgent	26 6 6 1	
       list item		2 7 114 1	
-        text	Labels, categories and topics.	2 7 23 1	
       list item		2 8 114 1	
+        heading	Use it for	2 8 7 1	strong
       list item		2 9 114 1	
-        heading	Code	2 9 4 1	strong
-      list item		2 10 114 4	
-        text	ui.row(|ui| {\n    ui.tag("design");\n    ui.tag("urgent");\n});	2 10 61 4	mono
-      list item		2 14 114 1	
-        group		2 14 114 1	
-          column		2 14 14 1	
-            text	Live	2 14 14 1	muted
-          column		18 14 98 1	
-            group		18 14 98 1	
-              tag	design	18 14 6 1	
-              tag	urgent	26 14 6 1	
-      list item		2 15 114 1	
+        text	Labels, categories and topics.	2 9 23 1	
+      list item		2 10 114 1	
+      list item		2 11 114 1	
+        heading	Code	2 11 4 1	strong
+      list item		2 12 114 4	
+        text	ui.row(|ui| {\n    ui.tag("design");\n    ui.tag("urgent");\n});	2 12 61 4	mono
       list item		2 16 114 1	
-        heading	Screen reader	2 16 11 1	strong
       list item		2 17 114 1	
-        text	Text, read as it is written.	2 17 19 1	
+        heading	Screen reader	2 17 11 1	strong
       list item		2 18 114 1	
+        text	Text, read as it is written.	2 18 19 1	
       list item		2 19 114 1	
-        heading	With awkward content	2 19 18 1	strong
       list item		2 20 114 1	
-        group		2 20 114 1	
-          column		2 20 14 1	
-            text	Nothing	2 20 14 1	muted
-          column		18 20 98 1	
-            tag		18 20 1 1	
+        heading	With awkward content	2 20 18 1	strong
       list item		2 21 114 1	
         group		2 21 114 1	
           column		2 21 14 1	
-            text	Very long	2 21 14 1	muted
+            text	Nothing	2 21 14 1	muted
           column		18 21 98 1	
-            tag	A label that goes on and on, well past the edge of any reasonable window, to see where it wraps and what it pushes aside	18 21 92 1	
+            tag		18 21 1 1	
       list item		2 22 114 1	
         group		2 22 114 1	
           column		2 22 14 1	
-            text	Right to left	2 22 14 1	muted
+            text	Very long	2 22 14 1	muted
           column		18 22 98 1	
-            tag	مرحبا بالعالم	18 22 9 1	
+            tag	A label that goes on and on, well past the edge of any reasonable window, to see where it wraps and what it pushes aside	18 22 92 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

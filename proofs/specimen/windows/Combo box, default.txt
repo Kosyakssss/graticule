@@ -1,34 +1,33 @@
 window		0 0 120 30	
   page	Combo box	0 0 120 24	
-    list		2 3 116 20	18 items
+    list		2 3 116 20	19 items
       list item		2 3 114 1	
         text	A one-line field with completions listed under it in an overlay while it has the focus: the ones that contain what is typed, a few at a time.	2 3 101 1	
       list item		2 4 114 1	
       list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
-      list item		2 6 114 2	
-        text	Text that is usually one of a known set but may be anything: a city, a contact, a tag already used elsewhere. When it must be one of a few options, use a select; when it is free text, a text field.	2 6 114 2	
-      list item		2 8 114 1	
-      list item		2 9 114 1	
-        heading	Code	2 9 4 1	strong
+        group		2 5 114 1	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 1	
+            text field	City	18 5 98 1	
+      list item		2 6 114 1	
+      list item		2 7 114 1	
+        heading	Use it for	2 7 7 1	strong
+      list item		2 8 114 2	
+        text	Text that is usually one of a known set but may be anything: a city, a contact, a tag already used elsewhere. When it must be one of a few options, use a select; when it is free text, a text field.	2 8 114 2	
       list item		2 10 114 1	
-        text	ui.combo_box(Catalog::city, Message::from("City"), &CITIES);	2 10 60 1	mono
       list item		2 11 114 1	
-        group		2 11 114 1	
-          column		2 11 14 1	
-            text	Live	2 11 14 1	muted
-          column		18 11 98 1	
-            text field	City	18 11 98 1	
-      list item		2 12 114 4	
-        text	The app passes the completions, already in the order it wants; the field keeps those that contain what is typed, ignoring case, and shows the first eight. Typing changes the text as in any field, and taking a completion sets it by one edit, named after the field. The completions are built only while the field or one of them has the focus, so nothing in the facts says whether they show. Following spec §4.4 they hang from the field, under it if they fit, else above, and never cover what is being typed.	2 12 114 4	
-      list item		2 16 114 1	
+        heading	Code	2 11 4 1	strong
+      list item		2 12 114 1	
+        text	ui.combo_box(Catalog::city, Message::from("City"), &CITIES);	2 12 60 1	mono
+      list item		2 13 114 4	
+        text	The app passes the completions, already in the order it wants; the field keeps those that contain what is typed, ignoring case, and shows the first eight. Typing changes the text as in any field, and taking a completion sets it by one edit, named after the field. The completions are built only while the field or one of them has the focus, so nothing in the facts says whether they show. Following spec §4.4 they hang from the field, under it if they fit, else above, and never cover what is being typed.	2 13 114 4	
       list item		2 17 114 1	
-        heading	Keys	2 17 4 1	strong
-      list item		2 18 114 3	
-        text	Down from the field reaches the completions; Up and Down move between them, Home and End go to the first and last, and Up from the first goes back to the field. Return or Space takes one and puts the focus back in the field. Escape on a completion goes back to the field; typing there types into the field.	2 18 114 3	
-      list item		2 21 114 1	
+      list item		2 18 114 1	
+        heading	Keys	2 18 4 1	strong
+      list item		2 19 114 3	
+        text	Down from the field reaches the completions; Up and Down move between them, Home and End go to the first and last, and Up from the first goes back to the field. Return or Space takes one and puts the focus back in the field. Escape on a completion goes back to the field; typing there types into the field.	2 19 114 3	
       list item		2 22 114 1	
-        heading	Narrow windows	2 22 14 1	strong
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

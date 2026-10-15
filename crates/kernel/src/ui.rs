@@ -1,18 +1,21 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::panic::Location;
+use std::sync::Arc;
 
 use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
 use crate::app::{Moment, Path};
+use crate::canvas::Drawing;
 use crate::color::{CHROMA, Channel, HUE, Oklch};
 use crate::days::{Day, Time};
 use crate::form::{Control, Item, Setting, Settings};
 use crate::ink::Ink;
 use crate::message::Message;
 use crate::picture::Picture;
-use crate::tree::{Holds, Id, Kind, ListInfo, NONE, Span, Tone, Tree};
+use crate::tree::{Board, Holds, Id, Kind, ListInfo, NONE, Span, Tone, Tree};
 use crate::value::{Integer, Value, grouped};
 
 const CHECK_MIN: i32 = 12;
@@ -293,6 +296,16 @@ impl<'a, C, S> Ui<'a, C, S> {
         let r = self.tree.put(picture.label);
         self.tree.nodes[i as usize].text = r;
         Placed { ui: self, node: i }
+    }
+
+    /// A raster image `rows` tall and as wide as its shape asks, narrower when the room is, with `label` saying what it shows for screen readers. An image not loaded yet holds its place, blank.
+    #[track_caller]
+    pub fn image(&mut self, label: impl AsRef<str>, image: &crate::image::Image, rows: i32) {
+        let (width, height) = if image.is_empty() { (1, 1) } else { (image.width(), image.height()) };
+        let i = self.add(Kind::Image { rows, width, height }, Location::caller());
+        let r = self.tree.put(label.as_ref());
+        self.tree.nodes[i as usize].name = r;
+        self.tree.images.push((i, image.clone()));
     }
 
     /// A count, in the monospace face with its thousands grouped: 1,284.
@@ -1063,6 +1076,23 @@ impl<'a, C, S> Ui<'a, C, S> {
         }
     }
 
+    /// A box `rows` tall and as wide as it may be, with a space of its own, holding what `f` draws. `label` says what it shows, for screen readers. It is drawn off the main thread, and again only when what it holds changes.
+    #[track_caller]
+    pub fn canvas(&mut self, label: impl AsRef<str>, rows: i32, f: impl FnOnce(&mut Canvas<'_, 'a, C, S>)) {
+        let i = self.add(Kind::Canvas { rows, pressable: false }, Location::caller());
+        let r = self.tree.put(label.as_ref());
+        let n = &mut self.tree.nodes[i as usize];
+        (n.name, n.span) = (r, crate::tree::Fill);
+        let mut canvas = Canvas { ui: self, drawing: Drawing::new(), board: Board { node: i, paint: None, drawings: Vec::new(), presses: Vec::new() } };
+        f(&mut canvas);
+        let Canvas { ui, drawing, mut board } = canvas;
+        if !drawing.is_empty() {
+            board.drawings.push(Arc::new(drawing));
+        }
+        ui.tree.nodes[i as usize].kind = Kind::Canvas { rows, pressable: !board.presses.is_empty() };
+        ui.tree.canvases.push(board);
+    }
+
     /// The lightness and chroma of the color at `path`, at its hue, as an area to pick them from: chroma grows to the right and lightness upward. Dragging shows where the mark would land and sets both when it is let go, by one `Edit`; the arrows step them.
     #[track_caller]
     pub fn color_area<F: Field>(&mut self, path: FactPath<F, Oklch>) {
@@ -1224,6 +1254,47 @@ impl<C> Tree<C> {
 }
 
 const COMPLETIONS: usize = 8;
+
+/// A canvas being drawn: draw on it as on a [`Drawing`], hand it drawings made elsewhere, and name the shapes that run a command when pressed.
+pub struct Canvas<'u, 'a, C, S> {
+    ui: &'u mut Ui<'a, C, S>,
+    drawing: Drawing,
+    board: Board,
+}
+
+impl<C, S> Canvas<'_, '_, C, S> {
+    /// Paints the canvas with the app's own GPU commands first, under everything drawn on it.
+    pub fn paint(&mut self, hook: &crate::canvas::PaintHook) {
+        self.board.paint = hook.get().cloned();
+    }
+
+    /// Draws `drawing` too, under what is drawn on the canvas itself. A drawing made in a job is handed over this way, so the view never builds its shapes.
+    pub fn drawing(&mut self, drawing: &Arc<Drawing>) {
+        self.board.drawings.push(drawing.clone());
+    }
+
+    /// Runs `cmd` when the shape named `key` is pressed: by a click, or by the arrows and Return once the canvas is reached.
+    pub fn press<M>(&mut self, key: u64, cmd: impl Bind<C, S, M>) {
+        if let Some(cmd) = cmd.bind(self.ui.subject) {
+            self.board.presses.push((key, self.ui.tree.commands.len() as u32));
+            self.ui.tree.commands.push(cmd);
+        }
+    }
+}
+
+impl<C, S> Deref for Canvas<'_, '_, C, S> {
+    type Target = Drawing;
+
+    fn deref(&self) -> &Drawing {
+        &self.drawing
+    }
+}
+
+impl<C, S> DerefMut for Canvas<'_, '_, C, S> {
+    fn deref_mut(&mut self) -> &mut Drawing {
+        &mut self.drawing
+    }
+}
 
 /// The id of `day`'s cell in the calendar with id `calendar`, so moving between days can name the one to focus before it is built.
 pub(crate) fn day_id(calendar: Id, day: Day) -> Id {

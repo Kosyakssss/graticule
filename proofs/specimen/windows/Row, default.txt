@@ -1,37 +1,38 @@
 window		0 0 120 30	
   page	Row	0 0 120 24	
-    list		2 3 116 20	14 items
+    list		2 3 116 20	15 items
       list item		2 3 114 1	
         text	Components side by side, left to right, a column apart.	2 3 41 1	
       list item		2 4 114 1	
       list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
+        group		2 5 114 1	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 1	
+            group		18 5 98 1	
+              text	Side	18 5 4 1	
+              text	by	24 5 2 1	
+              text	side	28 5 4 1	
       list item		2 6 114 1	
-        text	A field with the button that acts on it, or a few short pieces that read as one line.	2 6 60 1	
       list item		2 7 114 1	
+        heading	Use it for	2 7 7 1	strong
       list item		2 8 114 1	
-        heading	Code	2 8 4 1	strong
-      list item		2 9 114 4	
-        text	ui.row(|ui| {\n    ui.field(Todo::draft, t!("Something to do")).on_submit(Cmd::Add);\n    ui.button(Cmd::Add);\n});	2 9 112 4	mono
-      list item		2 13 114 1	
-        group		2 13 114 1	
-          column		2 13 14 1	
-            text	Live	2 13 14 1	muted
-          column		18 13 98 1	
-            group		18 13 98 1	
-              text	Side	18 13 4 1	
-              text	by	24 13 2 1	
-              text	side	28 13 4 1	
-      list item		2 14 114 1	
+        text	A field with the button that acts on it, or a few short pieces that read as one line.	2 8 60 1	
+      list item		2 9 114 1	
+      list item		2 10 114 1	
+        heading	Code	2 10 4 1	strong
+      list item		2 11 114 4	
+        text	ui.row(|ui| {\n    ui.field(Todo::draft, t!("Something to do")).on_submit(Cmd::Add);\n    ui.button(Cmd::Add);\n});	2 11 112 4	mono
       list item		2 15 114 1	
-        heading	Narrow windows	2 15 14 1	strong
       list item		2 16 114 1	
-        text	When the components' narrow widths don't fit side by side, they stack, one under the other, in the same order.	2 16 82 1	
+        heading	Narrow windows	2 16 14 1	strong
       list item		2 17 114 1	
+        text	When the components' narrow widths don't fit side by side, they stack, one under the other, in the same order.	2 17 82 1	
       list item		2 18 114 1	
-        heading	Screen reader	2 18 11 1	strong
       list item		2 19 114 1	
-        text	A group; each component inside says its own part.	2 19 38 1	
+        heading	Screen reader	2 19 11 1	strong
+      list item		2 20 114 1	
+        text	A group; each component inside says its own part.	2 20 38 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

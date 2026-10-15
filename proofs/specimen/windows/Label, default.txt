@@ -1,36 +1,35 @@
 window		0 0 120 30	
   page	Label	0 0 120 24	
-    list		2 3 116 20	15 items
+    list		2 3 116 20	16 items
       list item		2 3 114 2	
         text	A control with its label above it. Muted text after the control describes it, and an error after it says what is wrong; a screen reader reads both with the control, so they are never only for the eye.	2 3 114 2	
       list item		2 5 114 1	
-      list item		2 6 114 1	
-        heading	Use it for	2 6 7 1	strong
-      list item		2 7 114 1	
-        text	Fields, and any control whose purpose isn't said by its own words. Settings forms label their text fields this way.	2 7 83 1	
-      list item		2 8 114 1	
+      list item		2 6 114 3	
+        group		2 6 114 3	
+          column		2 6 14 1	
+            text	Live	2 6 14 1	muted
+          column		18 6 98 3	
+            labelled	Something to say	18 6 98 3	
+              text field	Type here	18 7 98 1	
+              text	It shows in the message line	18 8 98 1	muted
       list item		2 9 114 1	
-        heading	Code	2 9 4 1	strong
-      list item		2 10 114 4	
-        text	ui.labelled("Something to say", |ui| {\n    ui.field(Catalog::draft, Message::from("Type here")).on_submit(Cmd::Say);\n    ui.muted("It shows in the message line");\n});	2 10 114 4	mono
-      list item		2 14 114 3	
-        group		2 14 114 3	
-          column		2 14 14 1	
-            text	Live	2 14 14 1	muted
-          column		18 14 98 3	
-            labelled	Something to say	18 14 98 3	
-              text field	Type here	18 15 98 1	
-              text	It shows in the message line	18 16 98 1	muted
-      list item		2 17 114 1	
-        text	An error goes in the same place, with ui.error(…), while it applies.	2 17 49 1	
+      list item		2 10 114 1	
+        heading	Use it for	2 10 7 1	strong
+      list item		2 11 114 1	
+        text	Fields, and any control whose purpose isn't said by its own words. Settings forms label their text fields this way.	2 11 83 1	
+      list item		2 12 114 1	
+      list item		2 13 114 1	
+        heading	Code	2 13 4 1	strong
+      list item		2 14 114 4	
+        text	ui.labelled("Something to say", |ui| {\n    ui.field(Catalog::draft, Message::from("Type here")).on_submit(Cmd::Say);\n    ui.muted("It shows in the message line");\n});	2 14 114 4	mono
       list item		2 18 114 1	
+        text	An error goes in the same place, with ui.error(…), while it applies.	2 18 49 1	
       list item		2 19 114 1	
-        heading	Narrow windows	2 19 14 1	strong
       list item		2 20 114 1	
-        text	The label wraps above the control.	2 20 26 1	
+        heading	Narrow windows	2 20 14 1	strong
       list item		2 21 114 1	
+        text	The label wraps above the control.	2 21 26 1	
       list item		2 22 114 1	
-        heading	Screen reader	2 22 11 1	strong
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

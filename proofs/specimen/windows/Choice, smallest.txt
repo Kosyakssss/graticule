@@ -1,6 +1,6 @@
 window		0 0 41 22	
   page	Choice	0 0 41 7	
-    list		2 3 37 3	18 items
+    list		2 3 37 3	19 items
       list item		2 3 35 3	
         text	One of a few named options, as a button that shows the chosen one. Pressing it moves to the next option, and after the last back to the first, so nothing opens over the page.	2 3 35 3	
   alert		2 7 37 1	

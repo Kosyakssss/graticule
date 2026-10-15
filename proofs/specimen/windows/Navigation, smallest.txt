@@ -1,6 +1,6 @@
 window		0 0 30 23	
   page	Navigation	0 0 30 7	
-    list		2 3 26 3	18 items
+    list		2 3 26 3	19 items
       list item		2 3 24 3	
         text	The places of an app along the top, the current one marked. Places that don't fit go into a "More…" choice at the end.	2 3 24 3	
   alert		2 7 26 1	

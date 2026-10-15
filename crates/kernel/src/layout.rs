@@ -227,6 +227,11 @@ impl<'t> Layout<'t> {
             Kind::Field { holds: Holds::Time } => (7, 7),
             Kind::Field { holds: Holds::Color } => (12, 12),
             Kind::ColorArea { .. } => (AREA_COLS, AREA_COLS),
+            Kind::Canvas { .. } => (8, 8),
+            Kind::Image { rows, width, height } => {
+                let c = (rows as f32 * self.m.cell_h * width as f32 / height.max(1) as f32 / self.m.cell_w - 0.01).ceil().max(1.0) as i32;
+                (c.min(8), c)
+            }
             Kind::Calendar { .. } => (CALENDAR, CALENDAR),
             Kind::Day { .. } | Kind::Turn { .. } => (DAY - 1, DAY - 1),
             Kind::Field { holds: Holds::Code { length } } => {
@@ -472,6 +477,7 @@ impl<'t> Layout<'t> {
             Kind::Rule => 2,
             Kind::Calendar { .. } => 2 + 6,
             Kind::ColorArea { .. } => AREA_ROWS,
+            Kind::Canvas { rows, .. } | Kind::Image { rows, .. } => rows.max(1),
             Kind::Keys | Kind::Gauge { .. } | Kind::Tag | Kind::Chip | Kind::Avatar => 1,
             Kind::Placeholder { rows } => rows.max(1),
             Kind::Callout { .. } | Kind::Card => {
@@ -605,6 +611,15 @@ impl<'t> Layout<'t> {
         let area = Area::new(area.col, area.row, area.cols.max(0), area.rows.max(0));
         tree.nodes[i as usize].area = area;
         let kind = tree.nodes[i as usize].kind;
+        if area.is_empty() && tree.nodes[i as usize].first != NONE {
+            let (start, end) = self.children(tree, i);
+            for k in start..end {
+                let c = self.stack[k];
+                self.place(tree, c, Area::default());
+            }
+            self.release(start);
+            return;
+        }
         match kind {
             Kind::Page => {
                 let inner = Area::new(area.col + MARGIN, area.row + 3, area.cols - MARGIN * 2, area.rows - 4);
@@ -631,7 +646,7 @@ impl<'t> Layout<'t> {
                         2 => Area::new(area.col + CALENDAR - DAY + 1, area.row, DAY - 1, 1),
                         k => Area::new(area.col + (k - 3) % WEEK * DAY, area.row + 1 + (k - 3) / WEEK, DAY - 1, 1),
                     };
-                    self.place(tree, c, at);
+                    self.place(tree, c, if area.holds(at) { at } else { Area::default() });
                 }
                 self.release(start);
             }
@@ -826,6 +841,7 @@ impl<'t> Layout<'t> {
                     | Kind::Link
                     | Kind::Swatch { .. }
                     | Kind::Picture { .. }
+                    | Kind::Image { .. }
                     | Kind::Keys
                     | Kind::Tag
                     | Kind::Chip

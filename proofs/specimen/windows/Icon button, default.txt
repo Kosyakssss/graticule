@@ -1,34 +1,35 @@
 window		0 0 120 30	
   page	Icon button	0 0 120 24	
-    list		2 3 116 20	14 items
+    list		2 3 116 20	15 items
       list item		2 3 114 2	
         text	A button that shows a picture instead of words. The command's label is still what the status line shows when the pointer is over it and what a screen reader says, so the picture never has to explain itself. A close button is an icon button with the close icon.	2 3 114 2	
       list item		2 5 114 1	
       list item		2 6 114 1	
-        heading	Use it for	2 6 7 1	strong
+        group		2 6 114 1	
+          column		2 6 14 1	
+            text	Live	2 6 14 1	muted
+          column		18 6 98 1	
+            button	Back to all components	18 6 5 1	
       list item		2 7 114 1	
-        text	Commands everyone knows by their picture, where words would crowd the row: close, add, search, settings.	2 7 81 1	
       list item		2 8 114 1	
+        heading	Use it for	2 8 7 1	strong
       list item		2 9 114 1	
-        heading	Code	2 9 4 1	strong
+        text	Commands everyone knows by their picture, where words would crowd the row: close, add, search, settings.	2 9 81 1	
       list item		2 10 114 1	
-        text	ui.icon_button(&icons::CLOSE, Cmd::Back);	2 10 41 1	mono
       list item		2 11 114 1	
-        group		2 11 114 1	
-          column		2 11 14 1	
-            text	Live	2 11 14 1	muted
-          column		18 11 98 1	
-            button	Back to all components	18 11 5 1	
+        heading	Code	2 11 4 1	strong
       list item		2 12 114 1	
+        text	ui.icon_button(&icons::CLOSE, Cmd::Back);	2 12 41 1	mono
       list item		2 13 114 1	
-        heading	Keys	2 13 4 1	strong
       list item		2 14 114 1	
-        text	Tab reaches it; Space or Return presses it.	2 14 32 1	
+        heading	Keys	2 14 4 1	strong
       list item		2 15 114 1	
+        text	Tab reaches it; Space or Return presses it.	2 15 32 1	
       list item		2 16 114 1	
-        heading	Screen reader	2 16 11 1	strong
       list item		2 17 114 1	
-        text	A button, named with the command's label.	2 17 33 1	
+        heading	Screen reader	2 17 11 1	strong
+      list item		2 18 114 1	
+        text	A button, named with the command's label.	2 18 33 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

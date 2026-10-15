@@ -65,6 +65,18 @@ impl Offscreen {
         for u in self.text.uploads.drain(..) {
             self.gpu.upload(u.x, u.y, u.w, u.h, &u.data);
         }
+        for id in self.text.released.drain(..) {
+            self.gpu.remove_image(id);
+        }
+        for r in self.text.rasters.drain(..) {
+            self.gpu.raster(r);
+        }
+        for image in self.text.images.drain(..) {
+            self.gpu.picture(image);
+        }
+        for h in self.text.hooks.drain(..) {
+            self.gpu.hook(h);
+        }
         let rgba = self.gpu.snapshot(&self.quads, look.theme.bg);
         Picture { width: self.width, height: self.height, rgba, paint_ms }
     }
@@ -104,6 +116,18 @@ impl Offscreen {
         }
         for u in self.text.uploads.drain(..) {
             self.gpu.upload(u.x, u.y, u.w, u.h, &u.data);
+        }
+        for id in self.text.released.drain(..) {
+            self.gpu.remove_image(id);
+        }
+        for r in self.text.rasters.drain(..) {
+            self.gpu.raster(r);
+        }
+        for image in self.text.images.drain(..) {
+            self.gpu.picture(image);
+        }
+        for h in self.text.hooks.drain(..) {
+            self.gpu.hook(h);
         }
         let rgba = self.gpu.snapshot(&self.quads, look.theme.bg);
         Picture { width: self.width, height: self.height, rgba, paint_ms }

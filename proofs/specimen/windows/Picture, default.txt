@@ -1,32 +1,33 @@
 window		0 0 120 30	
   page	Picture	0 0 120 24	
-    list		2 3 116 20	59 items
+    list		2 3 116 20	60 items
       list item		2 3 114 3	
         text	Vector art made ahead of time: an icon, an ornament, a logo. Pictures are drawn as SVG files and compiled into the app by Engraver, so they cost nothing to load. Each is drawn once at the size it is shown and comes from the GPU's atlas after that. Its colors are the theme's inks, so it follows the appearance like everything else. The box sits on the grid; the shape inside it is free.	2 3 114 3	
       list item		2 6 114 1	
-      list item		2 7 114 1	
-        heading	Use it for	2 7 7 1	strong
-      list item		2 8 114 2	
-        text	Something that is quicker to see than to read: a warning beside a message, a folder beside a name, a play button. Graticule ships a set of icons for everyday things; an app adds its own from a folder of SVG files.	2 8 114 2	
+      list item		2 7 114 3	
+        group		2 7 114 3	
+          column		2 7 14 1	
+            text	Live	2 7 14 1	muted
+          column		18 7 98 3	
+            group		18 7 98 3	
+              image	Warning	18 7 3 1	
+              text	One row tall, beside text	23 7 19 1	
+              image	Star	44 7 8 3	
       list item		2 10 114 1	
       list item		2 11 114 1	
-        heading	Code	2 11 4 1	strong
+        heading	Use it for	2 11 7 1	strong
       list item		2 12 114 2	
-        text	ui.picture(&icons::WARNING);\nui.picture(&icons::STAR).height(3);	2 12 64 2	mono
-      list item		2 14 114 3	
-        group		2 14 114 3	
-          column		2 14 14 1	
-            text	Live	2 14 14 1	muted
-          column		18 14 98 3	
-            group		18 14 98 3	
-              image	Warning	18 14 3 1	
-              text	One row tall, beside text	23 14 19 1	
-              image	Star	44 14 8 3	
-      list item		2 17 114 1	
-        text	It is one row tall beside text unless .height(rows) makes it taller, and as wide as its shape needs.	2 17 72 1	
+        text	Something that is quicker to see than to read: a warning beside a message, a folder beside a name, a play button. Graticule ships a set of icons for everyday things; an app adds its own from a folder of SVG files.	2 12 114 2	
+      list item		2 14 114 1	
+      list item		2 15 114 1	
+        heading	Code	2 15 4 1	strong
+      list item		2 16 114 2	
+        text	ui.picture(&icons::WARNING);\nui.picture(&icons::STAR).height(3);	2 16 64 2	mono
       list item		2 18 114 1	
+        text	It is one row tall beside text unless .height(rows) makes it taller, and as wide as its shape needs.	2 18 72 1	
       list item		2 19 114 1	
-        heading	Your own pictures	2 19 14 1	strong
+      list item		2 20 114 1	
+        heading	Your own pictures	2 20 14 1	strong
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

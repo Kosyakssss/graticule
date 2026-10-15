@@ -218,13 +218,21 @@ A row is dragged within its list when the list has a mover (`on_move`). A press 
 
 Dragging out of the window is not possible with winit, which can receive a drag but not start one.
 
+### 7.6 Textures painted off the main thread
+
+Canvases, raster images and paint hooks each draw into a texture of their own, and the main thread only places it: one quad of kind 2 naming the texture, in the node's own range like any other quad. What goes into the texture is worked out on the presenter thread, which already owns the GPU, just before it draws the frame (`Gpu::settle`): a canvas's drawings are rasterized there with zeno into straight-alpha RGBA, an image is uploaded there with its mip levels, and a paint hook runs there. Painting a node only asks for this, through the text store that already carries the atlas's uploads, and asks only when the stamp of what decides the pixels changed: the drawings' hashes, the box's size, the weights and the theme's inks. A drawing works out its hash once, so a drawing made in a job costs the view nothing however many shapes it holds.
+
+The GPU draws quads in runs that share a texture. The kept layers know their runs too, worked out again only when a layer changed. A canvas's texture is let go of when its node leaves the kept list; an image's lasts as long as the app holds the image, which the presenter thread sees through a weak reference.
+
+A node's hash takes in what it draws from the tree's side tables, a color slider's color as much as a canvas's drawings, since the kept list repaints a node only when its hash changes.
+
 A law (§19) checks that patching the quad list gives the same pixels as building it from scratch. It compares the quads themselves, layer by layer, which is enough because boxes on the grid never overlap.
 
 ## 8. Hit testing
 
 After layout, the kernel fills a grid of the window's size in cells, each cell holding the index of the topmost node with an interaction there (a button, a check, a link, a field, a list row). It is refilled after every layout: at 200 × 60 cells that is 12,000 writes, a few microseconds, so tracking damaged cells isn't worth its code yet. Finding what is under the pointer is one array read, well under the 1 µs budget. Hit targets are at least one cell, which the taste laws require anyway.
 
-A hit gives a node; the kernel walks up to the nearest node that acts (a check's command, a field's focus, a row's selection) and collects the nearest row's subject on the way. A canvas, later, gets the point inside its box and tests its own shapes against their outlines (spec §6.3).
+A hit gives a node; the kernel walks up to the nearest node that acts (a check's command, a field's focus, a row's selection) and collects the nearest row's subject on the way. A canvas gets the point inside its box and tests its shapes against their outlines with zeno, the topmost first; a stroke counts a little around it and a filled shape a little past its edge, so thin lines and small dots can be hit. Only shapes with a command to press are hit, and the one hit is the one the arrows have reached too (`aim`), so a click and the keyboard leave the canvas in the same state.
 
 ## 9. Commands
 

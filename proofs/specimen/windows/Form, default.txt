@@ -1,46 +1,46 @@
 window		0 0 120 30	
   page	Form	0 0 120 24	
-    list		2 3 116 20	18 items
+    list		2 3 116 20	19 items
       list item		2 3 114 1	
         text	Settings drawn from a struct of facts: one control for each labelled field, chosen by its type.	2 3 68 1	
       list item		2 4 114 1	
-      list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
-      list item		2 6 114 1	
-        text	A page of settings or options, such as a print dialog's, where every field is something a person sets.	2 6 74 1	
-      list item		2 7 114 1	
-      list item		2 8 114 1	
-        heading	Code	2 8 4 1	strong
-      list item		2 9 114 1	
-        text	ui.form(Catalog::printing);	2 9 27 1	mono
-      list item		2 10 114 5	
-        group		2 10 114 5	
-          column		2 10 14 1	
-            text	Live	2 10 14 1	muted
-          column		18 10 98 5	
-            column		18 10 98 5	
-              group		18 10 98 1	
-                text	Copies	18 10 6 1	
-                number field	Copies	26 10 16 1	holds “1”
-                button	−	44 10 4 1	
-                button	+	50 10 4 1	
-              group		18 11 98 1	
-                text	Paper	18 11 5 1	
-                group		25 11 22 1	
-                  toggle button	A4	25 11 5 1	
-                  toggle button	Letter	30 11 9 1	
-                  toggle button	Legal	39 11 8 1	
-              switch	Print on both sides	18 12 98 1	
-              labelled	Header	18 13 98 2	
-                text field		18 14 98 1	
-      list item		2 15 114 4	
-        text	printing is a struct with derive(Facts, Form), and each field marked #[label("…")] is one setting. A bool is a switch, an enum with derive(Choice) is joined toggles, a Text is a field, and a whole number is a number field between a lower and a raise button. Every change is one edit and one undo step, named for what it set ("Copies: 3"). The built-in commands "Show only the changed settings" and "Show every setting" narrow every form to what differs from the struct's Default.	2 15 114 4	
-      list item		2 19 114 1	
+      list item		2 5 114 5	
+        group		2 5 114 5	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 5	
+            column		18 5 98 5	
+              group		18 5 98 1	
+                text	Copies	18 5 6 1	
+                number field	Copies	26 5 16 1	holds “1”
+                button	−	44 5 4 1	
+                button	+	50 5 4 1	
+              group		18 6 98 1	
+                text	Paper	18 6 5 1	
+                group		25 6 22 1	
+                  toggle button	A4	25 6 5 1	
+                  toggle button	Letter	30 6 9 1	
+                  toggle button	Legal	39 6 8 1	
+              switch	Print on both sides	18 7 98 1	
+              labelled	Header	18 8 98 2	
+                text field		18 9 98 1	
+      list item		2 10 114 1	
+      list item		2 11 114 1	
+        heading	Use it for	2 11 7 1	strong
+      list item		2 12 114 1	
+        text	A page of settings or options, such as a print dialog's, where every field is something a person sets.	2 12 74 1	
+      list item		2 13 114 1	
+      list item		2 14 114 1	
+        heading	Code	2 14 4 1	strong
+      list item		2 15 114 1	
+        text	ui.form(Catalog::printing);	2 15 27 1	mono
+      list item		2 16 114 4	
+        text	printing is a struct with derive(Facts, Form), and each field marked #[label("…")] is one setting. A bool is a switch, an enum with derive(Choice) is joined toggles, a Text is a field, and a whole number is a number field between a lower and a raise button. Every change is one edit and one undo step, named for what it set ("Copies: 3"). The built-in commands "Show only the changed settings" and "Show every setting" narrow every form to what differs from the struct's Default.	2 16 114 4	
       list item		2 20 114 1	
-        heading	Keys	2 20 4 1	strong
       list item		2 21 114 1	
-        text	Each control's own: Tab moves between them.	2 21 35 1	
+        heading	Keys	2 21 4 1	strong
       list item		2 22 114 1	
+        text	Each control's own: Tab moves between them.	2 22 35 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

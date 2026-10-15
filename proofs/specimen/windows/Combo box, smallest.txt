@@ -1,6 +1,6 @@
 window		0 0 38 22	
   page	Combo box	0 0 38 7	
-    list		2 3 34 3	18 items
+    list		2 3 34 3	19 items
       list item		2 3 32 3	
         text	A one-line field with completions listed under it in an overlay while it has the focus: the ones that contain what is typed, a few at a time.	2 3 32 3	
   alert		2 7 34 1	

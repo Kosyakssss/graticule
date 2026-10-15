@@ -1,37 +1,37 @@
 window		0 0 120 30	
   page	Text area	0 0 120 24	
-    list		2 3 116 20	18 items
+    list		2 3 116 20	19 items
       list item		2 3 114 1	
         text	A field of several lines that types into a Text in the facts. It wraps at its width and grows with what is typed, so nothing hides inside it.	2 3 99 1	
       list item		2 4 114 1	
-      list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
-      list item		2 6 114 1	
-        text	Short text of more than one line: a note, a description, a message. A document belongs to Galley.	2 6 72 1	
-      list item		2 7 114 1	
+      list item		2 5 114 3	
+        group		2 5 114 3	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 3	
+            text area	A few lines	18 5 98 3	holds “Milk, eggs and bread.\nAsk about the long weekend before Friday, since the office closes early that week.”
       list item		2 8 114 1	
-        heading	Code	2 8 4 1	strong
       list item		2 9 114 1	
-        text	ui.text_area(Catalog::notes, Message::from("A few lines"), 3);	2 9 62 1	mono
-      list item		2 10 114 3	
-        group		2 10 114 3	
-          column		2 10 14 1	
-            text	Live	2 10 14 1	muted
-          column		18 10 98 3	
-            text area	A few lines	18 10 98 3	holds “Milk, eggs and bread.\nAsk about the long weekend before Friday, since the office closes early that week.”
+        heading	Use it for	2 9 7 1	strong
+      list item		2 10 114 1	
+        text	Short text of more than one line: a note, a description, a message. A document belongs to Galley.	2 10 72 1	
+      list item		2 11 114 1	
+      list item		2 12 114 1	
+        heading	Code	2 12 4 1	strong
       list item		2 13 114 1	
-        text	The last number is how many rows it shows when it is empty or nearly so. Typing, as in every field, is an edit a word at a time, and one undo step each.	2 13 112 1	
+        text	ui.text_area(Catalog::notes, Message::from("A few lines"), 3);	2 13 62 1	mono
       list item		2 14 114 1	
+        text	The last number is how many rows it shows when it is empty or nearly so. Typing, as in every field, is an edit a word at a time, and one undo step each.	2 14 112 1	
       list item		2 15 114 1	
-        heading	Keys	2 15 4 1	strong
-      list item		2 16 114 3	
-        text	What a one-line field does, and: Return starts a new line, and the primary key with Return runs the submit command. Up and Down move between the rows as they show, keeping the column; at the first or last row they go to the start or the end. Home and End go to the ends of the row, and the primary key with Up or Down to the ends of the text.	2 16 114 3	
-      list item		2 19 114 1	
+      list item		2 16 114 1	
+        heading	Keys	2 16 4 1	strong
+      list item		2 17 114 3	
+        text	What a one-line field does, and: Return starts a new line, and the primary key with Return runs the submit command. Up and Down move between the rows as they show, keeping the column; at the first or last row they go to the start or the end. Home and End go to the ends of the row, and the primary key with Up or Down to the ends of the text.	2 17 114 3	
       list item		2 20 114 1	
-        heading	Narrow windows	2 20 14 1	strong
       list item		2 21 114 1	
-        text	The text wraps after the last space that fits, or within a word when a word is wider than the field, and the field grows taller.	2 21 91 1	
+        heading	Narrow windows	2 21 14 1	strong
       list item		2 22 114 1	
+        text	The text wraps after the last space that fits, or within a word when a word is wider than the field, and the field grows taller.	2 22 91 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

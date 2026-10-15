@@ -1,6 +1,6 @@
 window		0 0 30 23	
   page	Editable text	0 0 30 7	
-    list		2 3 26 3	18 items
+    list		2 3 26 3	19 items
       list item		2 3 24 3	
         text	Text that reads as text, with a faint line under it to say it can be changed, and becomes a field when it is clicked or reached with Tab.	2 3 24 3	
   alert		2 7 26 1	

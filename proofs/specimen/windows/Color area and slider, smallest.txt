@@ -1,6 +1,6 @@
 window		0 0 46 19	
   page	Color area and slider	0 0 46 7	
-    list		2 3 42 3	19 items
+    list		2 3 42 3	20 items
       list item		2 3 40 3	
         text	A color's lightness and chroma as an area to pick them from at its hue, and each part of the color as a slider whose track shows the colors it sets.	2 3 40 3	
   alert		2 7 42 1	

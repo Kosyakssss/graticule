@@ -231,6 +231,7 @@ pub struct Runner<A: App> {
     months: HashMap<Id, i32>,
     sliding: Option<(Id, i128)>,
     mixing: Option<(Id, (u16, u16))>,
+    aim: Option<(Id, u64)>,
     opened: Option<Id>,
     browse: Option<Id>,
     browsing: Option<(ErasedPath, String, mpsc::Receiver<Option<std::path::PathBuf>>)>,
@@ -317,6 +318,7 @@ impl<A: App> Runner<A> {
             months: HashMap::new(),
             sliding: None,
             mixing: None,
+            aim: None,
             opened: None,
             browse: None,
             browsing: None,
@@ -406,6 +408,7 @@ impl<A: App> Runner<A> {
         self.tree.only_changed = self.only_changed;
         (self.tree.opened, self.tree.focus) = (self.opened, self.focus);
         self.tree.months.clone_from(&self.months);
+        self.tree.aim = self.aim;
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
@@ -943,6 +946,12 @@ impl<A: App> Runner<A> {
                     self.tree.nodes[i].enabled = false;
                 }
                 continue;
+            }
+            if let Kind::Canvas { .. } = n.kind
+                && let Some(cmd) = self.aimed(i as u32)
+            {
+                let r = label(&mut self.tree.text, &self.tree.commands[cmd as usize], &self.facts, Form::Long);
+                self.tree.nodes[i].text = r;
             }
             if n.cmd == NONE {
                 continue;
@@ -2518,6 +2527,46 @@ impl<A: App> Runner<A> {
         true
     }
 
+    fn aimed(&self, i: u32) -> Option<u32> {
+        let (id, key) = self.aim?;
+        let b = self.tree.canvases.iter().find(|b| b.node == i)?;
+        (id == self.tree.nodes[i as usize].id).then_some(())?;
+        b.presses.iter().find(|p| p.0 == key).map(|p| p.1)
+    }
+
+    fn aim_key(&mut self, i: u32, key: Key) -> bool {
+        let id = self.tree.nodes[i as usize].id;
+        let Some(b) = self.tree.canvases.iter().find(|b| b.node == i) else { return false };
+        let keys: Vec<u64> = b.presses.iter().map(|p| p.0).collect();
+        let Some(&last) = keys.last() else { return false };
+        let now = self.aim.filter(|a| a.0 == id).and_then(|a| keys.iter().position(|&k| k == a.1));
+        let next = match (key, now) {
+            (Key::Home, _) => keys[0],
+            (Key::End, _) => last,
+            (Key::Right | Key::Down, Some(k)) => keys[(k + 1).min(keys.len() - 1)],
+            (Key::Left | Key::Up, Some(k)) => keys[k.saturating_sub(1)],
+            (Key::Right | Key::Down | Key::Left | Key::Up, None) => keys[0],
+            _ => return false,
+        };
+        self.aim = Some((id, next));
+        self.stale = true;
+        true
+    }
+
+    fn canvas_hit(&self, frame: &Frame, i: u32) -> Option<u64> {
+        let (x, y) = frame.pointer?;
+        let n = self.tree.nodes[i as usize];
+        let b = self.tree.canvases.iter().find(|b| b.node == i)?;
+        let m = frame.metrics;
+        let r = m.rect(n.area);
+        let (w, h) = (r.w.round().max(1.0), r.h.round().max(1.0));
+        let hair = m.hair();
+        let scale = crate::canvas::Scale { width: w as u32, height: h as u32, weights: [hair, hair, hair * 2.0], dot: (m.cell_h * 0.2).round().max(2.0) };
+        let at = (x - r.x.round(), y - r.y.round());
+        let key = b.drawings.iter().rev().find_map(|d| d.hit(&scale, at, (m.cell_h * 0.15).max(hair)))?;
+        b.presses.iter().any(|p| p.0 == key).then_some(key)
+    }
+
     fn mix(&mut self, i: u32, (l, c): (u16, u16)) -> bool {
         let n = self.tree.nodes[i as usize];
         let (Some(path), Kind::ColorArea { h, l: was_l, c: was_c }) = (n.path, n.kind) else { return false };
@@ -2685,6 +2734,12 @@ impl<A: App> Runner<A> {
         }
         if let Kind::Turn { forward } = n.kind {
             return self.turn_month(i, forward);
+        }
+        if let Kind::Canvas { .. } = n.kind {
+            let Some(cmd) = self.aimed(i) else { return false };
+            let cmd = self.tree.commands[cmd as usize].clone();
+            self.run(cmd);
+            return true;
         }
         if let Kind::Select { .. } | Kind::Popover { .. } | Kind::Confirm { open: false } = n.kind {
             return self.toggle_open(n.id);
@@ -3114,6 +3169,15 @@ impl<A: App> Runner<A> {
             && matches!(chord.key, Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End | Key::PageUp | Key::PageDown)
         {
             return self.day_key(i, chord.key);
+        }
+        if self.pending.is_empty()
+            && typing
+            && chord.mods == Mods::default()
+            && let Some(i) = self.focused_control()
+            && matches!(self.tree.nodes[i as usize].kind, Kind::Canvas { pressable: true, .. })
+            && matches!(chord.key, Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End)
+        {
+            return self.aim_key(i, chord.key);
         }
         if self.pending.is_empty()
             && typing
@@ -3994,6 +4058,12 @@ impl<A: App> Runner<A> {
                 {
                     self.focus_on(n.id, false);
                     self.sliding = Some((n.id, now));
+                    self.stale = true;
+                    return true;
+                }
+                if let Kind::Canvas { .. } = n.kind {
+                    self.focus_on(n.id, false);
+                    self.aim = self.canvas_hit(frame, i).map(|key| (n.id, key));
                     self.stale = true;
                     return true;
                 }

@@ -1,6 +1,6 @@
 window		0 0 44 21	
   page	Swatch	0 0 44 7	
-    list		2 3 40 3	11 items
+    list		2 3 40 3	12 items
       list item		2 3 38 3	
         text	A small box filled with one of the theme's inks: a label's color, a series in a legend, a choice of color. The ink is named, not mixed, so the swatch follows the theme and the appearance like everything else.	2 3 38 3	
   alert		2 7 40 1	

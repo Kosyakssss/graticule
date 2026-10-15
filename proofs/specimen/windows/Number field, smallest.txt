@@ -1,6 +1,6 @@
 window		0 0 32 23	
   page	Number field	0 0 32 7	
-    list		2 3 28 3	18 items
+    list		2 3 28 3	19 items
       list item		2 3 26 3	
         text	A whole number in the facts, typed as a number or as a sum and stepped by one with the arrows.	2 3 26 3	
   alert		2 7 28 1	

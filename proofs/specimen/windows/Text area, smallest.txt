@@ -1,6 +1,6 @@
 window		0 0 38 22	
   page	Text area	0 0 38 7	
-    list		2 3 34 3	18 items
+    list		2 3 34 3	19 items
       list item		2 3 32 3	
         text	A field of several lines that types into a Text in the facts. It wraps at its width and grows with what is typed, so nothing hides inside it.	2 3 32 3	
   alert		2 7 34 1	

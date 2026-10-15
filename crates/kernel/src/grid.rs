@@ -27,6 +27,11 @@ impl Area {
         col >= self.col && row >= self.row && col < self.right() && row < self.bottom()
     }
 
+    /// Whether `other` lies wholly inside it.
+    pub const fn holds(&self, other: Area) -> bool {
+        other.col >= self.col && other.row >= self.row && other.right() <= self.right() && other.bottom() <= self.bottom()
+    }
+
     pub fn take_top(&mut self, rows: i32) -> Area {
         let rows = rows.clamp(0, self.rows.max(0));
         let cut = Area::new(self.col, self.row, self.cols, rows);

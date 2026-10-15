@@ -126,6 +126,8 @@ Days and times have components now. A calendar shows a month with the chosen day
 
 Colors have components too. A color is kept as lightness, chroma and hue, the way the eye sees it, so that a lighter version of a color looks just as vivid. A color field shows a small swatch and takes a hex code such as #3366cc or an OKLCH value; sliders set each part and show along their track the colors they would give; an area sets lightness and chroma together by dragging or the arrows. A color picker is a color field with a button that opens the area and a hue slider.
 
+Apps can now draw. A canvas is a box with a space of its own, for charts and small diagrams: lines, filled shapes, dots and words in the theme's inks, drawn again only when what they show changes, and away from the thread that answers the keyboard. A dot or a bar on a canvas can do something when it is clicked, or reached with the arrows. Raster images, such as photographs and scans, sit in boxes of cells and keep their shape. For anything else an app can paint a canvas with its own GPU code, which still follows the theme. In Specimen each component's live example now sits under its first sentence, so the pictures of every page show it.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

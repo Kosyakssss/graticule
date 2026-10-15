@@ -52,6 +52,7 @@ struct Out {
   @location(1) color: vec4<f32>,
   @location(2) clip: vec4<f32>,
   @location(3) @interpolate(flat) kind: u32,
+  @location(4) @interpolate(flat) span: vec2<f32>,
 };
 
 @vertex fn vs(input: In) -> Out {
@@ -63,6 +64,7 @@ struct Out {
   out.color = input.color;
   out.clip = input.clip;
   out.kind = input.kind;
+  out.span = input.uv.zw / max(input.size, vec2<f32>(1.0));
   return out;
 }
 
@@ -72,7 +74,9 @@ struct Out {
     discard;
   }
   if (input.kind == 2u) {
-    let c = textureSampleLevel(picture, picture_sampler, input.uv, 0.0);
+    let texels = vec2<f32>(textureDimensions(picture, 0)) * input.span;
+    let lod = max(0.0, log2(max(texels.x, texels.y)));
+    let c = textureSampleLevel(picture, picture_sampler, input.uv, lod);
     let pa = c.a * input.color.a;
     return vec4<f32>(c.rgb * pa, pa);
   }
@@ -102,6 +106,11 @@ pub struct Gpu {
     pictures: std::collections::HashMap<u32, (wgpu::Texture, wgpu::BindGroup)>,
     runs: Vec<(u32, std::ops::Range<u32>)>,
     kept: [(wgpu::Buffer, usize, usize); 4],
+    kept_runs: [Vec<(u32, std::ops::Range<u32>)>; 4],
+    pending: Vec<crate::canvas::Raster>,
+    arriving: Vec<crate::image::Image>,
+    hooks: Vec<crate::canvas::Hooked>,
+    watched: Vec<(u32, std::sync::Weak<crate::image::Pixels>)>,
     next: Next,
     clear: [f32; 4],
 }
@@ -215,8 +224,13 @@ impl Gpu {
                 wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
             ],
         });
-        let picture_sampler = device.create_sampler(&wgpu::SamplerDescriptor { mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, ..Default::default() });
-        let blank = Self::picture_group(&device, &queue, &picture_layout, &picture_sampler, 1, 1, &[0, 0, 0, 0]).1;
+        let picture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            ..Default::default()
+        });
+        let blank = Self::picture_group(&device, &queue, &picture_layout, &picture_sampler, &[(1, 1, &[0, 0, 0, 0])]).1;
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[Some(&layout), Some(&picture_layout)], immediate_size: 0 });
         let attributes = wgpu::vertex_attr_array![
             0 => Float32x2,
@@ -268,6 +282,11 @@ impl Gpu {
             picture_sampler,
             blank,
             pictures: std::collections::HashMap::new(),
+            kept_runs: Default::default(),
+            pending: Vec::new(),
+            arriving: Vec::new(),
+            hooks: Vec::new(),
+            watched: Vec::new(),
             runs: Vec::new(),
             kept,
             next: Next::Full(0),
@@ -275,24 +294,27 @@ impl Gpu {
         }
     }
 
-    fn picture_group(device: &wgpu::Device, queue: &wgpu::Queue, layout: &wgpu::BindGroupLayout, sampler: &wgpu::Sampler, width: u32, height: u32, rgba: &[u8]) -> (wgpu::Texture, wgpu::BindGroup) {
+    fn picture_group(device: &wgpu::Device, queue: &wgpu::Queue, layout: &wgpu::BindGroupLayout, sampler: &wgpu::Sampler, levels: &[(u32, u32, &[u8])]) -> (wgpu::Texture, wgpu::BindGroup) {
+        let (width, height, _) = levels[0];
         let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size,
-            mip_level_count: 1,
+            mip_level_count: levels.len() as u32,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-            rgba,
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(width * 4), rows_per_image: Some(height) },
-            size,
-        );
+        for (level, &(w, h, rgba)) in levels.iter().enumerate() {
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: level as u32, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                rgba,
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w * 4), rows_per_image: Some(h) },
+                wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            );
+        }
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -307,8 +329,103 @@ impl Gpu {
 
     #[profiling::function]
     pub fn add_image(&mut self, id: u32, width: u32, height: u32, rgba: &[u8]) {
-        let entry = Self::picture_group(&self.device, &self.queue, &self.picture_layout, &self.picture_sampler, width, height, rgba);
+        let entry = Self::picture_group(&self.device, &self.queue, &self.picture_layout, &self.picture_sampler, &[(width, height, rgba)]);
         self.pictures.insert(id, entry);
+    }
+
+    /// Puts `rgba` in the texture `id`, writing over it when it is already this size.
+    pub fn set_image(&mut self, id: u32, width: u32, height: u32, rgba: &[u8]) {
+        match self.pictures.get(&id) {
+            Some((t, _)) if t.width() == width && t.height() == height => self.queue.write_texture(
+                wgpu::TexelCopyTextureInfo { texture: t, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                rgba,
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(width * 4), rows_per_image: Some(height) },
+                wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            ),
+            _ => {
+                self.remove_image(id);
+                self.add_image(id, width, height, rgba);
+            }
+        }
+    }
+
+    /// Takes a canvas to draw before the next frame is shown.
+    pub fn raster(&mut self, r: crate::canvas::Raster) {
+        self.pending.retain(|p| p.id != r.id);
+        self.pending.push(r);
+    }
+
+    /// Takes an image to send to the GPU before the next frame is shown. Its texture lasts as long as the image does.
+    pub fn picture(&mut self, image: crate::image::Image) {
+        self.arriving.push(image);
+    }
+
+    /// Takes a canvas's paint hook to run before the next frame is shown.
+    pub fn hook(&mut self, h: crate::canvas::Hooked) {
+        self.hooks.retain(|p| p.id != h.id);
+        self.hooks.push(h);
+    }
+
+    fn target(&mut self, id: u32, width: u32, height: u32) -> wgpu::TextureView {
+        let fits = self.pictures.get(&id).is_some_and(|(t, _)| t.width() == width && t.height() == height && t.usage().contains(wgpu::TextureUsages::RENDER_ATTACHMENT));
+        if !fits {
+            self.remove_image(id);
+            let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout: &self.picture_layout,
+                entries: &[
+                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.picture_sampler) },
+                ],
+            });
+            self.pictures.insert(id, (texture, group));
+        }
+        self.pictures[&id].0.create_view(&wgpu::TextureViewDescriptor::default())
+    }
+
+    #[profiling::function]
+    fn settle(&mut self) {
+        for h in std::mem::take(&mut self.hooks) {
+            if h.width == 0 || h.height == 0 {
+                continue;
+            }
+            let view = self.target(h.id, h.width, h.height);
+            h.paint.paint(&crate::canvas::Target { device: &self.device, queue: &self.queue, view: &view, format: wgpu::TextureFormat::Rgba8Unorm, width: h.width, height: h.height, theme: h.theme });
+        }
+        for r in std::mem::take(&mut self.pending) {
+            if r.scale.width > 0 && r.scale.height > 0 {
+                let rgba = r.rgba();
+                self.set_image(r.id, r.scale.width, r.scale.height, &rgba);
+            }
+        }
+        let most = self.device.limits().max_texture_dimension_2d;
+        for image in std::mem::take(&mut self.arriving) {
+            let Some(pixels) = image.pixels() else { continue };
+            let levels = crate::image::levels(pixels, most);
+            let levels: Vec<(u32, u32, &[u8])> = levels.iter().map(|(w, h, d)| (*w, *h, d.as_slice())).collect();
+            let entry = Self::picture_group(&self.device, &self.queue, &self.picture_layout, &self.picture_sampler, &levels);
+            self.remove_image(image.texture());
+            self.pictures.insert(image.texture(), entry);
+            self.watched.push((image.texture(), image.watch()));
+        }
+        let gone: Vec<u32> = self.watched.iter().filter(|(_, w)| w.strong_count() == 0).map(|(id, _)| *id).collect();
+        if !gone.is_empty() {
+            self.watched.retain(|(_, w)| w.strong_count() > 0);
+            for id in gone {
+                self.remove_image(id);
+            }
+        }
     }
 
     pub fn remove_image(&mut self, id: u32) {
@@ -350,21 +467,7 @@ impl Gpu {
         }
         self.queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&Globals { viewport: [width as f32, height as f32], pad: [0.0; 2] }));
         self.queue.write_buffer(&self.instances, 0, bytemuck::cast_slice(quads));
-        self.runs.clear();
-        let mut bound = 0u32;
-        let mut start = 0u32;
-        for (i, q) in quads.iter().enumerate() {
-            if q.kind == 2 && q.image != bound {
-                if i as u32 > start {
-                    self.runs.push((bound, start..i as u32));
-                }
-                bound = q.image;
-                start = i as u32;
-            }
-        }
-        if (quads.len() as u32) > start {
-            self.runs.push((bound, start..quads.len() as u32));
-        }
+        runs_of(quads, &mut self.runs);
     }
 
     fn encode(&self, view: &wgpu::TextureView, count: usize, clear: [f32; 4]) -> wgpu::CommandEncoder {
@@ -404,6 +507,9 @@ impl Gpu {
         let mut sent = 0;
         for (k, quads) in layers.into_iter().enumerate() {
             let (buffer, cap, len) = &mut self.kept[k];
+            if quads.len() > *cap || dirty[k].as_ref().is_some_and(|d| !d.is_empty()) || quads.len() != *len {
+                runs_of(quads, &mut self.kept_runs[k]);
+            }
             if quads.len() > *cap {
                 *cap = quads.len().next_power_of_two();
                 *buffer = Self::instance_buffer(&self.device, *cap);
@@ -435,7 +541,8 @@ impl Gpu {
         self.clear = clear;
     }
 
-    fn draw(&self, view: &wgpu::TextureView) {
+    fn draw(&mut self, view: &wgpu::TextureView) {
+        self.settle();
         let encoder = match self.next {
             Next::Kept => self.encode_kept(view, self.clear),
             Next::Full(count) => self.encode(view, count, self.clear),
@@ -461,11 +568,17 @@ impl Gpu {
             });
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.set_bind_group(1, &self.blank, &[]);
-            for (buffer, _, len) in &self.kept {
-                if *len > 0 {
-                    pass.set_vertex_buffer(0, buffer.slice(..));
-                    pass.draw(0..4, 0..*len as u32);
+            for ((buffer, _, len), runs) in self.kept.iter().zip(&self.kept_runs) {
+                if *len == 0 {
+                    continue;
+                }
+                pass.set_vertex_buffer(0, buffer.slice(..));
+                for (image, range) in runs {
+                    pass.set_bind_group(1, self.pictures.get(image).map(|(_, g)| g).unwrap_or(&self.blank), &[]);
+                    let end = range.end.min(*len as u32);
+                    if range.start < end {
+                        pass.draw(0..4, range.start..end);
+                    }
                 }
             }
         }
@@ -473,6 +586,7 @@ impl Gpu {
     }
 
     pub fn snapshot(&mut self, quads: &[Quad], clear: [f32; 4]) -> Vec<u8> {
+        self.settle();
         let (width, height) = (self.config.width, self.config.height);
         self.prepare(quads, width, height);
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
@@ -509,6 +623,24 @@ impl Gpu {
             pixels.extend_from_slice(&mapped[start..start + (width * 4) as usize]);
         }
         pixels
+    }
+}
+
+fn runs_of(quads: &[Quad], runs: &mut Vec<(u32, std::ops::Range<u32>)>) {
+    runs.clear();
+    let mut bound = 0u32;
+    let mut start = 0u32;
+    for (i, q) in quads.iter().enumerate() {
+        if q.kind == 2 && q.image != bound {
+            if i as u32 > start {
+                runs.push((bound, start..i as u32));
+            }
+            bound = q.image;
+            start = i as u32;
+        }
+    }
+    if (quads.len() as u32) > start {
+        runs.push((bound, start..quads.len() as u32));
     }
 }
 
@@ -611,7 +743,7 @@ fn present(gpu: &Mutex<Gpu>, surface: &wgpu::Surface<'static>, waiting: &AtomicB
     };
     let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
     let queue = {
-        let gpu = lock(gpu);
+        let mut gpu = lock(gpu);
         waiting.store(false, Ordering::Release);
         gpu.draw(&view);
         gpu.queue.clone()

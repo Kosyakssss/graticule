@@ -595,6 +595,72 @@ fn shaded(p: &mut Painter, n: &Node, value: &str, (at, label): (u16, u8), (base,
     p.text(value, mono, (cell.right() + w, cell.y), None, theme.muted);
 }
 
+fn image<C>(p: &mut Painter, tree: &Tree<C>, i: u32, n: &Node) {
+    let Some((_, image)) = tree.images.iter().find(|m| m.0 == i) else { return };
+    let r = p.rect(n.area);
+    if image.is_empty() {
+        p.fill(r, p.theme.hover);
+        return;
+    }
+    let scale = (r.w / image.width() as f32).min(r.h / image.height() as f32);
+    let (w, h) = ((image.width() as f32 * scale).round(), (image.height() as f32 * scale).round());
+    let y = (r.y + (r.h - h) / 2.0).round();
+    p.text.show(image);
+    let clip = p.clip();
+    p.quads.push(crate::gpu::Quad { pos: [r.x.round(), y], size: [w, h], uv: [0.0, 0.0, 1.0, 1.0], color: [1.0; 4], clip, kind: 2, image: image.texture(), pad: [0; 2] });
+}
+
+/// The texture a canvas is drawn into, from its id; 0 is no texture.
+pub fn texture(id: crate::tree::Id) -> u32 {
+    ((id.0 ^ (id.0 >> 32)) as u32 & 0x7fff_ffff) | 1
+}
+
+/// The texture a canvas's paint hook paints into, from the canvas's id.
+pub fn hook_texture(id: crate::tree::Id) -> u32 {
+    texture(id) ^ 0x4000_0000
+}
+
+/// The sizes a canvas `w` by `h` pixels is drawn at.
+pub fn canvas_scale(p: &Painter, w: f32, h: f32) -> crate::canvas::Scale {
+    let line = p.style.line(p.m);
+    crate::canvas::Scale { width: w as u32, height: h as u32, weights: [p.m.hair(), line, line * 2.0], dot: (p.m.cell_h * 0.2).round().max(2.0) }
+}
+
+fn canvas<C>(p: &mut Painter, tree: &Tree<C>, i: u32, n: &Node, look: Look) {
+    let Some(board) = tree.canvases.iter().find(|b| b.node == i) else { return };
+    let r = p.rect(n.area);
+    let (x, y, w, h) = (r.x.round(), r.y.round(), r.w.round().max(1.0), r.h.round().max(1.0));
+    let scale = canvas_scale(p, w, h);
+    let id = texture(n.id);
+    let clip = p.clip();
+    if let Some(paint) = &board.paint {
+        let hooked = crate::canvas::Hooked { id: hook_texture(n.id), width: w as u32, height: h as u32, paint: paint.clone(), theme: p.theme };
+        p.quads.push(crate::gpu::Quad { pos: [x, y], size: [w, h], uv: [0.0, 0.0, 1.0, 1.0], color: [1.0; 4], clip, kind: 2, image: hooked.id, pad: [0; 2] });
+        p.text.hook(hooked);
+    }
+    p.text.raster(crate::canvas::Raster { id, scale, drawings: board.drawings.clone(), theme: p.theme });
+    p.quads.push(crate::gpu::Quad { pos: [x, y], size: [w, h], uv: [0.0, 0.0, 1.0, 1.0], color: [1.0; 4], clip, kind: 2, image: id, pad: [0; 2] });
+    let saved = p.clip_to(Rect::new(x, y, w, h));
+    let mono = p.m.mono();
+    for d in &board.drawings {
+        for (words, (lx, ly), ink) in d.labels(w, h) {
+            let color = p.theme.get(ink);
+            p.text(words, mono, (x + lx, (y + ly - p.m.cell_h / 2.0).round()), None, color);
+        }
+    }
+    p.set_clip(saved);
+    let t = p.style.line(p.m);
+    if let Some((_, key)) = tree.aim.filter(|a| a.0 == n.id)
+        && let Some([bx, by, bw, bh]) = board.drawings.iter().rev().find_map(|d| d.bounds(&scale, key))
+    {
+        let pad = t * 2.0;
+        border(p, Rect::new((x + bx - pad).round(), (y + by - pad).round(), (bw + pad * 2.0).round(), (bh + pad * 2.0).round()), t, p.theme.ink);
+    }
+    if look.focused {
+        border(p, Rect::new(x, y, w, h), t, p.theme.ink);
+    }
+}
+
 fn color_area(p: &mut Painter, n: &Node, now: crate::color::Oklch, look: Look) {
     let r = p.rect(n.area);
     let (theme, t) = (p.theme, p.style.line(p.m));
@@ -946,6 +1012,8 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             Some(&(_, base, channel)) => shaded(p, &n, text, (at, label), (base, channel), look),
             None => slider(p, &n, text, at, label, look),
         },
+        (Layer::Over, Kind::Canvas { .. }) => canvas(p, tree, i, &n, look),
+        (Layer::Over, Kind::Image { .. }) => image(p, tree, i, &n),
         (Layer::Over, Kind::ColorArea { l, c, h }) => color_area(p, &n, crate::color::Oklch { l, c, h }, look),
         (Layer::Over, Kind::Range { label }) => range(p, tree, &n, text, label),
         (Layer::Over, Kind::Thumb { at, .. }) => thumb(p, &n, at, look),

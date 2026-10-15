@@ -1,6 +1,6 @@
 window		0 0 42 22	
   page	Card	0 0 42 7	
-    list		2 3 38 3	22 items
+    list		2 3 38 3	23 items
       list item		2 3 36 3	
         text	A group of components in a box under its title, for things that belong together, such as one account's details. A card is never a button: what you can act on inside it has its own button or link.	2 3 36 3	
   alert		2 7 38 1	

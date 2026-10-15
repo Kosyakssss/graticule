@@ -1,6 +1,6 @@
 window		0 0 50 18	
   page	File field	0 0 50 7	
-    list		2 3 46 3	18 items
+    list		2 3 46 3	19 items
       list item		2 3 44 2	
         text	A file's path, typed or pasted into a field, or chosen with the system's own file panel.	2 3 44 2	
       list item		2 5 44 1	

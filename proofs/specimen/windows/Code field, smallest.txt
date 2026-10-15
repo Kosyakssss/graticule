@@ -1,6 +1,6 @@
 window		0 0 45 20	
   page	Code field	0 0 45 7	
-    list		2 3 41 3	18 items
+    list		2 3 41 3	19 items
       list item		2 3 39 2	
         text	A code of a fixed number of characters, one to a box, such as the six digits a sign-in sends.	2 3 39 2	
       list item		2 5 39 1	

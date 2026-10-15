@@ -3,6 +3,7 @@
 mod catalog;
 mod changes;
 mod page;
+mod rings;
 mod style;
 
 use std::sync::mpsc;

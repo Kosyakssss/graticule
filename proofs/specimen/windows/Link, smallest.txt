@@ -1,6 +1,6 @@
 window		0 0 113 13	
   page	Link	0 0 113 7	
-    list		2 3 109 3	22 items
+    list		2 3 109 3	23 items
       list item		2 3 107 2	
         text	A lighter way to offer a command: underlined text that runs it. Like a button, its words are the command's label, and inside a list row its short form ("Remove", where the palette says "Remove “Call mum”").	2 3 107 2	
       list item		2 5 107 1	

@@ -1,6 +1,6 @@
 window		0 0 35 23	
   page	Avatar	0 0 35 7	
-    list		2 3 31 3	11 items
+    list		2 3 31 3	12 items
       list item		2 3 29 3	
         text	A person, as the first letters of their name in a box. A picture of the person comes with raster images (build-plan item 16).	2 3 29 3	
   alert		2 7 31 1	

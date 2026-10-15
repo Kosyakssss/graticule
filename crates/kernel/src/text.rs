@@ -179,6 +179,15 @@ pub struct Text {
     scratch: Scratch,
     pub(crate) pen: Vec<crate::px::Rect>,
     pub(crate) atlas: u64,
+    /// The canvases to draw off the main thread before the next frame is shown.
+    pub rasters: Vec<crate::canvas::Raster>,
+    /// The canvas textures no longer on screen, to let go of.
+    pub released: Vec<u32>,
+    /// The images to send to the GPU before the next frame is shown.
+    pub images: Vec<crate::image::Image>,
+    /// The paint hooks to run before the next frame is shown.
+    pub hooks: Vec<crate::canvas::Hooked>,
+    drawn: HashMap<u32, u64>,
 }
 
 pub struct Drawn {
@@ -239,6 +248,41 @@ impl Text {
             scratch: Scratch::default(),
             pen: Vec::new(),
             atlas: 0,
+            rasters: Vec::new(),
+            released: Vec::new(),
+            images: Vec::new(),
+            hooks: Vec::new(),
+            drawn: HashMap::new(),
+        }
+    }
+
+    /// Asks for a canvas to be drawn off the main thread, unless its texture holds these pixels already.
+    pub fn raster(&mut self, r: crate::canvas::Raster) {
+        let stamp = r.stamp();
+        if self.drawn.insert(r.id, stamp) != Some(stamp) {
+            self.rasters.push(r);
+        }
+    }
+
+    /// Asks for an image to be sent to the GPU off the main thread, unless it is there already.
+    pub fn show(&mut self, image: &crate::image::Image) {
+        if self.drawn.insert(image.texture(), 0).is_none() {
+            self.images.push(image.clone());
+        }
+    }
+
+    /// Asks for a canvas's paint hook to paint off the main thread, unless its texture holds these pixels already.
+    pub fn hook(&mut self, h: crate::canvas::Hooked) {
+        let stamp = h.stamp();
+        if self.drawn.insert(h.id, stamp) != Some(stamp) {
+            self.hooks.push(h);
+        }
+    }
+
+    /// Lets go of a canvas's texture.
+    pub fn release(&mut self, id: u32) {
+        if self.drawn.remove(&id).is_some() {
+            self.released.push(id);
         }
     }
 

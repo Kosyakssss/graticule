@@ -1,6 +1,6 @@
 window		0 0 30 23	
   page	Message line	0 0 30 7	
-    list		2 3 26 3	8 items
+    list		2 3 26 3	9 items
       list item		2 3 24 3	
         text	The line under the page, for what a command said, or what failed and why. It stays until the next command says something else.	2 3 24 3	
   alert		2 7 26 1	

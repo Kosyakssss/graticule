@@ -1,6 +1,6 @@
 window		0 0 31 23	
   page	Radio group	0 0 31 7	
-    list		2 3 27 3	18 items
+    list		2 3 27 3	19 items
       list item		2 3 25 3	
         text	One of a few named options, as radio buttons one under another under a heading. Every option is visible, and choosing one is a single click.	2 3 25 3	
   alert		2 7 27 1	

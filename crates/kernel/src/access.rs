@@ -19,6 +19,7 @@ fn role(kind: Kind) -> Role {
         Kind::Day { .. } => Role::GridCell,
         Kind::Turn { .. } => Role::Button,
         Kind::ColorArea { .. } => Role::ColorWell,
+        Kind::Canvas { .. } => Role::Canvas,
         Kind::Slider { .. } | Kind::Thumb { .. } => Role::Slider,
         Kind::Range { .. } => Role::Group,
         Kind::Cycle { .. } | Kind::Browse | Kind::Chip => Role::Button,
@@ -56,7 +57,7 @@ fn role(kind: Kind) -> Role {
         Kind::Overlay { .. } => Role::Menu,
         Kind::Entry => Role::MenuItem,
         Kind::Choice { .. } => Role::ListBoxOption,
-        Kind::Swatch { .. } | Kind::Picture { .. } => Role::Image,
+        Kind::Swatch { .. } | Kind::Picture { .. } | Kind::Image { .. } => Role::Image,
     }
 }
 
@@ -97,6 +98,12 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 node.set_label(name);
                 node.set_value(text);
                 node.set_expanded(open);
+            }
+            Kind::Canvas { .. } => {
+                node.set_label(name);
+                if !text.is_empty() {
+                    node.set_value(text);
+                }
             }
             Kind::ColorArea { l, c, h } => {
                 node.set_label(name);

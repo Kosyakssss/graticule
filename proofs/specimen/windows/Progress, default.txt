@@ -1,34 +1,35 @@
 window		0 0 120 30	
   page	Progress	0 0 120 24	
-    list		2 3 116 20	14 items
+    list		2 3 116 20	15 items
       list item		2 3 114 1	
         text	How far a piece of work has come, as a bar with the count beside it: 37 of 120. The bar fills in the link ink.	2 3 79 1	
       list item		2 4 114 1	
       list item		2 5 114 1	
-        heading	Use it for	2 5 7 1	strong
-      list item		2 6 114 2	
-        text	Work the app counts itself, such as files copied so far. A job's own progress is in the status line already, with its name, so a page needs this only when the work is the page's subject. Nothing moves while nothing changes: there is no bar that moves by itself, since the status line says when work is running.	2 6 114 2	
-      list item		2 8 114 1	
-      list item		2 9 114 1	
-        heading	Code	2 9 4 1	strong
+        group		2 5 114 1	
+          column		2 5 14 1	
+            text	Live	2 5 14 1	muted
+          column		18 5 98 1	
+            progress bar	37 of 120	18 5 98 1	30.8 %
+      list item		2 6 114 1	
+      list item		2 7 114 1	
+        heading	Use it for	2 7 7 1	strong
+      list item		2 8 114 2	
+        text	Work the app counts itself, such as files copied so far. A job's own progress is in the status line already, with its name, so a page needs this only when the work is the page's subject. Nothing moves while nothing changes: there is no bar that moves by itself, since the status line says when work is running.	2 8 114 2	
       list item		2 10 114 1	
-        text	ui.progress(37, 120);	2 10 21 1	mono
       list item		2 11 114 1	
-        group		2 11 114 1	
-          column		2 11 14 1	
-            text	Live	2 11 14 1	muted
-          column		18 11 98 1	
-            progress bar	37 of 120	18 11 98 1	30.8 %
+        heading	Code	2 11 4 1	strong
       list item		2 12 114 1	
+        text	ui.progress(37, 120);	2 12 21 1	mono
       list item		2 13 114 1	
-        heading	Narrow windows	2 13 14 1	strong
       list item		2 14 114 1	
-        text	The bar shrinks to eight columns; the count always stays beside it.	2 14 50 1	
+        heading	Narrow windows	2 14 14 1	strong
       list item		2 15 114 1	
+        text	The bar shrinks to eight columns; the count always stays beside it.	2 15 50 1	
       list item		2 16 114 1	
-        heading	Screen reader	2 16 11 1	strong
       list item		2 17 114 1	
-        text	A progress bar, with its percentage and the count.	2 17 37 1	
+        heading	Screen reader	2 17 11 1	strong
+      list item		2 18 114 1	
+        text	A progress bar, with its percentage and the count.	2 18 37 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

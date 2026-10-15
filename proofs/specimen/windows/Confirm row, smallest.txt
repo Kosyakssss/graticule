@@ -1,6 +1,6 @@
 window		0 0 30 23	
   page	Confirm row	0 0 30 7	
-    list		2 3 26 3	18 items
+    list		2 3 26 3	19 items
       list item		2 3 24 3	
         text	A button that asks before it runs: pressing it puts a question in its own place, with a button that runs the command and one that cancels. It is the grounded form of a dialog: nothing covers the page, and the question stands where it was asked.	2 3 24 3	
   alert		2 7 26 1	

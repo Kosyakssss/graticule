@@ -1,6 +1,6 @@
 window		0 0 42 22	
   page	Columns	0 0 42 7	
-    list		2 3 38 3	14 items
+    list		2 3 38 3	15 items
       list item		2 3 36 3	
         text	Columns side by side, each made with column and given a width in cells: a number, Fill, or either with a smallest width (28.min(20), Fill.min(40)).	2 3 36 3	
   alert		2 7 38 1	

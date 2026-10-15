@@ -1,6 +1,6 @@
 window		0 0 48 19	
   page	Color picker	0 0 48 7	
-    list		2 3 44 3	18 items
+    list		2 3 44 3	19 items
       list item		2 3 42 2	
         text	A color field with a button after it that opens a color area and a hue slider under it.	2 3 42 2	
       list item		2 5 42 1	

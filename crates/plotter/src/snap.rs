@@ -54,6 +54,26 @@ pub fn snap<'a>(moving: Bounds, others: impl IntoIterator<Item = &'a Bounds>, th
     snapped
 }
 
+/// The nudges that line up the edges of a box being resized with the edges and centres of `others` within `threshold` page units: `x` is where the edge dragged across is, if one is, and `y` the one dragged down.
+pub fn snap_edges<'a>(x: Option<f64>, y: Option<f64>, others: impl IntoIterator<Item = &'a Bounds>, threshold: f64) -> Snapped {
+    let others: Vec<&Bounds> = others.into_iter().collect();
+    let mut snapped = Snapped::default();
+    for (edge, across) in [(x, true), (y, false)] {
+        let Some(edge) = edge else { continue };
+        let marks = |b: &Bounds| if across { [b.x, b.x + b.w / 2.0, b.right()] } else { [b.y, b.y + b.h / 2.0, b.bottom()] };
+        let best = others.iter().flat_map(|o| marks(o)).map(|t| (t - edge, t)).filter(|(n, _)| n.abs() <= threshold).min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()));
+        if let Some((nudge, at)) = best {
+            snapped.guides.push(Guide { vertical: across, at });
+            if across {
+                snapped.dx = nudge;
+            } else {
+                snapped.dy = nudge;
+            }
+        }
+    }
+    snapped
+}
+
 fn lines(moving: &Bounds, others: &[&Bounds], across: bool, threshold: f64) -> Option<(f64, f64)> {
     let marks = |b: &Bounds| if across { [b.x, b.x + b.w / 2.0, b.right()] } else { [b.y, b.y + b.h / 2.0, b.bottom()] };
     let mut best = None::<(f64, f64)>;

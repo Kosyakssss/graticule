@@ -6,7 +6,7 @@ use ledger::{Choose, Key, Outcome, Selection};
 use crate::board::{Board, End, Kind, Shape};
 use crate::geometry::{Bounds, Point};
 use crate::index::Index;
-use crate::snap::{Gap, Guide, snap};
+use crate::snap::{Gap, Guide, snap, snap_edges};
 
 /// What a drag on the board does.
 #[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
@@ -42,8 +42,8 @@ pub enum Intent {
     Translate { keys: Vec<Key<Shape>>, dx: f64, dy: f64, guides: Vec<Guide>, gaps: Vec<Gap>, into: Option<Key<Shape>> },
     /// Choose the shapes wholly inside a box, with the whole of any group they are in inside it too, which are `keys`, with `adding` as well as the chosen ones.
     Brush { area: Bounds, keys: Vec<Key<Shape>>, adding: bool },
-    /// Give a shape a new box by dragging one of its handles: a corner, or the middle of a side, which moves only that side.
-    Resize { key: Key<Shape>, to: Bounds },
+    /// Stretch the chosen shapes from the box around them, `from`, to a new box, by dragging one of its handles: a corner, or the middle of a side, which moves only that side. The dragged edges snap to the other shapes, along `guides`.
+    Resize { keys: Vec<Key<Shape>>, from: Bounds, to: Bounds, guides: Vec<Guide> },
     /// Put a new shape on the board, in the frame it is drawn in, hold an arrow's ends to the shapes they start and finish on, and put the shapes a new frame surrounds, `holds`, in it.
     Create { shape: Shape, start: Option<Key<Shape>>, end: Option<Key<Shape>>, holds: Vec<Key<Shape>> },
 }
@@ -62,7 +62,21 @@ impl Intent {
         let (from, to) = (gesture.from, gesture.to);
         match tool {
             Tool::Select => {
-                if let Some((key, b, (fx, fy))) = handle(board, chosen, from, reach) {
+                if let Some(Grip { keys, around: b, at: (fx, fy) }) = handle(board, chosen, from, reach) {
+                    let mut guides = Vec::new();
+                    let mut to = to;
+                    if gesture.moved {
+                        let mine: HashSet<Key<Shape>> = board.contents(&keys).into_iter().collect();
+                        let (near, row) = (SNAP / zoom, ROW / zoom);
+                        let mut found = index.query(Bounds::new(to.x - row, to.y - near, 2.0 * row, 2.0 * near));
+                        found.extend(index.query(Bounds::new(to.x - near, to.y - row, 2.0 * near, 2.0 * row)));
+                        found.sort_unstable_by_key(|e| e.key);
+                        found.dedup_by_key(|e| e.key);
+                        let others: Vec<Bounds> = found.into_iter().filter(|e| !e.arrow && !mine.contains(&e.key)).map(|e| e.bounds).collect();
+                        let snapped = snap_edges((fx != 0.5).then_some(to.x), (fy != 0.5).then_some(to.y), &others, near);
+                        to = Point::new(to.x + snapped.dx, to.y + snapped.dy);
+                        guides = snapped.guides;
+                    }
                     let span = |f: f64, start: f64, size: f64, at: f64| match f {
                         0.5 => (start, start + size),
                         _ => {
@@ -72,8 +86,8 @@ impl Intent {
                     };
                     let ((x0, x1), (y0, y1)) = (span(fx, b.x, b.w, to.x), span(fy, b.y, b.h, to.y));
                     return match gesture.moved {
-                        true => Intent::Resize { key, to: Bounds::new(x0, y0, x1 - x0, y1 - y0) },
-                        false => Intent::Choose { shape: Some(key), adding: false },
+                        true => Intent::Resize { keys, from: b, to: Bounds::new(x0, y0, x1 - x0, y1 - y0), guides },
+                        false => Intent::Choose { shape: keys.first().copied(), adding: false },
                     };
                 }
                 match (index.hit(board, from, reach), gesture.moved) {
@@ -141,7 +155,7 @@ impl Intent {
     pub fn preview(&self, board: &Board) -> Vec<Shape> {
         let keys: Vec<Key<Shape>> = match self {
             Intent::Translate { keys, .. } => board.contents(keys),
-            Intent::Resize { key, .. } => vec![*key],
+            Intent::Resize { keys, .. } => keys.clone(),
             Intent::Create { start, end, .. } => start.iter().chain(end).copied().collect(),
             Intent::Choose { .. } | Intent::Brush { .. } => return Vec::new(),
         };
@@ -189,7 +203,7 @@ impl Board {
                 }
                 chosen.choose(&if keys.is_empty() { Choose::Clear } else { Choose::All(keys) })
             }
-            Intent::Resize { key, to } => self.resize(key, to),
+            Intent::Resize { keys, from, to, .. } => self.scale(&keys, from, to),
             Intent::Create { mut shape, start, end, holds } => {
                 shape.id = Key::from_raw(key());
                 let id = shape.id;
@@ -230,13 +244,31 @@ impl Board {
 /// Where a shape's handles are, as fractions of its box across and down: the corners and the middle of each side.
 pub const HANDLES: [(f64, f64); 8] = [(0.0, 0.0), (0.5, 0.0), (1.0, 0.0), (1.0, 0.5), (1.0, 1.0), (0.5, 1.0), (0.0, 1.0), (0.0, 0.5)];
 
-fn handle(board: &Board, chosen: &Selection<Shape>, p: Point, reach: f64) -> Option<(Key<Shape>, Bounds, (f64, f64))> {
-    let mut keys = chosen.iter();
-    let (key, None) = (keys.next()?, keys.next()) else { return None };
-    let shape = board.shapes.find(key).filter(|s| s.kind != Kind::Arrow && !s.locked)?;
-    let b = shape.bounds();
+/// Whether the box around `shapes` has handles to drag: one shape has them unless it is locked, an arrow or text, whose size its words decide; several have them if any is unlocked.
+pub fn resizable<'s>(shapes: impl IntoIterator<Item = &'s Shape>) -> bool {
+    let shapes: Vec<&Shape> = shapes.into_iter().collect();
+    match shapes.as_slice() {
+        [] => false,
+        [one] => !one.locked && !matches!(one.kind, Kind::Arrow | Kind::Text(_)),
+        many => many.iter().any(|s| !s.locked),
+    }
+}
+
+/// A handle taken: the shapes it resizes, the box around them and where on it the handle is, as in [`HANDLES`].
+struct Grip {
+    keys: Vec<Key<Shape>>,
+    around: Bounds,
+    at: (f64, f64),
+}
+
+fn handle(board: &Board, chosen: &Selection<Shape>, p: Point, reach: f64) -> Option<Grip> {
+    let shapes: Vec<&Shape> = chosen.iter().filter_map(|k| board.shapes.find(k)).collect();
+    if !resizable(shapes.iter().copied()) {
+        return None;
+    }
+    let b = shapes.iter().map(|s| s.bounds()).reduce(|a, b| a.union(&b))?;
     let near = HANDLES.into_iter().find(|&(fx, fy)| Point::new(b.x + fx * b.w, b.y + fy * b.h).distance(p) <= reach)?;
-    Some((key, b, near))
+    Some(Grip { keys: shapes.iter().map(|s| s.id).collect(), around: b, at: near })
 }
 
 /// A new shape on top of the stack, in the topmost frame under its middle.

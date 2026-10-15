@@ -59,7 +59,7 @@ impl Pen {
     }
 }
 
-/// The box around the chosen shapes, and whether it has handles to drag: only one shape that isn't an arrow and isn't locked does.
+/// The box around the chosen shapes, and whether it has handles to drag, as [`plotter::resizable`] says.
 #[derive(Default)]
 struct Chosen(Option<(Bounds, bool)>);
 
@@ -69,13 +69,9 @@ impl Chosen {
     }
 
     fn around<'s>(shapes: impl Iterator<Item = &'s Shape>) -> Chosen {
-        let (mut around, mut count, mut corners) = (None::<Bounds>, 0, false);
-        for shape in shapes {
-            around = Some(around.map_or(shape.bounds(), |a| a.union(&shape.bounds())));
-            count += 1;
-            corners = shape.kind != Kind::Arrow && !shape.locked;
-        }
-        Chosen(around.map(|a| (a, count == 1 && corners)))
+        let shapes: Vec<&Shape> = shapes.collect();
+        let around = shapes.iter().map(|s| s.bounds()).reduce(|a, b| a.union(&b));
+        Chosen(around.map(|a| (a, plotter::resizable(shapes.iter().copied()))))
     }
 }
 
@@ -512,6 +508,13 @@ impl App for Whiteboard {
                         match &intent {
                             Some(Intent::Brush { area, .. }) => {
                                 corners(canvas, *area, Ink::Muted);
+                            }
+                            Some(Intent::Resize { guides, to, .. }) => {
+                                let reach = to.expand(400.0);
+                                for g in guides {
+                                    let (from, to) = if g.vertical { ((g.at, reach.y), (g.at, reach.bottom())) } else { ((reach.x, g.at), (reach.right(), g.at)) };
+                                    canvas.line(at(from.0, from.1), at(to.0, to.1)).ink(Ink::Danger).stroke(Weight::Hair);
+                                }
                             }
                             Some(Intent::Translate { guides, gaps, .. }) => {
                                 let reach = moved.iter().map(Shape::bounds).reduce(|a, b| a.union(&b)).unwrap_or_default().expand(400.0);

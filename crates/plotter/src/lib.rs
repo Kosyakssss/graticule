@@ -15,6 +15,6 @@ mod laws;
 pub use board::{Binding, Board, End, Group, Ink, Kind, LINE, Page, Shape, text_width};
 pub use geometry::{Bounds, Geometry, Point};
 pub use index::{Entry, Index};
-pub use snap::{Gap, Guide, Snapped, snap};
+pub use snap::{Gap, Guide, Snapped, snap, snap_edges};
 pub use svg::svg;
-pub use tool::{Gesture, HANDLES, Intent, Tool};
+pub use tool::{Gesture, HANDLES, Intent, Tool, resizable};

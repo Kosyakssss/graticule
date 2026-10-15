@@ -549,6 +549,38 @@ impl Board {
         outcome
     }
 
+    /// Stretches shapes from the box `from` to the box `to`, each keeping its place inside it, as dragging a handle of the box around them does. Locked shapes stay as they are, and text only moves, since its words decide its size.
+    pub fn scale(&mut self, keys: &[Key<Shape>], from: Bounds, to: Bounds) -> Outcome {
+        let (sx, sy) = (if from.w == 0.0 { 1.0 } else { to.w / from.w }, if from.h == 0.0 { 1.0 } else { to.h / from.h });
+        let map = |x: f64, y: f64| (to.x + (x - from.x) * sx, to.y + (y - from.y) * sy);
+        let mut outcome = Outcome::Nothing;
+        for &key in keys {
+            if !self.shapes.find(key).is_some_and(|s| !s.locked) || (sx == 1.0 && sy == 1.0 && from.x == to.x && from.y == to.y) {
+                continue;
+            }
+            outcome = self.shapes.change(key, |s| {
+                let (x, y) = map(s.x, s.y);
+                match &mut s.kind {
+                    Kind::Arrow => {
+                        let (x1, y1) = map(s.x + s.w, s.y + s.h);
+                        (s.w, s.h) = (x1 - x, y1 - y);
+                    }
+                    Kind::Text(_) => {}
+                    Kind::Draw(points) => {
+                        for p in points.chunks_exact_mut(2) {
+                            (p[0], p[1]) = (p[0] * sx, p[1] * sy);
+                        }
+                        (s.w, s.h) = (s.w * sx, s.h * sy);
+                    }
+                    _ => (s.w, s.h) = (s.w * sx, s.h * sy),
+                }
+                (s.x, s.y) = (x, y);
+            });
+        }
+        self.settle(keys);
+        outcome
+    }
+
     /// Takes shapes off the board, with what their frames hold and every binding to or from them. An arrow whose target goes keeps its end where it was.
     pub fn delete(&mut self, keys: &[Key<Shape>]) -> Outcome {
         let keys = self.contents(keys);

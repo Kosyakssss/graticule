@@ -6,11 +6,12 @@ use ledger::{Key, List, Outcome};
 use crate::geometry::{Bounds, Geometry, Point};
 use crate::order;
 
-/// A board: its shapes and the bindings between them. Every change goes through its methods, which keep bound arrows on what they point at within the same change, so one undo takes back both.
+/// A board: its shapes, the bindings between them and the groups that hold them together. Every change goes through its methods, which keep bound arrows on what they point at and groups whole within the same change, so one undo takes back all of it.
 #[derive(Facts, Default)]
 pub struct Board {
     pub shapes: List<Shape>,
     pub bindings: List<Binding>,
+    pub groups: List<Group>,
 }
 
 /// One shape on the board. Its box is `x`, `y`, `w` and `h` in page units; an arrow runs from (`x`, `y`) to (`x + w`, `y + h`), so its width and height may be negative.
@@ -27,6 +28,24 @@ pub struct Shape {
     pub kind: Kind,
     pub ink: Ink,
     pub locked: bool,
+    /// The group it is in, if any.
+    pub group: Option<Key<Group>>,
+}
+
+/// Shapes held together, so choosing, moving, copying or deleting one does it to them all. A group may sit in another, and always holds at least two things: shapes, groups or both.
+#[derive(Facts, Debug)]
+pub struct Group {
+    #[key]
+    pub id: Key<Group>,
+    /// The group it is in, if any.
+    pub group: Option<Key<Group>>,
+}
+
+/// One thing directly in a group: a shape or another group.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Top {
+    Shape(Key<Shape>),
+    Group(Key<Group>),
 }
 
 /// What a shape is.
@@ -83,12 +102,12 @@ pub enum End {
 
 impl Shape {
     pub fn new(id: Key<Shape>, kind: Kind, bounds: Bounds) -> Self {
-        Shape { id, index: String::new(), x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, kind, ink: Ink::default(), locked: false }
+        Shape { id, index: String::new(), x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, kind, ink: Ink::default(), locked: false, group: None }
     }
 
     /// An arrow from `from` to `to`.
     pub fn arrow(id: Key<Shape>, from: Point, to: Point) -> Self {
-        Shape { id, index: String::new(), x: from.x, y: from.y, w: to.x - from.x, h: to.y - from.y, kind: Kind::Arrow, ink: Ink::default(), locked: false }
+        Shape { id, index: String::new(), x: from.x, y: from.y, w: to.x - from.x, h: to.y - from.y, kind: Kind::Arrow, ink: Ink::default(), locked: false, group: None }
     }
 
     pub fn bounds(&self) -> Bounds {
@@ -164,13 +183,18 @@ impl Board {
         })
     }
 
-    /// A board of only `keys` and the bindings between them: what copying them takes. Making it records nothing, even inside a command, since it is a copy and not a change.
+    /// A board of only `keys`, the bindings between them and the groups they are in: what copying them takes. Making it records nothing, even inside a command, since it is a copy and not a change.
     pub fn excerpt(&self, keys: &[Key<Shape>]) -> Board {
         let inside: HashSet<Key<Shape>> = keys.iter().copied().filter(|k| self.shapes.has(*k)).collect();
         let apart = ledger::Transaction::begin();
         let mut part = Board::default();
+        let mut groups = HashSet::new();
         for shape in self.stacked().into_iter().filter(|s| inside.contains(&s.id)) {
+            groups.extend(self.above(shape.group));
             let _ = part.shapes.push(shape.clone());
+        }
+        for group in groups.into_iter().filter_map(|g| self.groups.find(g)) {
+            let _ = part.groups.push(group.clone());
         }
         for b in self.touching(keys).into_iter().filter_map(|b| self.bindings.find(b)).filter(|b| inside.contains(&b.arrow) && inside.contains(&b.to)) {
             let _ = part.bindings.push(b.clone());
@@ -179,12 +203,17 @@ impl Board {
         part
     }
 
-    /// Puts every shape of `other` on top of the stack, in its own order, moved by `dx` and `dy`, with new keys from `key` and its bindings between them, and says what the new shapes' keys are.
+    /// Puts every shape of `other` on top of the stack, in its own order, moved by `dx` and `dy`, with new keys from `key`, its bindings between them and its groups, and says what the new shapes' keys are.
     pub fn paste(&mut self, other: &Board, dx: f64, dy: f64, mut key: impl FnMut() -> u128) -> Vec<Key<Shape>> {
+        let regrouped: Vec<(Key<Group>, Key<Group>)> = other.groups.iter().map(|g| (g.id, Key::from_raw(key()))).collect();
+        let group = |old: Option<Key<Group>>| old.and_then(|o| regrouped.iter().find(|(g, _)| *g == o)).map(|(_, n)| *n);
+        for g in other.groups.iter() {
+            let _ = self.groups.push(Group { id: group(Some(g.id)).unwrap_or(g.id), group: group(g.group) });
+        }
         let mut made = Vec::new();
         for shape in other.stacked() {
             let id = Key::from_raw(key());
-            let _ = self.add(Shape { id, x: shape.x + dx, y: shape.y + dy, ..shape.clone() });
+            let _ = self.add(Shape { id, x: shape.x + dx, y: shape.y + dy, group: group(shape.group), ..shape.clone() });
             made.push((shape.id, id));
         }
         let new = |old: Key<Shape>| made.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
@@ -194,6 +223,111 @@ impl Board {
             }
         }
         made.into_iter().map(|(_, n)| n).collect()
+    }
+
+    /// Holds shapes together in a new group `id`, with the groups they are in as wholes, and says whether it did: it takes at least two things to group.
+    pub fn group(&mut self, keys: &[Key<Shape>], id: Key<Group>) -> Outcome {
+        let mut tops: Vec<Top> = keys.iter().filter_map(|&k| self.shapes.find(k)).map(|s| self.outermost(s.group).map_or(Top::Shape(s.id), Top::Group)).collect();
+        tops.sort_unstable();
+        tops.dedup();
+        if tops.len() < 2 {
+            return Outcome::Nothing;
+        }
+        let _ = self.groups.push(Group { id, group: None });
+        for top in tops {
+            self.lift(top, Some(id));
+        }
+        Outcome::Changed
+    }
+
+    /// Takes apart the outermost groups the shapes are in, leaving what they held, groups inside them included, as it was.
+    pub fn ungroup(&mut self, keys: &[Key<Shape>]) -> Outcome {
+        let mut tops: Vec<Key<Group>> = keys.iter().filter_map(|&k| self.shapes.find(k)).filter_map(|s| self.outermost(s.group)).collect();
+        tops.sort_unstable();
+        tops.dedup();
+        let mut outcome = Outcome::Nothing;
+        for g in tops {
+            for top in self.held(g) {
+                self.lift(top, None);
+            }
+            outcome = self.groups.remove(g);
+        }
+        outcome
+    }
+
+    /// Every shape that goes with `keys`: each one, or if it is in a group, every shape in its outermost group. Choosing, moving and copying take this.
+    pub fn whole(&self, keys: &[Key<Shape>]) -> Vec<Key<Shape>> {
+        let mut seen = HashSet::new();
+        let mut whole = Vec::new();
+        for &key in keys {
+            let Some(shape) = self.shapes.find(key) else { continue };
+            let found = match self.outermost(shape.group) {
+                Some(g) => self.members(g),
+                None => vec![key],
+            };
+            whole.extend(found.into_iter().filter(|k| seen.insert(*k)));
+        }
+        whole
+    }
+
+    /// The groups `group` sits in, from itself out to the outermost.
+    fn above(&self, mut group: Option<Key<Group>>) -> Vec<Key<Group>> {
+        let mut found = Vec::new();
+        while let Some(g) = group.filter(|g| !found.contains(g)) {
+            found.push(g);
+            group = self.groups.find(g).and_then(|g| g.group);
+        }
+        found
+    }
+
+    fn outermost(&self, group: Option<Key<Group>>) -> Option<Key<Group>> {
+        self.above(group).last().copied()
+    }
+
+    /// The shapes and groups directly in `group`.
+    fn held(&self, group: Key<Group>) -> Vec<Top> {
+        let shapes = self.shapes.linked(Shape::group, group).map(|s| Top::Shape(s.id));
+        let groups = self.groups.linked(Group::group, group).map(|g| Top::Group(g.id));
+        shapes.chain(groups).collect()
+    }
+
+    /// Every shape in `group`, however deep.
+    fn members(&self, group: Key<Group>) -> Vec<Key<Shape>> {
+        let mut found = Vec::new();
+        let mut due = vec![group];
+        while let Some(g) = due.pop() {
+            for top in self.held(g) {
+                match top {
+                    Top::Shape(s) => found.push(s),
+                    Top::Group(g) => due.push(g),
+                }
+            }
+        }
+        found
+    }
+
+    fn lift(&mut self, top: Top, into: Option<Key<Group>>) {
+        let _ = match top {
+            Top::Shape(s) => self.shapes.change(s, |s| s.group = into),
+            Top::Group(g) => self.groups.change(g, |g| g.group = into),
+        };
+    }
+
+    /// Takes apart the groups among `groups` left holding fewer than two things, and the groups they were in in turn, since a group of one holds nothing together.
+    fn tidy(&mut self, groups: Vec<Key<Group>>) {
+        let mut due = groups;
+        while let Some(g) = due.pop() {
+            let Some(parent) = self.groups.find(g).map(|g| g.group) else { continue };
+            let held = self.held(g);
+            if held.len() >= 2 {
+                continue;
+            }
+            for top in held {
+                self.lift(top, parent);
+            }
+            let _ = self.groups.remove(g);
+            due.extend(parent);
+        }
     }
 
     /// Locks or unlocks shapes. A locked shape can't be moved, resized, written in or drawn in another ink.
@@ -254,11 +388,14 @@ impl Board {
             let _ = self.bindings.remove(b);
         }
         let mut outcome = Outcome::Nothing;
+        let mut groups = Vec::new();
         for &key in keys {
+            groups.extend(self.shapes.find(key).and_then(|s| s.group));
             if self.shapes.remove(key).changed() {
                 outcome = Outcome::Changed;
             }
         }
+        self.tidy(groups);
         outcome
     }
 

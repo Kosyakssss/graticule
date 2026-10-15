@@ -13,3 +13,5 @@ primary+a: choose-all
 primary+shift+p: palette
 primary+c: copy
 primary+v: paste
+primary+g: group
+primary+shift+g: ungroup

@@ -13,6 +13,8 @@ enum Act {
     Delete(u8),
     Front(u8),
     Back(u8),
+    Group(u8, u8),
+    Ungroup(u8),
     Gesture(u8, f64, f64, f64, f64, bool),
 }
 
@@ -30,6 +32,8 @@ fn act() -> impl Strategy<Value = Act> {
         any::<u8>().prop_map(Act::Delete),
         any::<u8>().prop_map(Act::Front),
         any::<u8>().prop_map(Act::Back),
+        (any::<u8>(), any::<u8>()).prop_map(|(a, b)| Act::Group(a, b)),
+        any::<u8>().prop_map(Act::Ungroup),
         (any::<u8>(), coord(), coord(), coord(), coord(), any::<bool>()).prop_map(|(t, a, b, c, d, s)| Act::Gesture(t, a, b, c, d, s)),
     ]
 }
@@ -89,6 +93,16 @@ fn run(board: &mut Board, chosen: &mut Selection<Shape>, act: &Act, next: &mut u
                 let _ = board.to_back(&[key]);
             }
         }
+        Act::Group(a, b) => {
+            if let (Some(a), Some(b)) = (nth(board, a), nth(board, b)) {
+                let _ = board.group(&[a, b], Key::fixed(*next));
+            }
+        }
+        Act::Ungroup(k) => {
+            if let Some(key) = nth(board, k) {
+                let _ = board.ungroup(&[key]);
+            }
+        }
     }
 }
 
@@ -100,11 +114,23 @@ fn bound(board: &Board) -> Result<(), String> {
             return Err(format!("the {:?} end of {:?} is at {at:?}, its anchor at {want:?}", b.end, b.arrow));
         }
     }
+    let parents = board.shapes.iter().map(|s| s.group).chain(board.groups.iter().map(|g| g.group));
+    for parent in parents.flatten() {
+        if !board.groups.has(parent) {
+            return Err(format!("group {parent:?} is gone but still holds something"));
+        }
+    }
+    for g in board.groups.iter() {
+        let held = board.shapes.iter().filter(|s| s.group == Some(g.id)).count() + board.groups.iter().filter(|h| h.group == Some(g.id)).count();
+        if held < 2 {
+            return Err(format!("group {:?} holds {held}", g.id));
+        }
+    }
     Ok(())
 }
 
 fn picture(board: &Board) -> Vec<(u128, String, String)> {
-    board.stacked().iter().map(|s| (s.id.raw(), format!("{:?} {} {} {} {} {:?}", s.kind, s.x, s.y, s.w, s.h, s.ink), s.index.clone())).collect()
+    board.stacked().iter().map(|s| (s.id.raw(), format!("{:?} {} {} {} {} {:?} {:?}", s.kind, s.x, s.y, s.w, s.h, s.ink, s.group), s.index.clone())).collect()
 }
 
 proptest! {

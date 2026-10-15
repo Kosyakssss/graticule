@@ -34,11 +34,11 @@ pub struct Gesture {
 /// What letting go of a gesture does, worked out from the board, its index, the chosen shapes and the tool alone. It is the state the tool is in, so showing a drag under way and finishing it can never disagree.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Intent {
-    /// Choose `shape`, or with `adding` add it to the chosen ones or take it away; no shape lets go of them all.
+    /// Choose `shape` and the rest of its group, or with `adding` add them to the chosen ones or take them away; no shape lets go of them all.
     Choose { shape: Option<Key<Shape>>, adding: bool },
     /// Move shapes by a distance, snapped to the others, with the lines and the equal gaps they snapped to.
     Translate { keys: Vec<Key<Shape>>, dx: f64, dy: f64, guides: Vec<Guide>, gaps: Vec<Gap> },
-    /// Choose the shapes wholly inside a box, which are `keys`, with `adding` as well as the chosen ones.
+    /// Choose the shapes wholly inside a box, with the whole of any group they are in inside it too, which are `keys`, with `adding` as well as the chosen ones.
     Brush { area: Bounds, keys: Vec<Key<Shape>>, adding: bool },
     /// Give a shape a new box by dragging one of its handles: a corner, or the middle of a side, which moves only that side.
     Resize { key: Key<Shape>, to: Bounds },
@@ -77,7 +77,7 @@ impl Intent {
                 match (index.hit(board, from, reach), gesture.moved) {
                     (Some(key), false) => Intent::Choose { shape: Some(key), adding: gesture.shift },
                     (Some(key), true) => {
-                        let keys: Vec<_> = if chosen.contains(key) { chosen.iter().filter(|k| board.shapes.has(*k)).collect() } else { vec![key] };
+                        let keys: Vec<_> = if chosen.contains(key) { chosen.iter().filter(|k| board.shapes.has(*k)).collect() } else { board.whole(&[key]) };
                         let (dx, dy) = (to.x - from.x, to.y - from.y);
                         let moving = keys.iter().filter_map(|k| board.shapes.find(*k)).map(|s| s.bounds()).reduce(|a, b| a.union(&b)).unwrap_or_default();
                         let moved = Bounds { x: moving.x + dx, y: moving.y + dy, ..moving };
@@ -94,7 +94,9 @@ impl Intent {
                     (None, false) => Intent::Choose { shape: None, adding: gesture.shift },
                     (None, true) => {
                         let area = Bounds::around(from, to);
-                        let keys = index.query(area).into_iter().filter_map(|e| board.shapes.find(e.key)).filter(|s| area.holds(&s.bounds())).map(|s| s.id).collect();
+                        let found: Vec<Key<Shape>> = index.query(area).into_iter().filter_map(|e| board.shapes.find(e.key)).filter(|s| area.holds(&s.bounds())).map(|s| s.id).collect();
+                        let held: HashSet<Key<Shape>> = found.iter().copied().collect();
+                        let keys = found.into_iter().filter(|k| board.whole(&[*k]).iter().all(|w| held.contains(w))).collect();
                         Intent::Brush { area, keys, adding: gesture.shift }
                     }
                 }
@@ -146,7 +148,15 @@ impl Board {
     /// Does what an intent says, as one change, choosing what it makes. `key` hands out new keys.
     pub fn perform(&mut self, chosen: &mut Selection<Shape>, intent: Intent, mut key: impl FnMut() -> u128) -> Outcome {
         match intent {
-            Intent::Choose { shape: Some(k), adding } => chosen.choose(&if adding { Choose::Toggle(k.raw()) } else { Choose::Only(k.raw()) }),
+            Intent::Choose { shape: Some(k), adding } => {
+                let whole = self.whole(&[k]);
+                let keys: Vec<u128> = match (adding, chosen.contains(k)) {
+                    (false, _) => whole.iter().map(|k| k.raw()).collect(),
+                    (true, false) => chosen.iter().chain(whole).map(Key::raw).collect(),
+                    (true, true) => chosen.iter().filter(|c| !whole.contains(c)).map(Key::raw).collect(),
+                };
+                chosen.choose(&if keys.is_empty() { Choose::Clear } else { Choose::All(keys) })
+            }
             Intent::Choose { shape: None, adding: false } => chosen.choose(&Choose::Clear),
             Intent::Choose { shape: None, adding: true } => Outcome::Nothing,
             Intent::Translate { keys, dx, dy, .. } => {

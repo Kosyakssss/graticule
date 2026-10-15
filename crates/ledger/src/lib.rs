@@ -25,7 +25,7 @@ pub use key::Key;
 pub use list::List;
 pub use op::Op;
 pub use outcome::Outcome;
-pub use path::{DEPTH, Derivation, ErasedPath, FactPath, Facts, Field, FieldInfo, Find, Kind, Moving, Record, Step, Work};
+pub use path::{DEPTH, Derivation, ErasedPath, FactPath, Facts, Field, FieldInfo, Find, Kind, Link, Moving, Record, Step, Work};
 pub use plain::Document;
 pub use selection::{Choose, Selection};
 pub use store::{Migration, Opened, Stopped, Store, entries, fresh_replica, migrate, note_failures, read, stopped_session};

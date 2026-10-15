@@ -43,13 +43,15 @@ window		0 0 120 30
     button	Import…	61 27 9 1	
     button	Lock	72 27 6 1	unavailable (Choose a shape first)
     button	Unlock	80 27 8 1	unavailable (Choose a shape first)
-    button	Choose everything	90 27 23 1	
-    button	Bring to front	2 28 12 1	unavailable (Choose a shape first)
-    button	Send to back	16 28 12 1	unavailable (Choose a shape first)
-    button	Show everything	30 28 15 1	
-    button	Open	47 28 6 1	unavailable (Choose a file first)
-    button	Save	55 28 6 1	unavailable (Choose a file first)
-    button	Export a picture	63 28 14 1	unavailable (Choose a file first)
-    button	Undo	79 28 13 1	unavailable (Nothing to undo)
-    button	Redo	94 28 19 1	unavailable (Nothing to redo)
-    button	Open the palette	2 29 28 1	
+    button	Group	90 27 14 1	unavailable (Choose two shapes or more)
+    button	Ungroup	2 28 22 1	unavailable (The board has no groups)
+    button	Choose everything	26 28 23 1	
+    button	Bring to front	51 28 12 1	unavailable (Choose a shape first)
+    button	Send to back	65 28 12 1	unavailable (Choose a shape first)
+    button	Show everything	79 28 15 1	
+    button	Open	96 28 6 1	unavailable (Choose a file first)
+    button	Save	104 28 6 1	unavailable (Choose a file first)
+    button	Export a picture	2 29 14 1	unavailable (Choose a file first)
+    button	Undo	18 29 13 1	unavailable (Nothing to undo)
+    button	Redo	33 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	54 29 28 1	

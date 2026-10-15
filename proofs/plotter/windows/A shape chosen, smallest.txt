@@ -1,4 +1,4 @@
-window		0 0 99 22	
+window		0 0 99 23	
   page	Plotter	0 0 99 16	
     group		2 3 95 1	
       group		2 3 46 1	
@@ -26,7 +26,7 @@ window		0 0 99 22
       button	Save	90 14 7 1	unavailable (Choose a file first)
   alert		2 16 95 1	
   status		2 17 95 1	
-  toolbar		2 18 95 4	
+  toolbar		2 18 95 5	
     button	Choose	2 18 10 1	unavailable (Choosing already)
     button	Rectangle	14 18 12 1	
     button	Ellipse	28 18 9 1	
@@ -43,13 +43,15 @@ window		0 0 99 22
     button	Import…	88 19 9 1	
     button	Lock	2 20 6 1	
     button	Unlock	10 20 8 1	
-    button	Choose everything	20 20 23 1	
-    button	Bring to front	45 20 12 1	
-    button	Send to back	59 20 12 1	
-    button	Show everything	73 20 15 1	
-    button	Open	90 20 6 1	unavailable (Choose a file first)
-    button	Save	2 21 6 1	unavailable (Choose a file first)
-    button	Export a picture	10 21 14 1	unavailable (Choose a file first)
-    button	Undo	26 21 13 1	unavailable (Nothing to undo)
-    button	Redo	41 21 19 1	unavailable (Nothing to redo)
-    button	Open the palette	62 21 28 1	
+    button	Group	20 20 14 1	unavailable (Choose two shapes or more)
+    button	Ungroup	36 20 22 1	unavailable (The board has no groups)
+    button	Choose everything	60 20 23 1	
+    button	Bring to front	85 20 12 1	
+    button	Send to back	2 21 12 1	
+    button	Show everything	16 21 15 1	
+    button	Open	33 21 6 1	unavailable (Choose a file first)
+    button	Save	41 21 6 1	unavailable (Choose a file first)
+    button	Export a picture	49 21 14 1	unavailable (Choose a file first)
+    button	Undo	65 21 13 1	unavailable (Nothing to undo)
+    button	Redo	2 22 19 1	unavailable (Nothing to redo)
+    button	Open the palette	23 22 28 1	

@@ -44,6 +44,12 @@ fn is_key(ty: &Type) -> bool {
     last_segment(ty).is_some_and(|s| s.ident == "Key" && !s.arguments.is_empty())
 }
 
+fn is_maybe_key(ty: &Type) -> bool {
+    last_segment(ty).is_some_and(|s| {
+        s.ident == "Option" && matches!(&s.arguments, syn::PathArguments::AngleBracketed(a) if a.args.len() == 1 && matches!(a.args.first(), Some(syn::GenericArgument::Type(t)) if is_key(t)))
+    })
+}
+
 fn is_bool(ty: &Type) -> bool {
     last_segment(ty).is_some_and(|s| s.ident == "bool" && s.arguments.is_empty())
 }
@@ -113,7 +119,7 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
             quote!(::std::option::Option::None)
         };
         let is_record_key = record.is_some_and(|k| k.ident == *ident);
-        let link_tokens = if record.is_some() && !is_record_key && is_key(ty) && f.kind != Kind::Live {
+        let link_tokens = if record.is_some() && !is_record_key && (is_key(ty) || is_maybe_key(ty)) && f.kind != Kind::Live {
             let n = links.len() as u8;
             links.push(ident.clone());
             quote!(::std::option::Option::Some(#n))
@@ -203,15 +209,15 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
         let flags = if flag_bits.is_empty() { quote!(0) } else { quote!(#(#flag_bits)|*) };
         let count = flag as usize;
         let link_count = links.len();
-        let link_arms = links.iter().enumerate().map(|(n, ident)| quote!(#n => self.#ident.raw(),));
+        let link_arms = links.iter().enumerate().map(|(n, ident)| quote!(#n => #ledger::Link::target(&self.#ident),));
         quote! {
             impl #ledger::Record for #name {
                 const FLAGS: usize = #count;
                 const LINKS: usize = #link_count;
-                fn link(&self, i: usize) -> u128 {
+                fn link(&self, i: usize) -> ::std::option::Option<u128> {
                     match i {
                         #(#link_arms)*
-                        _ => 0,
+                        _ => ::std::option::Option::None,
                     }
                 }
                 fn key(&self) -> #ledger::Key<Self> {

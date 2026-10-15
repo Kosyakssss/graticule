@@ -8,7 +8,7 @@ use crate::journal;
 use crate::key::Key;
 use crate::op::Op;
 use crate::outcome::Outcome;
-use crate::path::{ErasedPath, FactPath, Field, Kind, Record, Step};
+use crate::path::{ErasedPath, FactPath, Field, Kind, Link, Record, Step};
 use crate::plain::Document;
 use crate::value::Value;
 
@@ -156,7 +156,7 @@ impl<T: Record> List<T> {
     }
 
     /// The records whose `field` holds `key`, in no particular order, kept as the list changes.
-    pub fn linked<U: 'static>(&self, field: FactPath<T, Key<U>>, key: Key<U>) -> impl Iterator<Item = &T> + '_ {
+    pub fn linked<U: 'static, L: Link<U> + Field>(&self, field: FactPath<T, L>, key: Key<U>) -> impl Iterator<Item = &T> + '_ {
         let i = field.link().expect("a list follows every field of a record that holds a key") as usize;
         let to = key.raw();
         self.links[i].range((to, 0)..=(to, u128::MAX)).filter_map(|&(_, k)| self.find(Key::from_raw(k)))
@@ -442,9 +442,9 @@ impl<T: Record> List<T> {
         }
     }
 
-    fn relink(&mut self, key: u128, before: &[u128], after: &[u128]) {
+    fn relink(&mut self, key: u128, before: &[Option<u128>], after: &[Option<u128>]) {
         for (i, set) in self.links.iter_mut().enumerate() {
-            let (was, is) = (before.get(i).copied(), after.get(i).copied());
+            let (was, is) = (before.get(i).copied().flatten(), after.get(i).copied().flatten());
             if was == is {
                 continue;
             }
@@ -495,7 +495,7 @@ impl<T: Record> List<T> {
     }
 }
 
-fn links_of<T: Record>(record: &T) -> Vec<u128> {
+fn links_of<T: Record>(record: &T) -> Vec<Option<u128>> {
     (0..T::LINKS).map(|i| record.link(i)).collect()
 }
 

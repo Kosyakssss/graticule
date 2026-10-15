@@ -307,7 +307,7 @@ pub struct FieldInfo {
     pub kind: Kind,
 }
 
-/// A `Facts` type with a `#[key]` field, so it can live in a `List`. Its yes-or-no fields are counted by every list that holds it, and its fields holding another record's key are its links, which every list that holds it can follow backwards.
+/// A `Facts` type with a `#[key]` field, so it can live in a `List`. Its yes-or-no fields are counted by every list that holds it, and its fields holding another record's key, or maybe one, are its links, which every list that holds it can follow backwards.
 pub trait Record: Facts {
     const FLAGS: usize;
     const LINKS: usize;
@@ -316,8 +316,25 @@ pub trait Record: Facts {
 
     fn flags(&self) -> u64;
 
-    /// The raw key its `i`th link holds.
-    fn link(&self, i: usize) -> u128;
+    /// The raw key its `i`th link holds, if it holds one.
+    fn link(&self, i: usize) -> Option<u128>;
+}
+
+/// A field that holds another record's key, or maybe one: a link a list follows backwards.
+pub trait Link<U> {
+    fn target(&self) -> Option<u128>;
+}
+
+impl<U> Link<U> for Key<U> {
+    fn target(&self) -> Option<u128> {
+        Some(self.raw())
+    }
+}
+
+impl<U> Link<U> for Option<Key<U>> {
+    fn target(&self) -> Option<u128> {
+        self.map(|k| k.raw())
+    }
 }
 
 /// These facts can find a `T` by its key. Generated for every `List<T>` field; labels and `available` use it.

@@ -184,6 +184,8 @@ enum Cmd {
     MoveDown,
     #[label("Copy")]
     Copy,
+    #[internal]
+    Copied(String),
     #[label("Paste")]
     Paste,
     #[internal]
@@ -196,6 +198,10 @@ enum Cmd {
     Lock,
     #[label("Unlock")]
     Unlock,
+    #[label("Group")]
+    Group,
+    #[label("Ungroup")]
+    Ungroup,
     #[label("Choose everything")]
     ChooseAll,
     #[label("Bring to front")]
@@ -228,6 +234,9 @@ impl App for Whiteboard {
             Cmd::Remove | Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::ToFront | Cmd::ToBack | Cmd::Lock | Cmd::Unlock | Cmd::Copy => {
                 no_if(self.chosen.is_empty(), t!("Choose a shape first"))
             }
+            Cmd::Group => no_if(self.chosen.len() < 2, t!("Choose two shapes or more")),
+            Cmd::Ungroup if self.board.groups.is_empty() => No(t!("The board has no groups")),
+            Cmd::Ungroup => no_if(self.chosen.is_empty(), t!("Choose a group first")),
             Cmd::ChooseAll if self.chosen.len() == self.board.shapes.len() && !self.board.shapes.is_empty() => No(t!("Everything is chosen already")),
             Cmd::ChooseAll | Cmd::ShowAll => no_if(self.board.shapes.is_empty(), t!("The board is empty")),
             Cmd::ExportPicture if self.board.shapes.is_empty() => No(t!("The board is empty")),
@@ -238,7 +247,7 @@ impl App for Whiteboard {
             Cmd::Arrow => no_if(self.tool == Tool::Arrow, t!("Drawing arrows already")),
             Cmd::Draw => no_if(self.tool == Tool::Draw, t!("Drawing freehand already")),
             Cmd::Write { .. } => no_if(self.chosen.len() > 1, t!("Choose one shape at most")),
-            Cmd::Paste | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
+            Cmd::Paste | Cmd::Copied(_) | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
         }
     }
 
@@ -261,10 +270,13 @@ impl App for Whiteboard {
             }
             Cmd::Copy => {
                 let keys: Vec<_> = self.chosen.iter().collect();
-                let part = self.board.excerpt(&keys);
-                let count = part.shapes.len();
-                cx.copy(plotter::svg(&part));
-                cx.say(t!("Copied {count} shapes"))
+                let (board, count) = (self.board.clone(), keys.len());
+                cx.job(t!("Copying {count} shapes"), move || plotter::svg(&board.excerpt(&keys)), Cmd::Copied);
+                Outcome::Nothing
+            }
+            Cmd::Copied(svg) => {
+                cx.copy(svg);
+                Outcome::Nothing
             }
             Cmd::Paste => {
                 cx.paste(Cmd::Pasted);
@@ -292,6 +304,20 @@ impl App for Whiteboard {
                     (Outcome::Nothing, true) => cx.say(t!("Locked already")),
                     (Outcome::Nothing, false) => cx.say(t!("Not locked")),
                     (changed, _) => changed,
+                }
+            }
+            Cmd::Group => {
+                let keys: Vec<_> = self.chosen.iter().collect();
+                match self.board.group(&keys, cx.key()) {
+                    Outcome::Nothing => cx.say(t!("Grouped already")),
+                    changed => changed,
+                }
+            }
+            Cmd::Ungroup => {
+                let keys: Vec<_> = self.chosen.iter().collect();
+                match self.board.ungroup(&keys) {
+                    Outcome::Nothing => cx.say(t!("Not in a group")),
+                    changed => changed,
                 }
             }
             Cmd::ChooseAll => self.chosen.choose(&ledger::Choose::All(self.board.shapes.keys().map(Key::raw).collect())),
@@ -483,6 +509,13 @@ impl App for Whiteboard {
                 let _ = w.board.lock(&[first], true);
                 let _ = w.chosen.choose(&ledger::Choose::Only(first.raw()));
                 w.pen = Pen::Link;
+                w
+            })
+            .add("Two shapes grouped and chosen", {
+                let mut w = Whiteboard::diagram();
+                let stacked: Vec<_> = w.board.stacked().iter().take(2).map(|s| s.id).collect();
+                let _ = w.board.group(&stacked, Key::fixed(9_000));
+                let _ = w.chosen.choose(&ledger::Choose::All(stacked.iter().map(|k| k.raw()).collect()));
                 w
             })
             .add("Many shapes", Whiteboard::many(2_000))

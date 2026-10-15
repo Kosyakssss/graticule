@@ -6,6 +6,7 @@ mod find;
 mod fold;
 mod motion;
 mod selection;
+mod spelling;
 
 #[cfg(test)]
 mod laws;
@@ -16,3 +17,6 @@ pub use find::{Next, Replacement, Stale};
 pub use fold::{Block, Folds};
 pub use motion::Motion;
 pub use selection::{Selections, Span};
+pub use spelling::Spelling;
+
+pub use ledger::{Mark, Marks};

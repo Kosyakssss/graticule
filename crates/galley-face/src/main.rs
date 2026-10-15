@@ -1,4 +1,4 @@
-use galley::{Doc, Replacement};
+use galley::{Doc, Mark, Marks, Replacement};
 use graticule::prelude::*;
 
 #[derive(Facts, Default)]
@@ -10,6 +10,8 @@ struct Galley {
     find: Text,
     #[session]
     with: Text,
+    #[derived(marked, from = [text, file])]
+    marks: Derived<Marks>,
 }
 
 #[derive(Commands)]
@@ -172,7 +174,7 @@ impl App for Galley {
                 ui.button(Cmd::Open);
                 ui.button(Cmd::Save);
             });
-            ui.editor_with_find(t!("Text"), Galley::text, Galley::find);
+            ui.editor_with_find(t!("Text"), Galley::text, Galley::find).marked(self.marks.get());
             ui.row(|ui| {
                 ui.field(Galley::find, t!("Find"));
                 ui.field(Galley::with, t!("Replace with"));
@@ -195,9 +197,9 @@ impl App for Galley {
             })
             .add("Finding a word", Galley { find: Text::from("the"), ..Galley::with_text(LETTER) })
             .add("A folded block", {
-                let mut galley = Galley::with_text(CODE);
-                let _ = galley.text.fold(3..7);
-                let at = galley.text.line(2).start;
+                let mut galley = Galley { file: Text::from("main.rs"), ..Galley::with_text(CODE) };
+                let _ = galley.text.fold(4..8);
+                let at = galley.text.line(3).start;
                 galley.text.place(at, false);
                 galley
             })
@@ -213,7 +215,63 @@ impl Galley {
 
 const LETTER: &str = "Dear reader,\n\nThe text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.\nEvery change is an operation the ledger keeps, and undo takes it back with the cursors where they were.\n\n    Indented lines keep their indent when Return starts the next one.\n\nWith thanks,\nthe galley\n";
 
-const CODE: &str = "fn main() {\n    let lines = read();\n    for line in lines {\n        if line.is_empty() {\n            continue;\n        }\n        print(line);\n    }\n}\n";
+const KEYWORDS: &[&str] = &[
+    "as", "break", "const", "continue", "else", "enum", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static",
+    "struct", "trait", "true", "type", "use", "where", "while",
+];
+
+fn marked(text: &Doc, file: &Text) -> Marks {
+    let mut marks = Marks::new();
+    if !file.as_str().ends_with(".rs") {
+        return marks;
+    }
+    let chars: Vec<char> = text.to_string().chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+    while i < len {
+        let start = i;
+        let c = chars[i];
+        let mark = if c == '/' && chars.get(i + 1) == Some(&'/') {
+            while i < len && chars[i] != '\n' {
+                i += 1;
+            }
+            Some(Mark::Comment)
+        } else if c == '"' {
+            i += 1;
+            while i < len && chars[i] != '"' {
+                i += if chars[i] == '\\' { 2 } else { 1 };
+            }
+            i = (i + 1).min(len);
+            Some(Mark::Literal)
+        } else if c.is_ascii_digit() {
+            while i < len && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '.') {
+                i += 1;
+            }
+            Some(Mark::Literal)
+        } else if c.is_alphabetic() || c == '_' {
+            while i < len && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            let word: String = chars[start..i].iter().collect();
+            if KEYWORDS.contains(&word.as_str()) {
+                Some(Mark::Keyword)
+            } else if c.is_uppercase() {
+                Some(Mark::Type)
+            } else {
+                None
+            }
+        } else {
+            i += 1;
+            None
+        };
+        if let Some(mark) = mark {
+            marks.add(start..i, mark);
+        }
+    }
+    marks
+}
+
+const CODE: &str = "fn main() {\n    // Print every line that has something on it\n    let lines: Vec<String> = read(\"notes.txt\");\n    for line in lines {\n        if line.is_empty() {\n            continue;\n        }\n        print(line);\n    }\n}\n";
 
 fn main() {
     graticule::run::<Galley>(t!("Galley"));

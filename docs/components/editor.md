@@ -25,6 +25,8 @@ The text is a `galley::Doc`, a field of the facts. What is typed, deleted, moved
 
 Lines folded away in the `Doc` don't show: the line they are folded under ends with how many there are, faint, and the cursor steps over them. `Doc::fold(lines)` folds any lines, which is how a syntax tree's blocks would be folded; `Doc::block` finds the block of indented lines at the cursor, in a job, and `Doc::fold_found` folds it; `unfold` and `unfold_all` open them again. A cursor that lands inside a fold, by a find or a click, opens it.
 
+`.marked(self.marks.get())` draws what a parser or a spellchecker says of the text, worked out in a derived value: keywords and type names in the link ink, literals in the ok ink, comments muted, and misspelt words underlined in the danger ink. `Doc::check_spelling` fills in the mistakes from any `galley::Spelling`.
+
 The editor is as tall as the room it is given, at least three rows, and builds only the lines that show, so a very long file costs no more on screen than a short one. It follows the primary cursor as it moves.
 
 ## Mouse and keys
@@ -39,4 +41,4 @@ A long line wraps after the last space that fits, or mid-word when there is none
 
 ## Screen reader
 
-The editor is a text box with its label; each line that shows says its number and its text, and how many lines are folded away under it.
+The editor is a text box with its label; each line that shows says its number and its text, how many lines are folded away under it, and how many of its words are misspelt.

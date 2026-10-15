@@ -335,6 +335,7 @@ pub enum Kind {
         line: u32,
         rows: u16,
         folded: u32,
+        start: u64,
     },
 }
 
@@ -630,6 +631,9 @@ pub struct EditorInfo {
     pub step: fn(&dyn std::any::Any, ErasedPath, usize, i32) -> usize,
 }
 
+/// A stretch of an editor line an app marked: its start and end in bytes, and what it is.
+pub type Inked = (u32, u32, ledger::Mark);
+
 /// What the kernel knows about a list it can move around in and choose from, without knowing the type of its items.
 #[derive(Clone, Copy, Debug)]
 pub struct ListInfo {
@@ -719,6 +723,10 @@ pub struct Tree<C> {
     pub carets: Vec<(u32, u32, bool)>,
     /// Where what an editor is asked to find appears on each of its lines, as byte ranges, by the line's node.
     pub found: Vec<(u32, Vec<(u32, u32)>)>,
+    /// What an app marked on each of an editor's lines, as byte ranges with their marks, by the line's node.
+    pub inked: Vec<(u32, Vec<Inked>)>,
+    /// The mistakes an app marked on each of an editor's lines, as byte ranges, by the line's node.
+    pub mistakes: Vec<(u32, Vec<(u32, u32)>)>,
     /// What the kernel needs from the text each editor shows, without knowing its type.
     pub editors: Vec<EditorInfo>,
     /// Where an editor's cursors are while its lines are made, kept so making them allocates nothing.
@@ -822,6 +830,8 @@ impl<C> Default for Tree<C> {
             marks: Vec::new(),
             carets: Vec::new(),
             found: Vec::new(),
+            inked: Vec::new(),
+            mistakes: Vec::new(),
             editors: Vec::new(),
             cursors: Vec::new(),
             rulers: Vec::new(),
@@ -855,6 +865,8 @@ impl<C> Tree<C> {
         self.marks.clear();
         self.carets.clear();
         self.found.clear();
+        self.inked.clear();
+        self.mistakes.clear();
         self.editors.clear();
         self.rulers.clear();
         self.scales.clear();

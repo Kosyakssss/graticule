@@ -90,6 +90,29 @@ impl<C, S> Placed<'_, '_, C, S> {
         self
     }
 
+    /// What an editor's text is, stretch by stretch, from a parser or a spellchecker, worked out in a derived value, so `None` until its first value arrives: the lines that show are drawn by it, keywords and types in the link ink, literals in the ok ink, comments muted, and mistakes underlined in the danger ink.
+    pub fn marked(self, marks: Option<&ledger::Marks>) -> Self {
+        let Some(marks) = marks.filter(|m| !m.is_empty()) else { return self };
+        let tree = &mut *self.ui.tree;
+        for c in tree.children(self.node).collect::<Vec<_>>() {
+            let n = tree.nodes[c as usize];
+            let Kind::EditLine { start, .. } = n.kind else { continue };
+            let start = start as usize;
+            let text = tree.str(n.text);
+            let end = start + text.chars().count();
+            let byte = |at: usize| text.char_indices().nth(at.clamp(start, end) - start).map_or(text.len(), |(b, _)| b) as u32;
+            let inked: Vec<(u32, u32, ledger::Mark)> = marks.inks_within(start..end).iter().map(|(r, m)| (byte(r.start), byte(r.end), *m)).collect();
+            let wrong: Vec<(u32, u32)> = marks.mistakes_within(start..end).iter().map(|r| (byte(r.start), byte(r.end))).collect();
+            if !inked.is_empty() {
+                tree.inked.push((c, inked));
+            }
+            if !wrong.is_empty() {
+                tree.mistakes.push((c, wrong));
+            }
+        }
+        self
+    }
+
     /// How tall a picture is, in rows; its width follows from its shape.
     pub fn height(self, rows: i32) -> Self {
         if let Kind::Picture { rows: r, .. } = &mut self.ui.tree.nodes[self.node as usize].kind {
@@ -1615,7 +1638,12 @@ impl<'a, C, S> Ui<'a, C, S> {
             let s = &self.tree.text[text.start as usize..text.end as usize];
             let rows = crate::field::rows(s, cols).count().max(1);
             let folded = doc.folded(line);
-            let n = self.tree.add(i, Kind::EditLine { line: line as u32, rows: rows.min(usize::from(u16::MAX)) as u16, folded: folded.min(u32::MAX as usize) as u32 }, Some(id.mix(line as u64)), at);
+            let n = self.tree.add(
+                i,
+                Kind::EditLine { line: line as u32, rows: rows.min(usize::from(u16::MAX)) as u16, folded: folded.min(u32::MAX as usize) as u32, start: doc.line_start(line) as u64 },
+                Some(id.mix(line as u64)),
+                at,
+            );
             self.tree.nodes[n as usize].text = text;
             let start = doc.line_start(line);
             let s = &self.tree.text[text.start as usize..text.end as usize];

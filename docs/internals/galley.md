@@ -44,6 +44,14 @@ Folds travel with the selections in the same `Op::Select`, as a `folds` entry be
 
 Which lines to fold is the app's. `Doc::fold` takes any lines, which is where a syntax tree's blocks would come in; `Doc::block` finds, on a copy in a job, the lines indented further than the cursor's, or else the block the cursor's line belongs to, since a block may run to the end of a long file. The kernel reads folds through `Editable::folded` and `Editable::shown`, which default to none, so the editor skips folded lines and the wheel scrolls by the lines that show.
 
+## Marks: syntax and spelling
+
+What a parser or a spellchecker says of a text is `ledger::Marks`, re-exported by Galley: ranges of characters, each a keyword, a type name, a literal, a comment or a mistake. It lives in Ledger beside `Editable` because the kernel draws it and Galley must not need the kernel. Mistakes are kept apart from the rest, since a misspelt word in a comment is both; within each kind ranges are in order and apart, so the editor finds a line's marks by two binary searches and reads only the lines it shows.
+
+Marks are worked out over the whole text, so they belong in a derived value: the app names a function from its `Doc` (and anything else, such as the file's name) to `Marks`, the kernel runs it off the main thread after each change, and the view hands the latest to `.marked(…)` on the editor. Until a newer value arrives the editor draws the last one, whose places may be a few characters off for a frame; they are clamped to each line, so nothing breaks. This is where tree-sitter plugs in: its incremental parse is the derived function's business, and its folds go through `Doc::fold`. Galley ships no parser; the face's marker of Rust is a few dozen lines to show the hook working.
+
+`Spelling` is the hook a spellchecker fills: whether it knows a word and what might have been meant. `Doc::check_spelling` walks a range of the text word by word and marks those it doesn't know; a word is letters with apostrophes inside, and a run holding a digit or an underscore is a name and left alone, so code checks sensibly. Which spellcheckers ship is open question 15.
+
 ## Laws
 
 `crates/galley/src/laws.rs`: any sequence of edits at any cursors, over text with combining marks, emoji and line breaks, undoes to the start and redoes to the end through its recorded operations, bringing back the selections each time as well as the text; and the selections are valid after every step. The edits include folding any lines, folding the block at the cursor and unfolding, and validity includes the folds: in order, apart, each whole lines under a line that shows, with no cursor inside one; undo and redo bring the folds back with the selections. Every app with an editor also gets the universal laws, which Assay drives by typing into its editors as well as its fields.

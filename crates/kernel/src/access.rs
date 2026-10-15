@@ -147,11 +147,19 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
             }
             Kind::Editor { .. } => node.set_label(name),
             Kind::EditLine { line, folded, .. } => {
-                node.set_label(match folded {
-                    0 => format!("Line {}", line + 1),
-                    1 => format!("Line {}, with a line folded away under it", line + 1),
-                    n => format!("Line {}, with {n} lines folded away under it", line + 1),
-                });
+                let wrong = tree.mistakes.iter().find(|m| m.0 == i as u32).map_or(0, |m| m.1.len());
+                let mut label = format!("Line {}", line + 1);
+                match folded {
+                    0 => {}
+                    1 => label.push_str(", with a line folded away under it"),
+                    n => label.push_str(&format!(", with {n} lines folded away under it")),
+                }
+                match wrong {
+                    0 => {}
+                    1 => label.push_str(", one word misspelt"),
+                    n => label.push_str(&format!(", {n} words misspelt")),
+                }
+                node.set_label(label);
                 node.set_value(text);
             }
             Kind::Canvas { .. } => {

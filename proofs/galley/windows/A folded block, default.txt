@@ -2,17 +2,18 @@ window		0 0 120 30
   page	Galley	0 0 120 25	
     group		2 3 116 1	
       group		2 3 98 1	
-        text field	File	2 3 86 1	
+        text field	File	2 3 86 1	holds “main.rs”
         button	Choose…	90 3 10 1	
-      button	Open	102 3 7 1	unavailable (Choose a file first)
-      button	Save	111 3 7 1	unavailable (Choose a file first)
+      button	Open	102 3 7 1	
+      button	Save	111 3 7 1	
     editor	Text	2 5 116 17	
       line	fn main() {	2 5 116 1	
-      line	    let lines = read();	2 6 116 1	
-      line	    for line in lines {	2 7 116 1	
-      line	    }	2 8 116 1	
-      line	}	2 9 116 1	
-      line		2 10 116 1	
+      line	    // Print every line that has something on it	2 6 116 1	
+      line	    let lines: Vec<String> = read("notes.txt");	2 7 116 1	
+      line	    for line in lines {	2 8 116 1	
+      line	    }	2 9 116 1	
+      line	}	2 10 116 1	
+      line		2 11 116 1	
     group		2 23 116 1	
       text field	Find	2 23 17 1	
       text field	Replace with	21 23 18 1	
@@ -23,8 +24,8 @@ window		0 0 120 30
   alert		2 25 116 1	
   status		2 26 116 1	
   toolbar		2 27 116 3	
-    button	Open	2 27 6 1	unavailable (Choose a file first)
-    button	Save	10 27 6 1	unavailable (Choose a file first)
+    button	Open	2 27 6 1	
+    button	Save	10 27 6 1	
     button	Select every match	18 27 17 1	unavailable (Type what to find first)
     button	Find the next	37 27 19 1	unavailable (Type what to find first)
     button	Find the previous	58 27 28 1	unavailable (Type what to find first)

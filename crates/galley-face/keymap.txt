@@ -4,3 +4,29 @@ primary+alt+down: add-cursor-below
 primary+d: add-next-match
 primary+g: find-next
 primary+shift+g: find-previous
+
+# A modal editor, as in Vi: take the # from the start of each line below.
+# h: left
+# l: right
+# k: up
+# j: down
+# w: word-right
+# b: word-left
+# 0: line-start
+# shift+4: line-end
+# g g: first
+# shift+g: last
+# [normal]
+# i: insert-mode
+# v: select-mode
+# x: delete
+# d motion: delete
+# c motion: change
+# y motion: copy
+# [insert]
+# escape: normal-mode
+# [select]
+# escape: normal-mode
+# d: delete
+# c: change
+# y: copy

@@ -451,7 +451,7 @@ The components are done properly before any demo app. Each is built with its pag
 ### 17.7 The apps
 In the order of §14. Each app exercises every version of every component it uses, is checked by Assay, and meets its energy and size budgets (§12.3).
 
-27. **Open.** Galley's editor and Twin.
+27. **Partial.** Galley's editor and Twin. Built in parts: (a) the modal keymap in text, done: the kernel's built-ins move through a focused editor by character, word, line end and either end, and delete, change, cut and copy what is chosen; an operator such as `d motion: delete` acts over a movement through text, a count times; select mode extends every movement; a binding in insert mode's own section reaches the keymap before the editor, so Escape leaves insert mode. The `galley` face ships plain, with a Vi-like modal keymap in its keymap file to switch on by taking the `#` off its lines, which applies live.
 28. **Open.** Ticker.
 29. **Open.** Plotter's whiteboard, Atlas and Patchbay.
 30. **Open.** Lightbox.

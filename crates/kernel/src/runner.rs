@@ -1587,7 +1587,13 @@ impl<A: App> Runner<A> {
         match b {
             Builtin::Undo | Builtin::Redo if let Available::No(why) = self.facts.undoable() => Available::No(why),
             Builtin::Undo if self.undo_label().is_none() => Available::No(Message::from("Nothing to undo")),
-            Builtin::Copy if self.chosen().is_empty() => Available::No(Message::from("No text is chosen: drag across text to choose some")),
+            Builtin::Copy if self.focused_editor().is_none() && self.chosen().is_empty() => Available::No(Message::from("No text is chosen: drag across text to choose some")),
+            Builtin::Left | Builtin::Right | Builtin::WordLeft | Builtin::WordRight | Builtin::LineStart | Builtin::LineEnd | Builtin::DeleteText | Builtin::Change | Builtin::Cut
+                if self.focused_editor().is_none() =>
+            {
+                Available::No(Message::from("No text editor has the keyboard"))
+            }
+            Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::First | Builtin::Last if self.focused_editor().is_some() => Available::Yes,
             Builtin::Undo | Builtin::Redo if self.turning.is_some() => Available::No(Message::from("Wait for the change in progress to finish")),
             Builtin::Redo if !self.background.is_empty() => Available::No(Message::from("Wait for the change in progress to finish")),
             Builtin::Redo if self.history.redo_label().is_none() => Available::No(Message::from("Nothing to redo")),
@@ -3400,9 +3406,35 @@ impl<A: App> Runner<A> {
                 true
             }
             Builtin::Copy => {
-                let text = self.chosen_text();
+                let text = match self.focused_editor() {
+                    Some(i) => self.editor_selected(i),
+                    None => self.chosen_text(),
+                };
                 self.copy(text);
                 false
+            }
+            Builtin::DeleteText | Builtin::Change | Builtin::Cut => {
+                let Some(i) = self.focused_editor() else { return false };
+                if b == Builtin::Cut {
+                    let text = self.editor_selected(i);
+                    if text.is_empty() {
+                        return false;
+                    }
+                    self.copy(text);
+                }
+                let deleted = self.type_in(i, ledger::Typed::Delete { forward: true, word: false });
+                if b == Builtin::Change && self.keymap.modal {
+                    self.mode = Mode::Insert;
+                    self.stale = true;
+                } else if self.mode == Mode::Select {
+                    self.mode = Mode::Normal;
+                    self.stale = true;
+                }
+                deleted
+            }
+            _ if let (Some(to), Some(i)) = (b.travel(), self.focused_editor()) => {
+                let extend = self.selecting() || matches!(b, Builtin::ExtendUp | Builtin::ExtendDown);
+                self.type_in(i, ledger::Typed::Move { to, extend })
             }
             Builtin::LightAppearance | Builtin::DarkAppearance | Builtin::SystemAppearance | Builtin::NextTheme | Builtin::NextStyle | Builtin::AbsoluteDates | Builtin::RelativeDates => {
                 self.switch = b.switch();
@@ -3733,7 +3765,7 @@ impl<A: App> Runner<A> {
                 return self.scroll_help(by);
             }
         }
-        let typing = !self.keymap.modal || self.mode == Mode::Insert;
+        let typing = (!self.keymap.modal || self.mode == Mode::Insert) && !(self.pending.is_empty() && !chord.types() && self.keymap.claims(self.mode, chord));
         if self.pending.is_empty()
             && typing
             && let Some(i) = self.focused_field()
@@ -4015,6 +4047,16 @@ impl<A: App> Runner<A> {
             }
             Lookup::Nothing => {}
         }
+        if !typing
+            && let Some(i) = self.focused_editor()
+            && let Kind::Editor { single, .. } = self.tree.nodes[i as usize].kind
+        {
+            let rows = self.tree.nodes[i as usize].area.rows.clamp(1, i32::from(u16::MAX)) as u16;
+            let width = self.spans.get(&self.tree.nodes[i as usize].id).copied().unwrap_or(80).clamp(1, i32::from(u16::MAX)) as u16;
+            if let Some(field::EditorKey::Typed(ledger::Typed::Move { to, extend })) = field::editor_key(chord.key, chord.mods, rows, width, single) {
+                return self.type_in(i, ledger::Typed::Move { to, extend: extend || self.selecting() });
+            }
+        }
         match (Builtin::ALL.into_iter().find(|b| b.convention().contains(&chord)), control) {
             (Some(b), _) => self.builtin(b),
             (None, Some(i)) => self.fire(i),
@@ -4027,6 +4069,18 @@ impl<A: App> Runner<A> {
             Lookup::Run(m) => Builtin::find(m),
             _ => Builtin::ALL.into_iter().find(|b| b.convention().contains(&motion)),
         };
+        if let Some(i) = self.focused_editor() {
+            let Some(to) = movement.and_then(Builtin::travel) else {
+                return self.say(Message::plain(format!("{typed} does nothing: {motion} doesn't move through text")));
+            };
+            let Some(op) = Builtin::find(name).filter(|b| matches!(b, Builtin::DeleteText | Builtin::Change | Builtin::Cut | Builtin::Copy)) else {
+                return self.say(Message::plain(format!("{} can't act over text; delete, change, cut and copy can", title(name))));
+            };
+            for _ in 0..times {
+                self.type_in(i, ledger::Typed::Move { to, extend: true });
+            }
+            return self.builtin(op);
+        }
         let Some(movement) = movement.filter(|b| matches!(b, Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::First | Builtin::Last)) else {
             return self.say(Message::plain(format!("{typed} does nothing: {motion} is not a movement")));
         };

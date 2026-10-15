@@ -17,6 +17,15 @@ pub enum Builtin {
     ExtendDown,
     First,
     Last,
+    Left,
+    Right,
+    WordLeft,
+    WordRight,
+    LineStart,
+    LineEnd,
+    DeleteText,
+    Change,
+    Cut,
     SelectAll,
     Expand,
     Collapse,
@@ -48,7 +57,7 @@ pub enum Builtin {
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 39] = [
+    pub const ALL: [Builtin; 48] = [
         Builtin::Palette,
         Builtin::Undo,
         Builtin::Redo,
@@ -60,6 +69,15 @@ impl Builtin {
         Builtin::ExtendDown,
         Builtin::First,
         Builtin::Last,
+        Builtin::Left,
+        Builtin::Right,
+        Builtin::WordLeft,
+        Builtin::WordRight,
+        Builtin::LineStart,
+        Builtin::LineEnd,
+        Builtin::DeleteText,
+        Builtin::Change,
+        Builtin::Cut,
         Builtin::SelectAll,
         Builtin::Expand,
         Builtin::Collapse,
@@ -103,6 +121,15 @@ impl Builtin {
             Builtin::ExtendDown => "extend-down",
             Builtin::First => "first",
             Builtin::Last => "last",
+            Builtin::Left => "left",
+            Builtin::Right => "right",
+            Builtin::WordLeft => "word-left",
+            Builtin::WordRight => "word-right",
+            Builtin::LineStart => "line-start",
+            Builtin::LineEnd => "line-end",
+            Builtin::DeleteText => "delete",
+            Builtin::Change => "change",
+            Builtin::Cut => "cut",
             Builtin::SelectAll => "select-all",
             Builtin::Expand => "open-branch",
             Builtin::Collapse => "close-branch",
@@ -147,6 +174,15 @@ impl Builtin {
             Builtin::ExtendDown => "Choose down the list too",
             Builtin::First => "Go to the top of the list",
             Builtin::Last => "Go to the bottom of the list",
+            Builtin::Left => "Move left",
+            Builtin::Right => "Move right",
+            Builtin::WordLeft => "Move to the word before",
+            Builtin::WordRight => "Move to the next word",
+            Builtin::LineStart => "Move to the start of the line",
+            Builtin::LineEnd => "Move to the end of the line",
+            Builtin::DeleteText => "Delete the chosen text, or the next character",
+            Builtin::Change => "Change the chosen text: delete it and start typing",
+            Builtin::Cut => "Cut the chosen text",
             Builtin::SelectAll => "Choose everything in the list",
             Builtin::Expand => "Open the branch, or go into it",
             Builtin::Collapse => "Close the branch, or go up to it",
@@ -250,6 +286,15 @@ impl Builtin {
                 K
             }
             Builtin::Palette
+            | Builtin::Left
+            | Builtin::Right
+            | Builtin::WordLeft
+            | Builtin::WordRight
+            | Builtin::LineStart
+            | Builtin::LineEnd
+            | Builtin::DeleteText
+            | Builtin::Change
+            | Builtin::Cut
             | Builtin::LightAppearance
             | Builtin::DarkAppearance
             | Builtin::SystemAppearance
@@ -290,13 +335,44 @@ impl Builtin {
     pub fn repeats(self) -> bool {
         matches!(
             self,
-            Builtin::Undo | Builtin::Redo | Builtin::Next | Builtin::Previous | Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::NextTheme | Builtin::NextStyle
+            Builtin::Undo
+                | Builtin::Redo
+                | Builtin::Next
+                | Builtin::Previous
+                | Builtin::Up
+                | Builtin::Down
+                | Builtin::ExtendUp
+                | Builtin::ExtendDown
+                | Builtin::Left
+                | Builtin::Right
+                | Builtin::WordLeft
+                | Builtin::WordRight
+                | Builtin::DeleteText
+                | Builtin::NextTheme
+                | Builtin::NextStyle
         )
     }
 
     /// Commands that move around or change only how everything looks, rather than the facts; they never become undo steps and aren't offered in the action bar.
     pub fn moves(self) -> bool {
         !matches!(self, Builtin::Palette | Builtin::Undo | Builtin::Redo)
+    }
+
+    /// Where it moves an editor's cursors, if it is a movement through text.
+    pub fn travel(self) -> Option<ledger::Travel> {
+        match self {
+            Builtin::Up | Builtin::ExtendUp => Some(ledger::Travel::Up),
+            Builtin::Down | Builtin::ExtendDown => Some(ledger::Travel::Down),
+            Builtin::First => Some(ledger::Travel::Start),
+            Builtin::Last => Some(ledger::Travel::End),
+            Builtin::Left => Some(ledger::Travel::Left),
+            Builtin::Right => Some(ledger::Travel::Right),
+            Builtin::WordLeft => Some(ledger::Travel::WordLeft),
+            Builtin::WordRight => Some(ledger::Travel::WordRight),
+            Builtin::LineStart => Some(ledger::Travel::LineStart),
+            Builtin::LineEnd => Some(ledger::Travel::LineEnd),
+            _ => None,
+        }
     }
 
     /// The change to the look it asks for, if it is one of the commands that switch it.

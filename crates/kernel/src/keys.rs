@@ -291,6 +291,11 @@ impl Keymap {
         })
     }
 
+    /// Whether `mode`'s own bindings, not those of every mode, start with `chord`, so it reaches the keymap before a focused field's own keys: `[insert]` then `escape: normal-mode` leaves insert mode from inside an editor.
+    pub fn claims(&self, mode: Mode, chord: Chord) -> bool {
+        self.bindings.iter().any(|b| b.mode == Some(mode) && b.keys[0] == chord)
+    }
+
     /// The first keys bound to a command in `mode`, for showing beside it.
     pub fn keys_for(&self, mode: Mode, command: &str) -> Option<String> {
         self.active(mode).find(|b| b.command == command).map(|b| if b.motion { format!("{} motion", label(&b.keys)) } else { label(&b.keys) })

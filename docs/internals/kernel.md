@@ -454,6 +454,8 @@ The to-do app needs jobs (for exporting and for bulk changes), tallies and bulk 
 
 The first slice adds the laws for the grid, the frame budget, no allocation per frame and idle (spec §17); budgets are judged on the M1 in release builds, by the slowest 1% of frames.
 
+One cost is still paid on the main thread the first time it comes up: shaping words and drawing their glyphs. A page of words seen for the first time takes about 1.3 ms to lay out and 0.8 ms to paint on a Windows desktop, against 50 µs and 100 µs once its words are known, which is why Assay's slowest single frame is the first opening of a component page. Shaping ahead of time on another thread belongs with Galley (build-plan item 23), which owns text.
+
 ## 16. The to-do app against this design
 
 Walking through `api.md`'s to-do app line by line, everything compiles and runs as written except four things, each with the smallest fix:

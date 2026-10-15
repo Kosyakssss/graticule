@@ -8,6 +8,8 @@ use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use ledger::{ErasedPath, Step};
+
 const RING: usize = 1024;
 
 /// What made a frame necessary.
@@ -110,7 +112,7 @@ pub struct Overlay {
 }
 
 /// What Scope asks the attached app for. The app answers after its next frame, in lines of its own.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Ask {
     /// Every box in the tree: what it is, where, the line of code that made it and why it is that size.
     Boxes,
@@ -128,6 +130,8 @@ pub enum Ask {
     Rewind(usize),
     /// Draw this over the window.
     Overlay(Overlay),
+    /// Set the fact at `path`, as a `fact` line gave it, to the value `text` reads as, as one undoable edit, then answer as `Facts` does.
+    Set { path: String, text: String },
 }
 
 impl Ask {
@@ -142,6 +146,7 @@ impl Ask {
             Ask::History => "ask\thistory\n".into(),
             Ask::Rewind(n) => format!("ask\trewind\t{n}\n"),
             Ask::Overlay(o) => format!("ask\toverlay\t{}\t{}\t{}\n", u8::from(o.grid), u8::from(o.boxes), u8::from(o.taste)),
+            Ask::Set { path, text } => format!("ask\tset\t{path}\t{}\n", text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>()),
         }
     }
 
@@ -157,6 +162,7 @@ impl Ask {
             "history" => Some(Ask::History),
             "rewind" => Some(Ask::Rewind(f.next()?.parse().ok()?)),
             "overlay" => Some(Ask::Overlay(Overlay { grid: f.next()? == "1", boxes: f.next()? == "1", taste: f.next() == Some("1") })),
+            "set" => Some(Ask::Set { path: f.next()?.to_string(), text: f.next().unwrap_or_default().to_string() }),
             _ => None,
         }
     }
@@ -164,9 +170,48 @@ impl Ask {
 
 /// The facts as lines of the wire: `fact <depth> <name> <value>` for every field, item and variant, at most `most` of them, between `facts begin` and `facts done`.
 pub fn facts_lines(facts: &ledger::Value, most: usize) -> String {
+    lines_of(facts, &Unknown, most)
+}
+
+/// The facts as `facts_lines` writes them, each plain value followed by its path, which an `Ask::Set` gives back to change it.
+pub fn facts_lines_of<F: ledger::Field>(facts: &F, most: usize) -> String {
+    lines_of(&facts.value(), &Known(facts), most)
+}
+
+trait Paths {
+    fn keys(&self, steps: &[Step]) -> Option<Vec<u128>>;
+    fn named(&self, steps: &[Step], name: &str) -> Option<(u16, ledger::Kind)>;
+}
+
+struct Unknown;
+
+impl Paths for Unknown {
+    fn keys(&self, _steps: &[Step]) -> Option<Vec<u128>> {
+        None
+    }
+
+    fn named(&self, _steps: &[Step], _name: &str) -> Option<(u16, ledger::Kind)> {
+        None
+    }
+}
+
+struct Known<'a, F>(&'a F);
+
+impl<F: ledger::Field> Paths for Known<'_, F> {
+    fn keys(&self, steps: &[Step]) -> Option<Vec<u128>> {
+        self.0.item_keys(steps)
+    }
+
+    fn named(&self, steps: &[Step], name: &str) -> Option<(u16, ledger::Kind)> {
+        self.0.field_named(steps, name)
+    }
+}
+
+fn lines_of(facts: &ledger::Value, paths: &impl Paths, most: usize) -> String {
     let mut out = String::from("facts\tbegin\n");
     let mut left = most;
-    fact_lines(facts, 0, "facts", &mut out, &mut left);
+    let at = Spot { path: Some(ErasedPath::ROOT), optional: false };
+    fact_lines(facts, 0, "facts", at, paths, &mut out, &mut left);
     if left == 0 {
         out.push_str("fact\t0\t…\tmore than can be shown\n");
     }
@@ -174,7 +219,93 @@ pub fn facts_lines(facts: &ledger::Value, most: usize) -> String {
     out
 }
 
-fn fact_lines(value: &ledger::Value, depth: usize, name: &str, out: &mut String, left: &mut usize) {
+#[derive(Clone, Copy)]
+struct Spot {
+    path: Option<ErasedPath>,
+    optional: bool,
+}
+
+impl Spot {
+    fn into(self, step: Option<(Step, ledger::Kind)>) -> Spot {
+        let path = self.path.zip(step).filter(|(p, _)| p.steps().len() < ledger::DEPTH).map(|(p, (step, kind))| p.push(step, kind));
+        Spot { path, optional: false }
+    }
+
+    fn token(self, value: &ledger::Value) -> Option<String> {
+        use ledger::Value as V;
+        let path = self.path.filter(|p| !p.steps().is_empty())?;
+        let shape = match value {
+            V::Bool(_) => 'b',
+            V::Int(_) => 'i',
+            V::UInt(_) => 'u',
+            V::Float(_) => 'f',
+            V::Str(_) => 's',
+            V::Variant(_, inner) if **inner == V::Unit => 'v',
+            _ => return None,
+        };
+        let kind = match path.kind() {
+            ledger::Kind::Document => 'd',
+            ledger::Kind::Session => 's',
+            ledger::Kind::Live => 'l',
+            ledger::Kind::Resource => 'r',
+        };
+        let steps: Vec<String> = path
+            .steps()
+            .iter()
+            .map(|s| match s {
+                Step::Field(i) => i.to_string(),
+                Step::Key(k) => format!("#{k:x}"),
+            })
+            .collect();
+        Some(format!("{}{shape}:{kind}:{}", if self.optional { "o" } else { "" }, steps.join("/")))
+    }
+}
+
+/// Where an `Ask::Set` points, and the value its text reads as: the same kind of value the fact holds now, or `None` if the text can't be one.
+pub fn read_set(path: &str, text: &str) -> Option<(ErasedPath, ledger::Value)> {
+    use ledger::Value as V;
+    let mut parts = path.split(':');
+    let (shape, kind, steps) = (parts.next()?, parts.next()?, parts.next()?);
+    let kind = match kind {
+        "d" => ledger::Kind::Document,
+        "s" => ledger::Kind::Session,
+        "l" => ledger::Kind::Live,
+        "r" => ledger::Kind::Resource,
+        _ => return None,
+    };
+    let mut at = ErasedPath::ROOT;
+    for step in steps.split('/') {
+        if at.steps().len() >= ledger::DEPTH {
+            return None;
+        }
+        let step = match step.strip_prefix('#') {
+            Some(hex) => Step::Key(u128::from_str_radix(hex, 16).ok()?),
+            None => Step::Field(step.parse().ok()?),
+        };
+        at = at.push(step, kind);
+    }
+    let (optional, shape) = match shape.strip_prefix('o') {
+        Some(rest) => (true, rest),
+        None => (false, shape),
+    };
+    let text = text.trim();
+    let value = match shape {
+        "b" => match text.to_lowercase().as_str() {
+            "yes" | "true" | "on" => V::Bool(true),
+            "no" | "false" | "off" => V::Bool(false),
+            _ => return None,
+        },
+        "i" => V::Int(text.parse().ok()?),
+        "u" => V::UInt(text.parse().ok()?),
+        "f" => V::Float(text.parse().ok()?),
+        "s" => V::Str(text.trim_matches(|c| c == '“' || c == '”').to_string()),
+        "v" if !text.is_empty() => V::Variant(text.to_string(), Box::new(V::Unit)),
+        _ => return None,
+    };
+    Some((at, if optional { V::Some(Box::new(value)) } else { value }))
+}
+
+fn fact_lines(value: &ledger::Value, depth: usize, name: &str, at: Spot, paths: &impl Paths, out: &mut String, left: &mut usize) {
     use ledger::Value as V;
     if *left == 0 {
         return;
@@ -192,33 +323,40 @@ fn fact_lines(value: &ledger::Value, depth: usize, name: &str, out: &mut String,
         V::None => "none".into(),
         V::Some(inner) => {
             *left += 1;
-            return fact_lines(inner, depth, name, out, left);
+            return fact_lines(inner, depth, name, Spot { optional: true, ..at }, paths, out, left);
         }
         V::List(items) if items.len() == 1 => "1 item".into(),
         V::List(items) => format!("{} items", items.len()),
         V::Map(_) => String::new(),
         V::Variant(variant, _) => variant.clone(),
     };
-    out.push_str(&format!("fact\t{depth}\t{}\t{said}\n", one_line(name)));
+    match at.token(value) {
+        Some(token) => out.push_str(&format!("fact\t{depth}\t{}\t{said}\t{token}\n", one_line(name))),
+        None => out.push_str(&format!("fact\t{depth}\t{}\t{said}\n", one_line(name))),
+    }
+    let nowhere = Spot { path: None, optional: false };
     match value {
         V::List(items) => {
+            let keys = at.path.and_then(|p| paths.keys(p.steps()));
             for (i, item) in items.iter().enumerate() {
-                fact_lines(item, depth + 1, &format!("{}", i + 1), out, left);
+                let step = keys.as_ref().and_then(|k| k.get(i)).zip(at.path).map(|(k, p)| (Step::Key(*k), p.kind()));
+                fact_lines(item, depth + 1, &format!("{}", i + 1), at.into(step), paths, out, left);
             }
         }
         V::Map(fields) => {
             for (field, v) in fields {
-                fact_lines(v, depth + 1, field, out, left);
+                let step = at.path.and_then(|p| paths.named(p.steps(), field)).map(|(i, kind)| (Step::Field(i), kind));
+                fact_lines(v, depth + 1, field, at.into(step), paths, out, left);
             }
         }
         V::Variant(_, inner) => match inner.as_ref() {
             V::Unit => {}
             V::Map(fields) => {
                 for (field, v) in fields {
-                    fact_lines(v, depth + 1, field, out, left);
+                    fact_lines(v, depth + 1, field, nowhere, paths, out, left);
                 }
             }
-            inner => fact_lines(inner, depth + 1, "with", out, left),
+            inner => fact_lines(inner, depth + 1, "with", nowhere, paths, out, left),
         },
         _ => {}
     }

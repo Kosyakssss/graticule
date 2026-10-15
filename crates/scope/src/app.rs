@@ -56,6 +56,12 @@ pub struct Scope {
     #[session]
     pub rewinds: u32,
     #[session]
+    pub change_at: String,
+    #[session]
+    pub change_to: String,
+    #[session]
+    pub changes: u32,
+    #[session]
     pub asked: u32,
     #[session]
     pub grid: bool,
@@ -154,7 +160,7 @@ impl Step {
     }
 }
 
-/// One field, item or variant of the attached app's facts.
+/// One field, item or variant of the attached app's facts, with where it is when it holds a plain value that can be changed from here.
 #[derive(Facts)]
 pub struct Fact {
     #[key]
@@ -162,13 +168,14 @@ pub struct Fact {
     pub depth: u32,
     pub name: String,
     pub value: String,
+    pub path: String,
 }
 
 impl Fact {
     /// Reads a `fact` line of the wire.
     pub fn read(n: u64, line: &str) -> Option<Fact> {
         let mut f = line.strip_prefix("fact\t")?.split('\t');
-        Some(Fact { id: Key::fixed(n), depth: f.next()?.parse().ok()?, name: f.next()?.to_string(), value: f.next().unwrap_or_default().to_string() })
+        Some(Fact { id: Key::fixed(n), depth: f.next()?.parse().ok()?, name: f.next()?.to_string(), value: f.next().unwrap_or_default().to_string(), path: f.next().unwrap_or_default().to_string() })
     }
 }
 
@@ -345,6 +352,12 @@ pub enum Cmd {
     Rewind,
     #[label("Go to “{what}”", short: "Go here")]
     GoTo(#[subject] Key<Step>),
+    #[label("Change “{name}”…", short: "Change…")]
+    Change {
+        #[subject]
+        fact: Key<Fact>,
+        to: String,
+    },
     #[label("Ask again")]
     Again,
     #[internal]
@@ -405,6 +418,11 @@ impl App for Scope {
             Cmd::GoTo(step) => match self.steps.find(*step) {
                 None => Available::No(Message::from("That step is gone")),
                 Some(s) if self.current() == Some(s.number) => Available::No(Message::from("The app is there now")),
+                Some(_) => Available::Yes,
+            },
+            Cmd::Change { fact, .. } => match self.facts.find(*fact) {
+                None => Available::No(Message::from("That fact is gone")),
+                Some(f) if f.path.is_empty() => Available::No(Message::from("Only a plain value can be changed from here: yes or no, a number, words, or an option that holds nothing")),
                 Some(_) => Available::Yes,
             },
             Cmd::Again => kernel::no_if(matches!(self.view, View::Apps | View::Time | View::Redraws), Message::from("Time and redraws arrive by themselves")),
@@ -474,6 +492,12 @@ impl App for Scope {
             Cmd::Rewind => {
                 self.asked += 1;
                 self.show(View::Rewind)
+            }
+            Cmd::Change { fact, to } => {
+                let Some(path) = self.facts.find(fact).map(|f| f.path.clone()) else { return Outcome::Nothing };
+                (self.change_at, self.change_to) = (path, to);
+                self.changes += 1;
+                Outcome::Changed
             }
             Cmd::GoTo(step) => {
                 let Some(number) = self.steps.find(step).map(|s| s.number) else { return Outcome::Nothing };
@@ -573,12 +597,12 @@ impl App for Scope {
             "fact\t0\tfacts\t",
             "fact\t1\ttasks\t2 items",
             "fact\t2\t1\t",
-            "fact\t3\ttitle\t“Water the plants”",
-            "fact\t3\tdone\tno",
+            "fact\t3\ttitle\t“Water the plants”\ts:d:0/#1/1",
+            "fact\t3\tdone\tno\tb:d:0/#1/2",
             "fact\t2\t2\t",
-            "fact\t3\ttitle\t“Call the bank”",
-            "fact\t3\tdone\tyes",
-            "fact\t1\tfilter\tAll",
+            "fact\t3\ttitle\t“Call the bank”\ts:d:0/#2/1",
+            "fact\t3\tdone\tyes\tb:d:0/#2/2",
+            "fact\t1\tfilter\tAll\tv:s:1",
         ];
         let facts = facts.iter().zip(1..).filter_map(|(l, n)| Fact::read(n, l)).collect();
         let errands = ["effect\tjob\tFetching the feeds\t2.4\t2400.0\trunning", "effect\twrite\ttasks.txt\t31.0\t3.2\tdone", "effect\topen\thttps://example.org\t95.5\t0.0\tdone"];

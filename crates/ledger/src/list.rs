@@ -579,6 +579,21 @@ impl<T: Record> Field for List<T> {
         }
     }
 
+    fn item_keys(&self, steps: &[Step]) -> Option<Vec<u128>> {
+        match steps {
+            [] => Some(self.keys().map(Key::raw).collect()),
+            [Step::Key(k), rest @ ..] => self.find(Key::from_raw(*k))?.item_keys(rest),
+            _ => None,
+        }
+    }
+
+    fn field_named(&self, steps: &[Step], name: &str) -> Option<(u16, Kind)> {
+        match steps {
+            [Step::Key(k), rest @ ..] => self.find(Key::from_raw(*k))?.field_named(rest, name),
+            _ => None,
+        }
+    }
+
     fn item_type(&self, steps: &[Step]) -> Option<std::any::TypeId> {
         match steps {
             [] => Some(std::any::TypeId::of::<T>()),

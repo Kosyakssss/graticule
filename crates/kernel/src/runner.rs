@@ -852,7 +852,7 @@ impl<A: App> Runner<A> {
         let (send, receive) = mpsc::channel();
         let (facts, waker) = (self.facts.clone(), self.waker.clone());
         let started = std::thread::Builder::new().name("graticule facts for scope".into()).spawn(move || {
-            let _ = send.send(crate::scope::facts_lines(&ledger::Field::value(&facts), FACT_LINES));
+            let _ = send.send(crate::scope::facts_lines_of(&facts, FACT_LINES));
             if let Some(waker) = waker {
                 waker.wake();
             }
@@ -4659,7 +4659,7 @@ impl<A: App> Face for Runner<A> {
                     self.facts_asked();
                     continue;
                 }
-                crate::scope::Ask::Overlay(_) => continue,
+                crate::scope::Ask::Overlay(_) | crate::scope::Ask::Set { .. } => continue,
             };
             self.answers.push(answer);
         }
@@ -4677,6 +4677,19 @@ impl<A: App> Face for Runner<A> {
             crate::scope::Ask::Rewind(to) => {
                 self.rewinding = Some(to);
                 self.rewind();
+            }
+            crate::scope::Ask::Set { path, text } => {
+                match crate::scope::read_set(&path, &text) {
+                    Some((at, value)) => {
+                        if !self.set_value(at, value, format!("Set from Scope to {}", text.trim())) {
+                            self.say(Message::plain(format!("Scope couldn't set that fact to “{}”", text.trim())));
+                        }
+                    }
+                    None => {
+                        self.say(Message::plain(format!("“{}” isn't a value that fact can hold", text.trim())));
+                    }
+                }
+                self.scope_asks.push(crate::scope::Ask::Facts);
             }
             ask => self.scope_asks.push(ask),
         }

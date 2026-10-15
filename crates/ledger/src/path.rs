@@ -228,6 +228,16 @@ pub trait Field: Clone + 'static {
         None
     }
 
+    /// The raw keys of the records in the list at the end of this path, in order, if a list is there.
+    fn item_keys(&self, _steps: &[Step]) -> Option<Vec<u128>> {
+        None
+    }
+
+    /// The index and kind of the field called `name` in the struct at the end of this path, if a struct is there, so a path can be found from names.
+    fn field_named(&self, _steps: &[Step], _name: &str) -> Option<(u16, Kind)> {
+        None
+    }
+
     /// Hands each live or derived value directly in this struct to `each`, with its field's index.
     fn moving(&mut self, _each: &mut dyn FnMut(u16, &mut dyn Moving)) {}
 

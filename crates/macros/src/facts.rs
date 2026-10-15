@@ -135,6 +135,7 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
     let indexes: Vec<u16> = (0..fields.len() as u16).collect();
     let tuple_index: Vec<syn::Index> = (0..fields.len()).map(syn::Index::from).collect();
     let kinds: Vec<TokenStream> = fields.iter().map(|f| kind_tokens(f.kind)).collect();
+    let all_names: Vec<String> = fields.iter().map(|f| f.ident.to_string()).collect();
     let saved: Vec<&Field> = fields.iter().filter(|f| matches!(f.kind, Kind::Document | Kind::Session)).collect();
     let saved_idents: Vec<&syn::Ident> = saved.iter().map(|f| &f.ident).collect();
     let saved_names: Vec<String> = saved.iter().map(|f| f.ident.to_string()).collect();
@@ -340,6 +341,24 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
             fn item_type(&self, steps: &[#ledger::Step]) -> ::std::option::Option<::std::any::TypeId> {
                 match steps {
                     #([#ledger::Step::Field(#indexes), rest @ ..] => #ledger::Field::item_type(&self.#idents, rest),)*
+                    _ => ::std::option::Option::None,
+                }
+            }
+
+            fn item_keys(&self, steps: &[#ledger::Step]) -> ::std::option::Option<::std::vec::Vec<u128>> {
+                match steps {
+                    #([#ledger::Step::Field(#indexes), rest @ ..] => #ledger::Field::item_keys(&self.#idents, rest),)*
+                    _ => ::std::option::Option::None,
+                }
+            }
+
+            fn field_named(&self, steps: &[#ledger::Step], name: &str) -> ::std::option::Option<(u16, #ledger::Kind)> {
+                match steps {
+                    [] => match name {
+                        #(#all_names => ::std::option::Option::Some((#indexes, #kinds)),)*
+                        _ => ::std::option::Option::None,
+                    },
+                    #([#ledger::Step::Field(#indexes), rest @ ..] => #ledger::Field::field_named(&self.#idents, rest, name),)*
                     _ => ::std::option::Option::None,
                 }
             }

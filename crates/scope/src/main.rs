@@ -34,6 +34,7 @@ struct Line {
     asked: Option<(View, u32)>,
     overlay: Overlay,
     rewound: u32,
+    changed: u32,
 }
 
 struct Window {
@@ -130,7 +131,7 @@ impl Window {
             wake();
         });
         if started.is_ok() {
-            self.line = Some(Line { to, heard, pending, asking, asked: None, overlay: Overlay::default(), rewound: 0 });
+            self.line = Some(Line { to, heard, pending, asking, asked: None, overlay: Overlay::default(), rewound: 0, changed: 0 });
             self.ask();
         }
         true
@@ -157,6 +158,10 @@ impl Window {
                 View::Rewind => asks.push(Ask::History),
                 _ => {}
             }
+        }
+        if line.changed != facts.changes {
+            line.changed = facts.changes;
+            asks.push(Ask::Set { path: facts.change_at.clone(), text: facts.change_to.clone() });
         }
         if line.rewound != facts.rewinds {
             line.rewound = facts.rewinds;

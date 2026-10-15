@@ -48,6 +48,14 @@ pub struct Scope {
     #[session]
     reading_flaws: Selection<Flaw>,
     #[session]
+    steps: List<Step>,
+    #[session]
+    reading_steps: Selection<Step>,
+    #[session]
+    pub rewind_to: Option<u64>,
+    #[session]
+    pub rewinds: u32,
+    #[session]
     pub asked: u32,
     #[session]
     pub grid: bool,
@@ -68,6 +76,7 @@ pub enum View {
     Facts,
     Effects,
     Taste,
+    Rewind,
 }
 
 /// A block of lines the attached app sent in answer to an ask, read on Scope's reading thread.
@@ -78,6 +87,7 @@ pub enum Answer {
     Facts(Vec<Fact>),
     Effects(Vec<Errand>),
     Taste(Vec<Flaw>),
+    History(Vec<Step>),
 }
 
 impl Answer {
@@ -100,6 +110,7 @@ impl Answer {
             "facts" => Some(Answer::Facts(numbered().filter_map(|(l, n)| Fact::read(n, l)).collect())),
             "effects" => Some(Answer::Effects(numbered().filter_map(|(l, n)| Errand::read(n, l)).collect())),
             "taste" => Some(Answer::Taste(numbered().filter_map(|(l, n)| Flaw::read(n, l)).collect())),
+            "history" => Some(Answer::History(Step::all(lines))),
             _ => None,
         }
     }
@@ -120,6 +131,26 @@ impl Flaw {
     pub fn read(n: u64, line: &str) -> Option<Flaw> {
         let mut f = line.strip_prefix("flaw\t")?.split('\t');
         Some(Flaw { id: Key::fixed(n), law: f.next()?.to_string(), at: f.next()?.to_string(), said: f.next().unwrap_or_default().to_string() })
+    }
+}
+
+/// One step of the attached app's history, on the branch undo and redo follow: `number` steps are applied once it is.
+#[derive(Facts)]
+pub struct Step {
+    #[key]
+    id: Key<Step>,
+    pub number: u64,
+    pub what: String,
+    pub applied: bool,
+}
+
+impl Step {
+    /// Reads a history answer: an `applied` line saying how many steps are applied, then a `step` line for each, the first first. The list starts with the state before any step.
+    pub fn all(lines: &[String]) -> Vec<Step> {
+        let applied: u64 = lines.iter().find_map(|l| l.strip_prefix("applied\t")?.parse().ok()).unwrap_or(0);
+        let start = Step { id: Key::fixed(1), number: 0, what: "Before anything was done".into(), applied: true };
+        let steps = lines.iter().filter_map(|l| l.strip_prefix("step\t")).zip(1u64..).map(|(what, n)| Step { id: Key::fixed(n + 1), number: n, what: what.to_string(), applied: n <= applied });
+        std::iter::once(start).chain(steps).collect()
     }
 }
 
@@ -310,6 +341,10 @@ pub enum Cmd {
     Effects,
     #[label("Taste")]
     Taste,
+    #[label("Rewind")]
+    Rewind,
+    #[label("Go to “{what}”", short: "Go here")]
+    GoTo(#[subject] Key<Step>),
     #[label("Ask again")]
     Again,
     #[internal]
@@ -363,6 +398,15 @@ impl App for Scope {
                 Available::Yes => here(View::Taste),
                 no => no,
             },
+            Cmd::Rewind => match attached() {
+                Available::Yes => here(View::Rewind),
+                no => no,
+            },
+            Cmd::GoTo(step) => match self.steps.find(*step) {
+                None => Available::No(Message::from("That step is gone")),
+                Some(s) if self.current() == Some(s.number) => Available::No(Message::from("The app is there now")),
+                Some(_) => Available::Yes,
+            },
             Cmd::Again => kernel::no_if(matches!(self.view, View::Apps | View::Time | View::Redraws), Message::from("Time and redraws arrive by themselves")),
             Cmd::Look | Cmd::Found(_) | Cmd::Launched(_) | Cmd::Arrived(_) | Cmd::Lost | Cmd::Answered(_) => Available::Yes,
         }
@@ -391,6 +435,7 @@ impl App for Scope {
                 let _ = self.facts.replace([]);
                 let _ = self.errands.replace([]);
                 let _ = self.flaws.replace([]);
+                let _ = self.steps.replace([]);
                 self.view = View::Time;
                 Outcome::Changed
             }
@@ -426,6 +471,16 @@ impl App for Scope {
                 self.asked += 1;
                 self.show(View::Taste)
             }
+            Cmd::Rewind => {
+                self.asked += 1;
+                self.show(View::Rewind)
+            }
+            Cmd::GoTo(step) => {
+                let Some(number) = self.steps.find(step).map(|s| s.number) else { return Outcome::Nothing };
+                self.rewind_to = Some(number);
+                self.rewinds += 1;
+                Outcome::Changed
+            }
             Cmd::Answered(answer) => {
                 let _ = match answer {
                     Answer::Boxes(boxes) => self.boxes.replace(boxes),
@@ -433,6 +488,7 @@ impl App for Scope {
                     Answer::Facts(facts) => self.facts.replace(facts),
                     Answer::Effects(errands) => self.errands.replace(errands),
                     Answer::Taste(flaws) => self.flaws.replace(flaws),
+                    Answer::History(steps) => self.steps.replace(steps),
                 };
                 Outcome::Changed
             }
@@ -533,6 +589,8 @@ impl App for Scope {
         let flaws = flaws.iter().zip(1..).filter_map(|(l, n)| Flaw::read(n, l)).collect();
         let tasteful = Scope { marks: true, ..attached(View::Taste) };
         let flawed = Scope { flaws, marks: true, ..attached(View::Taste) };
+        let history: Vec<String> = ["applied\t2", "step\tAdd “Water the plants”", "step\tAdd “Call the bank”", "step\tMark “Call the bank” done"].iter().map(|s| s.to_string()).collect();
+        let rewind = Scope { steps: Step::all(&history).into_iter().collect(), ..attached(View::Rewind) };
         kernel::States::new()
             .add("No apps", Scope::default())
             .add("Two apps running", running)
@@ -544,6 +602,7 @@ impl App for Scope {
             .add("Effects and jobs", effects)
             .add("Taste", tasteful)
             .add("A taste law broken", flawed)
+            .add("Rewind", rewind)
     }
 
     fn view(&self, ui: &mut Ui<Cmd>) {
@@ -555,6 +614,7 @@ impl App for Scope {
             (View::Facts, Some(_)) => self.read_facts(ui),
             (View::Effects, Some(_)) => self.effects(ui),
             (View::Taste, Some(_)) => self.taste(ui),
+            (View::Rewind, Some(_)) => self.rewind(ui),
             _ => self.running(ui),
         }
     }
@@ -702,6 +762,32 @@ impl Scope {
                     ui.column(14, |ui| ui.mono(format!("{} s ago", e.ago)));
                     ui.column(16, |ui| ui.mono(format!("{} {} ms", if e.outcome == "running" { "for" } else { "took" }, e.took)));
                     ui.column(10, |ui| ui.text(&e.outcome));
+                });
+            });
+        });
+    }
+
+    /// How many steps the attached app has applied, as it last said.
+    fn current(&self) -> Option<u64> {
+        self.steps.iter().filter(|s| s.applied).map(|s| s.number).max()
+    }
+
+    fn rewind(&self, ui: &mut Ui<Cmd>) {
+        ui.page(Message::plain(format!("Rewind: {}", self.name())), |ui| {
+            ui.muted("Every step the app's history holds on this branch, first first. Going to a step undoes or redoes everything after it, one step at a time, so the app's own undo brings it back.");
+            if self.steps.is_empty() {
+                ui.empty(Message::from("No answer yet. The app answers after its next frame."), Cmd::Again);
+                return;
+            }
+            let current = self.current();
+            ui.list(&self.steps, Scope::reading_steps, |ui, s| {
+                ui.columns(|ui| {
+                    ui.column(4, |ui| ui.muted(if Some(s.number) == current { "now" } else { "" }));
+                    ui.column(6, |ui| ui.mono(s.number.to_string()));
+                    ui.column(kernel::Fill, |ui| if s.applied { ui.text(&s.what) } else { ui.muted(&s.what) });
+                    ui.column(10, |ui| {
+                        ui.link(Cmd::GoTo);
+                    });
                 });
             });
         });

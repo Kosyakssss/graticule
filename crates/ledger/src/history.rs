@@ -120,6 +120,19 @@ impl<P: Clone> History<P> {
         std::iter::successors(self.at, |&at| self.steps[at].parent).count()
     }
 
+    /// The current branch as a line: every step's label from the first, through where the history is now, on along the newest branch that redo would follow; and how many of them are applied.
+    pub fn line(&self) -> (Vec<&str>, usize) {
+        let mut steps: Vec<usize> = std::iter::successors(self.at, |&at| self.steps[at].parent).collect();
+        steps.reverse();
+        let applied = steps.len();
+        let mut next = self.next();
+        while let Some(n) = next {
+            steps.push(n);
+            next = self.steps[n].newest;
+        }
+        (steps.iter().map(|&s| self.steps[s].label.as_str()).collect(), applied)
+    }
+
     /// The label of the step undo would take back.
     pub fn undo_label(&self) -> Option<&str> {
         self.at.map(|at| self.steps[at].label.as_str())

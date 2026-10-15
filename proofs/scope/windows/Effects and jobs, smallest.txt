@@ -39,7 +39,8 @@ window		0 0 70 16
     button	Facts	39 13 6 1	
     button	Effects and jobs	47 13 14 1	unavailable (It is showing)
     button	Taste	2 14 7 1	
-    button	Ask again	11 14 10 1	
-    button	Undo	23 14 13 1	unavailable (Nothing to undo)
-    button	Redo	38 14 19 1	unavailable (Nothing to redo)
+    button	Rewind	11 14 8 1	
+    button	Ask again	21 14 10 1	
+    button	Undo	33 14 13 1	unavailable (Nothing to undo)
+    button	Redo	48 14 19 1	unavailable (Nothing to redo)
     button	Open the palette	2 15 15 1	

@@ -33,6 +33,7 @@ struct Line {
     asking: TcpStream,
     asked: Option<(View, u32)>,
     overlay: Overlay,
+    rewound: u32,
 }
 
 struct Window {
@@ -129,7 +130,7 @@ impl Window {
             wake();
         });
         if started.is_ok() {
-            self.line = Some(Line { to, heard, pending, asking, asked: None, overlay: Overlay::default() });
+            self.line = Some(Line { to, heard, pending, asking, asked: None, overlay: Overlay::default(), rewound: 0 });
             self.ask();
         }
         true
@@ -153,7 +154,14 @@ impl Window {
                 View::Facts => asks.push(Ask::Facts),
                 View::Effects => asks.push(Ask::Effects),
                 View::Taste => asks.push(Ask::Taste),
+                View::Rewind => asks.push(Ask::History),
                 _ => {}
+            }
+        }
+        if line.rewound != facts.rewinds {
+            line.rewound = facts.rewinds;
+            if let Some(to) = facts.rewind_to {
+                asks.push(Ask::Rewind(to as usize));
             }
         }
         for ask in asks {

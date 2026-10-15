@@ -122,6 +122,10 @@ pub enum Ask {
     Effects,
     /// The boxes on screen that break a taste law, and why.
     Taste,
+    /// The steps of the current branch of history, and how many are applied.
+    History,
+    /// Undo or redo until this many steps of the current branch are applied, then answer as `History` does.
+    Rewind(usize),
     /// Draw this over the window.
     Overlay(Overlay),
 }
@@ -135,6 +139,8 @@ impl Ask {
             Ask::Facts => "ask\tfacts\n".into(),
             Ask::Effects => "ask\teffects\n".into(),
             Ask::Taste => "ask\ttaste\n".into(),
+            Ask::History => "ask\thistory\n".into(),
+            Ask::Rewind(n) => format!("ask\trewind\t{n}\n"),
             Ask::Overlay(o) => format!("ask\toverlay\t{}\t{}\t{}\n", u8::from(o.grid), u8::from(o.boxes), u8::from(o.taste)),
         }
     }
@@ -148,6 +154,8 @@ impl Ask {
             "facts" => Some(Ask::Facts),
             "effects" => Some(Ask::Effects),
             "taste" => Some(Ask::Taste),
+            "history" => Some(Ask::History),
+            "rewind" => Some(Ask::Rewind(f.next()?.parse().ok()?)),
             "overlay" => Some(Ask::Overlay(Overlay { grid: f.next()? == "1", boxes: f.next()? == "1", taste: f.next() == Some("1") })),
             _ => None,
         }

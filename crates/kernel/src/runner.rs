@@ -321,6 +321,7 @@ pub struct Runner<A: App> {
     errands: VecDeque<Errand>,
     errands_made: u64,
     facts_answer: Option<mpsc::Receiver<String>>,
+    rewinding: Option<usize>,
 }
 
 impl<A: App> Runner<A> {
@@ -422,6 +423,7 @@ impl<A: App> Runner<A> {
             errands: VecDeque::new(),
             errands_made: 0,
             facts_answer: None,
+            rewinding: None,
         }
     }
 
@@ -788,6 +790,31 @@ impl<A: App> Runner<A> {
         }
         (self.stack, self.widths) = layout.finish();
         out.push_str("boxes\tdone\n");
+        out
+    }
+
+    fn rewind(&mut self) {
+        while let Some(to) = self.rewinding {
+            if self.turning.is_some() {
+                return;
+            }
+            let depth = self.history.depth();
+            let moved = depth != to && self.undo(depth > to);
+            if !moved {
+                self.rewinding = None;
+                self.scope_asks.push(crate::scope::Ask::History);
+            }
+        }
+    }
+
+    fn history_answer(&self) -> String {
+        let one_line = |s: &str| s.chars().map(|c| if c.is_control() { ' ' } else { c }).take(120).collect::<String>();
+        let (steps, applied) = self.history.line();
+        let mut out = format!("history\tbegin\napplied\t{applied}\n");
+        for step in steps {
+            let _ = writeln!(out, "step\t{}", one_line(&done_as(step)));
+        }
+        out.push_str("history\tdone\n");
         out
     }
 
@@ -4401,6 +4428,8 @@ impl<A: App> Face for Runner<A> {
                 crate::scope::Ask::Commands => self.commands_answer(),
                 crate::scope::Ask::Effects => self.effects_answer(),
                 crate::scope::Ask::Taste => self.taste_answer(p.m.screen()),
+                crate::scope::Ask::History => self.history_answer(),
+                crate::scope::Ask::Rewind(_) => continue,
                 crate::scope::Ask::Facts => {
                     self.facts_asked();
                     continue;
@@ -4420,6 +4449,10 @@ impl<A: App> Face for Runner<A> {
     fn ask(&mut self, ask: crate::scope::Ask) {
         match ask {
             crate::scope::Ask::Overlay(overlay) => self.overlay = overlay,
+            crate::scope::Ask::Rewind(to) => {
+                self.rewinding = Some(to);
+                self.rewind();
+            }
             ask => self.scope_asks.push(ask),
         }
     }
@@ -4847,6 +4880,7 @@ impl<A: App> Runner<A> {
                 }
                 self.collect();
                 self.slice(Slice::Time(SLICE));
+                self.rewind();
                 true
             }
             Input::Clock => {

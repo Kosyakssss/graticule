@@ -31,6 +31,7 @@ window		0 0 38 29
     button	Facts	15 24 6 1	
     button	Effects and jobs	2 25 14 1	
     button	Taste	18 25 7 1	
+    button	Rewind	27 25 8 1	
     button	Ask again	2 26 10 1	unavailable (Time and redraws arrive by themselves)
     button	Undo	14 26 13 1	unavailable (Nothing to undo)
     button	Redo	2 27 19 1	unavailable (Nothing to redo)

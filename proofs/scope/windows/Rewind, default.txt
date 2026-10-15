@@ -1,0 +1,62 @@
+window		0 0 120 30	
+  page	Rewind: To do	0 0 120 26	
+    text	Every step the app's history holds on this branch, first first. Going to a step undoes or redoes everything after it, one step at a time, so the app's own undo brings it back.	2 3 116 2	muted
+    list		2 6 116 19	4 items
+      list item		2 6 114 1	
+        group		2 6 114 1	
+          column		2 6 4 1	
+            text		2 6 4 1	muted
+          column		8 6 6 1	
+            text	0	8 6 6 1	mono
+          column		16 6 88 1	
+            text	Before anything was done	16 6 88 1	
+          column		106 6 10 1	
+            link	Go here	106 6 6 1	
+      list item		2 7 114 1	
+        group		2 7 114 1	
+          column		2 7 4 1	
+            text		2 7 4 1	muted
+          column		8 7 6 1	
+            text	1	8 7 6 1	mono
+          column		16 7 88 1	
+            text	Add “Water the plants”	16 7 88 1	
+          column		106 7 10 1	
+            link	Go here	106 7 6 1	
+      list item		2 8 114 1	
+        group		2 8 114 1	
+          column		2 8 4 1	
+            text	now	2 8 4 1	muted
+          column		8 8 6 1	
+            text	2	8 8 6 1	mono
+          column		16 8 88 1	
+            text	Add “Call the bank”	16 8 88 1	
+          column		106 8 10 1	
+            link	Go here	106 8 6 1	unavailable (The app is there now)
+      list item		2 9 114 1	
+        group		2 9 114 1	
+          column		2 9 4 1	
+            text		2 9 4 1	muted
+          column		8 9 6 1	
+            text	3	8 9 6 1	mono
+          column		16 9 88 1	
+            text	Mark “Call the bank” done	16 9 88 1	muted
+          column		106 9 10 1	
+            link	Go here	106 9 6 1	
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Look for running apps	2 28 19 1	
+    button	Detach	23 28 8 1	
+    button	Running apps	33 28 13 1	
+    button	Time	48 28 6 1	
+    button	Why it redrew	56 28 13 1	
+    button	Boxes	71 28 7 1	
+    button	Commands	80 28 11 1	
+    button	Facts	93 28 6 1	
+    button	Effects and jobs	101 28 14 1	
+    button	Taste	2 29 7 1	
+    button	Rewind	11 29 8 1	unavailable (It is showing)
+    button	Ask again	21 29 10 1	
+    button	Undo	33 29 13 1	unavailable (Nothing to undo)
+    button	Redo	48 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	69 29 15 1	

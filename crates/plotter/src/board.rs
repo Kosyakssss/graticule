@@ -81,6 +81,20 @@ pub enum Kind {
     Frame(String),
 }
 
+/// What a shape is in words, for reading it out: "rectangle", "text “Facts”".
+impl std::fmt::Display for Kind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Kind::Rect => f.write_str("rectangle"),
+            Kind::Ellipse => f.write_str("ellipse"),
+            Kind::Text(words) => write!(f, "text “{words}”"),
+            Kind::Draw(_) => f.write_str("freehand line"),
+            Kind::Arrow => f.write_str("arrow"),
+            Kind::Frame(name) => write!(f, "frame “{name}”"),
+        }
+    }
+}
+
 /// How tall a line of a text shape is, in page units.
 pub const LINE: f64 = 16.0;
 

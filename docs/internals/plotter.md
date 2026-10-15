@@ -99,6 +99,12 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **Here.** Read-only is the face's, not the board's: a session fact, `Access`, since whether someone may change a board is about who is looking, not about the board. The face turns down every command that changes the board (`changes` names each one, so a new command has to say), a drag does only what choosing does, and an ink chosen doesn't restyle. Undo is the kernel's, so the app tells it through `App::undoable`, which the runner asks before Undo and Redo; otherwise undo would change a board meant to stay as it is. Typing into the face's own fields, such as the file's path, still makes steps, which wait until editing is allowed again.
 
+## Reading the board
+
+**tldraw.** Shapes are DOM elements with ARIA labels; the keyboard moves the selection between them.
+
+**Here.** The kernel's canvas already makes the shapes it is given presses for keyboard stops, read out by their command's label. The face gives each shape in sight a press of `ChooseShape`, labelled from the shape's kind ("Choose the text “Facts”", from `Kind`'s `Display`, so the words are English until the label is translated), and names every mark it draws for a shape with the same key, so the kernel's ring goes round the shape reached. Only the first 512 in sight from the bottom of the stack get presses, so the view's cost stays bounded on a crowded screen. A text shape is drawn as words, which carry no key, so it is read out and chosen but not ringed.
+
 ## Also in tldraw, later here
 
 Pasting or dropping images; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; and rotation. Export to SVG comes with the core, since a board must render without a screen.

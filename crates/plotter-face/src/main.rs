@@ -139,6 +139,15 @@ struct Layers {
 const SLICE: usize = 512;
 const SMALL: usize = 4_096;
 
+/// How many of the shapes in sight the keyboard reaches, from the bottom of the stack, so a screen reader can read them out.
+const READ: usize = 512;
+
+/// The key a shape's mark has on the canvas, so the keyboard's ring finds it.
+fn mark(key: Key<Shape>) -> u64 {
+    let raw = key.raw();
+    (raw as u64) ^ ((raw >> 64) as u64).rotate_left(32)
+}
+
 /// How far the arrow keys move the chosen shapes, in page units.
 const STEP: f64 = 10.0;
 
@@ -225,6 +234,8 @@ enum Cmd {
     ReadOnly,
     #[label("Allow editing")]
     AllowEditing,
+    #[label("Choose the {kind}", short: "Choose")]
+    ChooseShape(#[subject] Key<Shape>),
     #[label("Choose everything")]
     ChooseAll,
     #[label("Bring to front")]
@@ -258,6 +269,11 @@ impl App for Whiteboard {
         }
         match cmd {
             Cmd::ReadOnly => no_if(self.access == Access::Reading, t!("Read-only already")),
+            Cmd::ChooseShape(key) if !self.board.shapes.has(*key) => No(t!("That shape is gone")),
+            Cmd::ChooseShape(key) => {
+                let whole = self.board.whole(&[*key]);
+                no_if(self.chosen.len() == whole.len() && whole.iter().all(|k| self.chosen.contains(*k)), t!("Chosen already"))
+            }
             Cmd::AllowEditing => no_if(self.access == Access::Editing, t!("Editing already")),
             Cmd::Remove | Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::ToFront | Cmd::ToBack | Cmd::Lock | Cmd::Unlock | Cmd::Copy => {
                 no_if(self.chosen.is_empty(), t!("Choose a shape first"))
@@ -354,6 +370,10 @@ impl App for Whiteboard {
                     Outcome::Nothing => cx.say(t!("Not in a group")),
                     changed => changed,
                 }
+            }
+            Cmd::ChooseShape(key) => {
+                let whole = self.board.whole(&[key]);
+                self.chosen.choose(&ledger::Choose::All(whole.into_iter().map(Key::raw).collect()))
             }
             Cmd::ReadOnly => {
                 self.access = Access::Reading;
@@ -512,8 +532,10 @@ impl App for Whiteboard {
                         let shown = |key: Key<Shape>| moved.iter().find(|m| m.id == key).or(self.board.shapes.find(key));
                         let window = |shape: &Shape| self.board.frames(shape.frame).into_iter().filter_map(shown).map(|f| f.bounds()).reduce(|a, b| a.overlap(&b));
                         let small = self.board.shapes.len() <= SMALL;
+                        let mut reached = Vec::new();
                         match self.layers.get().filter(|_| !(small && (self.layers.coming() || self.index.coming()))) {
                             Some(layers) => {
+                                reached.extend(layers.slices.iter().flat_map(|(keys, _)| keys).take(READ).copied());
                                 for (keys, drawing) in &layers.slices {
                                     if keys.iter().any(|k| moving.contains(k)) {
                                         let mut redrawn = Drawing::new();
@@ -527,12 +549,16 @@ impl App for Whiteboard {
                                 }
                             }
                             None if small => {
+                                reached.extend(self.board.on(self.showing()).iter().take(READ).map(|s| s.id));
                                 for shape in self.board.on(self.showing()) {
                                     let shape = shown(shape.id).unwrap_or(shape);
                                     draw(canvas, shape, window(shape));
                                 }
                             }
                             None => {}
+                        }
+                        for key in reached {
+                            canvas.press(mark(key), Cmd::ChooseShape(key));
                         }
                         for shape in moved.iter().filter(|m| !self.board.shapes.has(m.id)) {
                             draw(canvas, shape, window(shape));
@@ -859,9 +885,11 @@ fn draw(canvas: &mut Drawing, shape: &Shape, window: Option<Bounds>) {
     let color = ink(shape.ink);
     let b = Bounds::new(shape.x, shape.y, shape.w, shape.h);
     let edge = window.map(|w| (at(w.x, w.y), at(w.right(), w.bottom())));
-    let fit = |mark: &mut canvas::Shape| {
+    let named = mark(shape.id);
+    let fit = |drawn: &mut canvas::Shape| {
+        drawn.key(named);
         if let Some((from, to)) = edge {
-            mark.clip(from, to);
+            drawn.clip(from, to);
         }
     };
     match &shape.kind {
@@ -930,8 +958,14 @@ fn changes(cmd: &Cmd) -> bool {
         Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::Paste | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) => true,
         Cmd::Lock | Cmd::Unlock | Cmd::Group | Cmd::Ungroup | Cmd::AddPage | Cmd::RenamePage { .. } | Cmd::RemovePage => true,
         Cmd::ToFront | Cmd::ToBack | Cmd::Open | Cmd::Opened(_) => true,
-        Cmd::Select | Cmd::Copy | Cmd::Copied(_) | Cmd::GoToPage(_) | Cmd::ReadOnly | Cmd::AllowEditing | Cmd::ChooseAll | Cmd::ShowAll => false,
+        Cmd::Select | Cmd::Copy | Cmd::Copied(_) | Cmd::GoToPage(_) | Cmd::ChooseShape(_) | Cmd::ReadOnly | Cmd::AllowEditing | Cmd::ChooseAll | Cmd::ShowAll => false,
         Cmd::Save | Cmd::Saved(_) | Cmd::ExportPicture | Cmd::Drew(_) | Cmd::Edit(_) => false,
+    }
+}
+
+impl ledger::Find<Shape> for Whiteboard {
+    fn find(&self, key: Key<Shape>) -> Option<&Shape> {
+        self.board.shapes.find(key)
     }
 }
 

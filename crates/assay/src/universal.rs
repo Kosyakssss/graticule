@@ -367,6 +367,32 @@ fn aim<A: App>(runner: &mut Runner<A>, pick: u32) -> Option<(String, &'static st
     Some((what, word))
 }
 
+/// Reaches one of a canvas's shapes the way the keyboard does, going to the canvas, moving down to the shape and pressing Return, so a command only a canvas's shapes run is reached.
+fn reach<A: App>(runner: &mut Runner<A>, at: u32, pick: usize) -> (String, Option<Probe<A>>) {
+    let node = runner.tree.nodes[at as usize];
+    let name = runner.tree.str(node.name).to_string();
+    let Some(presses) = runner.tree.canvases.iter().find(|b| b.node == at).map(|b| b.presses.clone()).filter(|p| !p.is_empty()) else {
+        return (format!("go to the canvas “{name}”, with nothing on it to press"), None);
+    };
+    let n = pick % presses.len().min(REACHED);
+    let probe = Some(runner.tree.commands[presses[n].1 as usize].clone()).filter(|cmd| runner.facts.available(cmd).is_yes()).map(|cmd| Probe {
+        facts: runner.facts.clone(),
+        history: runner.history.len(),
+        effects: runner.effects().len(),
+        name: cmd.name(),
+    });
+    runner.act(node.id.0, Action::Focus);
+    for key in std::iter::repeat_n("down", n + 1).chain(["enter"]) {
+        if let Ok(chord) = Chord::parse(key) {
+            runner.press(chord, None);
+        }
+    }
+    (format!("go to the canvas “{name}”, move down {} and press Return", n + 1), probe)
+}
+
+/// How far down a canvas's shapes Assay goes to press one.
+const REACHED: usize = 8;
+
 fn take<A: App>(runner: &mut Runner<A>, step: Step, aimed: Option<(String, &'static str)>) -> (String, Option<Probe<A>>) {
     match step {
         Step::Press(keys) => {
@@ -389,11 +415,17 @@ fn take<A: App>(runner: &mut Runner<A>, step: Step, aimed: Option<(String, &'sta
             }
         }
         Step::Click(pick) => {
-            let acting: Vec<u32> = (0..runner.tree.nodes.len() as u32).filter(|&i| runner.tree.nodes[i as usize].kind.acts()).collect();
+            let acting: Vec<u32> = (0..runner.tree.nodes.len() as u32)
+                .filter(|&i| runner.tree.nodes[i as usize].kind.acts() || matches!(runner.tree.nodes[i as usize].kind, Kind::Canvas { pressable: true, .. }))
+                .collect();
             if acting.is_empty() {
                 return ("click, with nothing on screen to click".into(), None);
             }
-            let node = runner.tree.nodes[acting[pick as usize % acting.len()] as usize];
+            let at = acting[pick as usize % acting.len()];
+            let node = runner.tree.nodes[at as usize];
+            if let Kind::Canvas { .. } = node.kind {
+                return reach(runner, at, pick as usize / acting.len());
+            }
             let label = [runner.tree.str(node.name), runner.tree.str(node.text)].into_iter().find(|s| !s.is_empty()).unwrap_or_default().to_string();
             let what = match node.kind {
                 Kind::ListRow { index, .. } if label.is_empty() => format!("list item {}", index + 1),

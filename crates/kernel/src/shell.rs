@@ -115,6 +115,10 @@ pub trait Face: 'static {
     fn changes(&self) -> Option<crate::app::Moment> {
         None
     }
+    /// How long this face has spent working out derived values in line, all told, which a window does on threads of their own; offscreen renders leave it out of the time they print.
+    fn worked_aside(&self) -> std::time::Duration {
+        std::time::Duration::ZERO
+    }
     /// The smallest window this face fits in, in cells, once it knows.
     fn minimum(&self) -> Option<(i32, i32)> {
         None

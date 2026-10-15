@@ -1666,11 +1666,6 @@ impl<A: App> Runner<A> {
         }
     }
 
-    /// How long derived values have taken to work out on this thread, all told. A window works them out on threads of their own, so a frame never waits for them; a runner without one, as Assay drives, works them out in line, and leaves this time out of its frames.
-    pub fn worked_aside(&self) -> Duration {
-        self.aside
-    }
-
     /// What went wrong in the last command, if it failed.
     pub fn failure(&self) -> Option<&str> {
         match &self.said {
@@ -4879,6 +4874,10 @@ impl<A: App> Drop for Runner<A> {
 }
 
 impl<A: App> Face for Runner<A> {
+    fn worked_aside(&self) -> Duration {
+        self.aside
+    }
+
     fn paint(&mut self, p: &mut Painter, _: Seen) {
         if self.metrics != Some(p.m) || self.fonts != p.text.atlas || self.drawn_in != Some((p.theme, p.style)) {
             self.metrics = Some(p.m);

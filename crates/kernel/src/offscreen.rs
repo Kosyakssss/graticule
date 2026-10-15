@@ -99,13 +99,13 @@ impl Offscreen {
         let appearance = look.appearance;
         let mut paint_ms = 0.0;
         for _ in 0..2 {
-            let started = Instant::now();
+            let (started, aside) = (Instant::now(), face.worked_aside());
             self.text.wait_for_fallback();
             self.text.begin_frame();
             self.quads.clear();
             let mut painter = Painter::new(&mut self.quads, &mut self.text, self.metrics, look);
             face.paint(&mut painter, Seen { appearance, ..Seen::default() });
-            paint_ms = started.elapsed().as_secs_f32() * 1000.0;
+            paint_ms = started.elapsed().saturating_sub(face.worked_aside() - aside).as_secs_f32() * 1000.0;
             if !self.text.fallback_pending() {
                 break;
             }

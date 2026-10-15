@@ -1,7 +1,6 @@
 use std::any::Any;
-use std::cell::RefCell;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::bulk::{self, Bulk};
 use crate::journal;
@@ -23,7 +22,7 @@ pub struct List<T: Record> {
     pos: Vec<u32>,
     free: Vec<u32>,
     index: imbl::HashMap<u128, u32>,
-    starts: RefCell<Starts>,
+    starts: Mutex<Starts>,
     tallies: Vec<u64>,
     links: Vec<imbl::OrdSet<(u128, u128)>>,
     len: usize,
@@ -44,7 +43,7 @@ impl<T: Record> Default for List<T> {
             pos: Vec::new(),
             free: Vec::new(),
             index: imbl::HashMap::new(),
-            starts: RefCell::default(),
+            starts: Mutex::default(),
             tallies: vec![0; T::FLAGS],
             links: vec![imbl::OrdSet::new(); T::LINKS],
             len: 0,
@@ -61,7 +60,7 @@ impl<T: Record> Clone for List<T> {
             pos: self.pos.clone(),
             free: self.free.clone(),
             index: self.index.clone(),
-            starts: RefCell::new(self.starts.borrow().clone()),
+            starts: Mutex::new(self.starts().clone()),
             tallies: self.tallies.clone(),
             links: self.links.clone(),
             len: self.len,
@@ -124,7 +123,7 @@ impl<T: Record> List<T> {
             return None;
         }
         let p = self.chunk_of(index);
-        let start = self.starts.borrow().of[p];
+        let start = self.starts().of[p];
         self.chunks[p].get(index - start)
     }
 
@@ -132,7 +131,7 @@ impl<T: Record> List<T> {
     pub fn position(&self, key: Key<T>) -> Option<usize> {
         let (p, i) = self.locate(key)?;
         self.chunk_of(0);
-        let mut starts = self.starts.borrow_mut();
+        let mut starts = self.starts();
         Self::validate(&mut starts, &self.chunks, p);
         Some(starts.of[p] + i)
     }
@@ -343,7 +342,7 @@ impl<T: Record> List<T> {
     }
 
     fn chunk_of(&self, index: usize) -> usize {
-        let mut starts = self.starts.borrow_mut();
+        let mut starts = self.starts();
         let n = self.chunks.len();
         Self::validate(&mut starts, &self.chunks, n.saturating_sub(1));
         match starts.of.binary_search(&index) {
@@ -357,8 +356,12 @@ impl<T: Record> List<T> {
         }
     }
 
+    fn starts(&self) -> MutexGuard<'_, Starts> {
+        self.starts.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn invalidate(&mut self, from: usize) {
-        let starts = self.starts.get_mut();
+        let starts = self.starts.get_mut().unwrap_or_else(PoisonError::into_inner);
         starts.valid = starts.valid.min(from);
     }
 
@@ -398,7 +401,7 @@ impl<T: Record> List<T> {
             (p, self.chunks[p].len())
         } else {
             let p = self.chunk_of(index);
-            (p, index - self.starts.borrow().of[p])
+            (p, index - self.starts().of[p])
         };
         let (p, i) = if self.chunks[p].len() >= CHUNK {
             let half = CHUNK / 2;

@@ -2,6 +2,7 @@
 
 use std::any::Any;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, OnceLock};
 
 use arc_swap::ArcSwap;
@@ -138,15 +139,28 @@ impl<T> Clone for Derived<T> {
     }
 }
 
-impl<T: Send + 'static> Moving for Derived<T> {
+impl<T: Send + Sync + 'static> Moving for Derived<T> {
     fn arrive(&mut self, value: Box<dyn Any + Send>) {
-        if let Ok(value) = value.downcast::<T>() {
-            self.value = Some(Arc::from(value));
+        if let Ok(value) = value.downcast::<T>()
+            && let Some(old) = self.value.replace(Arc::from(value))
+        {
+            discard(Box::new(old));
         }
     }
 
     fn coming(&mut self, coming: bool) {
         self.coming = coming;
+    }
+}
+
+fn discard(old: Box<dyn Send>) {
+    static BIN: OnceLock<Option<Sender<Box<dyn Send>>>> = OnceLock::new();
+    let bin = BIN.get_or_init(|| {
+        let (tx, rx) = channel::<Box<dyn Send>>();
+        std::thread::Builder::new().name("graticule-discard".into()).spawn(move || rx.into_iter().for_each(drop)).ok().map(|_| tx)
+    });
+    if let Some(tx) = bin {
+        let _ = tx.send(old);
     }
 }
 

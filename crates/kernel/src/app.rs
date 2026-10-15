@@ -181,7 +181,7 @@ impl Field for Failure {
 impl ledger::Document for Failure {}
 
 /// What makes a file's contents from a snapshot of the facts, run in the background.
-pub type Contents = Box<dyn FnOnce(&dyn Any) -> String + Send>;
+pub type Contents = Box<dyn FnOnce(&dyn Any) -> Vec<u8> + Send>;
 
 /// Work asked for as data. Its result comes back as a command.
 pub enum Effect<C> {
@@ -296,15 +296,15 @@ impl<C> Cx<C> {
         Outcome::Nothing
     }
 
-    /// Asks where to save a file, makes its contents from a snapshot of the facts in the background and writes it. The result comes back as `reply`.
-    pub fn save_as<F: 'static>(&mut self, name: &str, write: fn(&F) -> String, reply: fn(Result<Path, Failure>) -> C) {
-        let make = move |facts: &dyn Any| facts.downcast_ref::<F>().map(write).unwrap_or_default();
+    /// Asks where to save a file, makes its contents, text or bytes, from a snapshot of the facts in the background and writes it. The result comes back as `reply`.
+    pub fn save_as<F: 'static, B: Into<Vec<u8>> + 'static>(&mut self, name: &str, write: fn(&F) -> B, reply: fn(Result<Path, Failure>) -> C) {
+        let make = move |facts: &dyn Any| facts.downcast_ref::<F>().map(|f| write(f).into()).unwrap_or_default();
         self.effects.push(Effect::SaveAs { name: name.to_string(), write: Box::new(make), reply });
     }
 
-    /// Makes a file's contents from a snapshot of the facts in the background and writes it to a path the app already has, making its folder if needed. The result comes back as `reply`.
-    pub fn write<F: 'static>(&mut self, path: Path, write: impl FnOnce(&F) -> String + Send + 'static, reply: fn(Result<Path, Failure>) -> C) {
-        let make = move |facts: &dyn Any| facts.downcast_ref::<F>().map(write).unwrap_or_default();
+    /// Makes a file's contents, text or bytes, from a snapshot of the facts in the background and writes it to a path the app already has, making its folder if needed. The result comes back as `reply`.
+    pub fn write<F: 'static, B: Into<Vec<u8>> + 'static>(&mut self, path: Path, write: impl FnOnce(&F) -> B + Send + 'static, reply: fn(Result<Path, Failure>) -> C) {
+        let make = move |facts: &dyn Any| facts.downcast_ref::<F>().map(|f| write(f).into()).unwrap_or_default();
         self.effects.push(Effect::Write { path, write: Box::new(make), reply });
     }
 

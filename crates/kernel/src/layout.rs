@@ -12,6 +12,7 @@ pub const CHECK: i32 = 3;
 pub const BUTTON: i32 = 3;
 pub const SWATCH: i32 = 4;
 const BUTTON_MIN: i32 = 16;
+const CANVAS_ROWS: i32 = 4;
 pub const CALLOUT: i32 = 4;
 const WEEK: i32 = 7;
 const DAY: i32 = 4;
@@ -1053,7 +1054,7 @@ impl<'t> Layout<'t> {
                 seen += 1;
                 let share = spare * seen / fills.max(1) - given;
                 given += share;
-                share
+                if matches!(tree.nodes[c as usize].kind, Kind::Canvas { .. }) { share.max(CANVAS_ROWS) } else { share }
             } else {
                 self.rows(tree, c, area.cols)
             };

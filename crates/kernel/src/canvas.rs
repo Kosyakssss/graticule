@@ -4,7 +4,9 @@ use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::sync::{Arc, OnceLock};
 
-use swash::zeno::{Cap, Command, HitTest, Join, Mask, PathBuilder, Placement, Point, Scratch, Stroke};
+use parley::{FontFamily, LayoutContext, LineHeight, PositionedLayoutItem, StyleProperty};
+use swash::scale::{Render, ScaleContext, Source, StrikeWith};
+use swash::zeno::{Cap, Command, Format, HitTest, Join, Mask, PathBuilder, Placement, Point, Scratch, Stroke, Vector};
 
 use ledger::{Field, Value};
 
@@ -492,6 +494,60 @@ impl Raster {
             }
         }
         h.finish()
+    }
+
+    /// Its pixels as a PNG file's bytes, for exporting a picture, with its words set in the bundled monospace face `words` pixels high. It loads its own fonts, so call it from a job or a file's contents, never from the view.
+    pub fn png(&self, words: f32) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut encoder = png::Encoder::new(&mut out, self.scale.width.max(1), self.scale.height.max(1));
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut pixels = self.rgba();
+        self.set_words(&mut pixels, words);
+        let written = encoder.write_header().and_then(|mut w| w.write_image_data(&pixels));
+        if written.is_err() {
+            out.clear();
+        }
+        out
+    }
+
+    fn set_words(&self, out: &mut [u8], size: f32) {
+        if size <= 0.0 || self.drawings.iter().all(|d| d.labels.is_empty()) {
+            return;
+        }
+        let (w, h) = (self.scale.width as usize, self.scale.height as usize);
+        let mut fonts = crate::fonts::Fonts::new(false);
+        let mono = fonts.mono.clone();
+        let mut layouts = LayoutContext::<u8>::new();
+        let mut scale = ScaleContext::new();
+        let line = (size * 1.4).round();
+        for d in &self.drawings {
+            for (words, (x, y), ink) in d.labels(&self.scale) {
+                let color = self.theme.get(ink);
+                let mut b = layouts.ranged_builder(&mut fonts.cx, words, 1.0, true);
+                b.push_default(StyleProperty::FontFamily(FontFamily::named(&mono)));
+                b.push_default(StyleProperty::FontSize(size));
+                b.push_default(StyleProperty::LineHeight(LineHeight::Absolute(line)));
+                let mut layout = b.build(words);
+                layout.break_all_lines(None);
+                let top = y - line / 2.0;
+                for item in layout.lines().flat_map(|l| l.items().collect::<Vec<_>>()) {
+                    let PositionedLayoutItem::GlyphRun(run) = item else { continue };
+                    let font = run.run().font();
+                    let Some(face) = swash::FontRef::from_index(font.data.data(), font.index as usize) else { continue };
+                    let mut scaler = scale.builder(face).size(run.run().font_size()).hint(false).normalized_coords(run.run().normalized_coords().iter()).build();
+                    for glyph in run.positioned_glyphs() {
+                        let (gx, gy) = (x + glyph.x, top + glyph.y);
+                        let render =
+                            Render::new(&[Source::Outline, Source::Bitmap(StrikeWith::BestFit)]).format(Format::Alpha).offset(Vector::new(gx - gx.floor(), 0.0)).render(&mut scaler, glyph.id as u16);
+                        if let Some(image) = render {
+                            let at = Placement { left: gx.floor() as i32 + image.placement.left, top: gy.round() as i32 - image.placement.top, ..image.placement };
+                            blend(out, (w, h), &image.data, at, color);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Its pixels, as RGBA with straight alpha, row by row.

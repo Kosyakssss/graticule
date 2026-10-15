@@ -398,7 +398,7 @@ A menu button's entries are its children, laid out with no area, as an overflow'
 
 ## 12. Effects
 
-`cx.save_as("To do.md", Todo::as_markdown, Cmd::Exported)` pushes `Effect::SaveAs { name, write, reply }` into `Cx`. `write` is a `fn(&F) -> String` that makes the file's contents, and `reply` is a `fn(Result<Path, Failure>) -> C`, which `Cmd::Exported` is.
+`cx.save_as("To do.md", Todo::as_markdown, Cmd::Exported)` pushes `Effect::SaveAs { name, write, reply }` into `Cx`. `write` is a `fn(&F) -> B` that makes the file's contents, where `B` is anything that turns into bytes (a `String`, or a `Vec<u8>` for a picture), and `reply` is a `fn(Result<Path, Failure>) -> C`, which `Cmd::Exported` is.
 
 After the commit the kernel runs effects in order, in the same frame, once it has the window (`Runner::painted`): the save panel opens as a sheet on the window (rfd's asynchronous panel), without blocking the event loop; a job thread waits for the user's choice, and if they call it off, nothing comes back; a job takes a snapshot of the facts (§14), runs `write` on it and writes the file, shown with its progress in the status line, so exporting fifty million items never touches the main thread; the result comes back through the event loop as `Cmd::Exported(result)`, which goes through `available` and `update` like any command. `#[internal]` keeps it out of the palette, menus, keymaps and undo.
 

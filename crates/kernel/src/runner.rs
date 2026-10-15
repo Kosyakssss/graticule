@@ -272,6 +272,7 @@ pub struct Runner<A: App> {
     reading: Option<Reading>,
     reading_drag: bool,
     drag: Option<Id>,
+    placing: Option<(Id, usize)>,
     carry: Option<Carry>,
     dropping: Vec<std::path::PathBuf>,
     pending: Vec<Chord>,
@@ -391,6 +392,7 @@ impl<A: App> Runner<A> {
             menu: None,
             clipboard: None,
             reveal: false,
+            placing: None,
             ime: false,
             repairing: false,
             keep: Keep::Nothing,
@@ -1398,6 +1400,27 @@ impl<A: App> Runner<A> {
                 }
             }
         }
+        for e in 0..self.tree.editors.len() {
+            let n = self.tree.nodes[self.tree.editors[e].node as usize];
+            let Kind::Editor { count, first, head, .. } = n.kind else { continue };
+            let reveal = self.reveal;
+            let s = self.scrolls.entry(n.id).or_default();
+            if s.rows != n.area.rows {
+                s.rows = n.area.rows;
+                moved = true;
+            }
+            let rows = n.area.rows.max(1) as u32;
+            let mut to = first.min((count as i32 - n.area.rows).max(0) as u32);
+            if reveal && head < to {
+                to = head;
+            } else if reveal && head >= to + rows {
+                to = head + 1 - rows;
+            }
+            if to != first {
+                s.index = to;
+                moved = true;
+            }
+        }
         moved
     }
 
@@ -1412,6 +1435,10 @@ impl<A: App> Runner<A> {
             self.tree.nodes.iter().filter(|n| matches!(n.kind, Kind::ListRow { key, .. } if self.marked.contains(&key))).map(|n| n.id).collect()
         };
         let chosen: HashMap<Id, (u32, u32)> = self.chosen().into_iter().map(|(i, r)| (self.tree.nodes[i as usize].id, (r.start as u32, r.end as u32))).collect();
+        let editing: std::collections::HashSet<Id> = match focus.and_then(|f| self.tree.find(f)) {
+            Some(e) if matches!(self.tree.nodes[e as usize].kind, Kind::Editor { .. }) => self.tree.children(e).map(|c| self.tree.nodes[c as usize].id).collect(),
+            _ => Default::default(),
+        };
         let caret = match &self.palette {
             Some(p) => Some((PALETTE, p.caret)),
             None => self.focus.and_then(|f| self.carets.get(&f).map(|c| (f, *c))),
@@ -1421,7 +1448,7 @@ impl<A: App> Runner<A> {
             Look {
                 hovered: hover == Some(id),
                 pressed: pressed == Some(id) && hover == Some(id),
-                focused: focus == Some(id),
+                focused: focus == Some(id) || editing.contains(&id),
                 caret: at.map_or(u32::MAX, |c| c.caret as u32),
                 anchor: at.map_or(u32::MAX, |c| c.anchor as u32),
                 composing: if focus == Some(id) { composed } else { Range32::default() },
@@ -3404,6 +3431,79 @@ impl<A: App> Runner<A> {
         self.tree.nodes[i as usize].kind.control().then_some(i)
     }
 
+    fn focused_editor(&self) -> Option<u32> {
+        let i = self.focused_control()?;
+        matches!(self.tree.nodes[i as usize].kind, Kind::Editor { .. }).then_some(i)
+    }
+
+    fn editor_selected(&self, i: u32) -> String {
+        let Some(info) = self.tree.editors.iter().find(|e| e.node == i) else { return String::new() };
+        (info.selected)(&self.facts as &dyn Any, info.path)
+    }
+
+    fn type_in(&mut self, i: u32, typed: ledger::Typed) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let Some(path) = n.path else { return false };
+        let (kind, space, ends) = match &typed {
+            ledger::Typed::Insert(t) => (field::Kind::Typing, t.starts_with(char::is_whitespace), t.ends_with(char::is_whitespace)),
+            ledger::Typed::NewLine => (field::Kind::Typing, true, true),
+            ledger::Typed::Delete { .. } => (field::Kind::Deleting, false, false),
+            _ => (field::Kind::Alone, false, false),
+        };
+        let continues = kind != field::Kind::Alone && matches!(self.typing, Some((id, k, after_space)) if id == n.id && k == kind && (after_space || !space));
+        if !continues {
+            self.gesture += 1;
+        }
+        self.typing = (kind != field::Kind::Alone).then_some((n.id, kind, ends));
+        let Some(cmd) = <A::Cmd as Commands<A>>::edit(Edit::new(path, Change::Typed(typed), self.gesture)) else { return false };
+        self.reveal = true;
+        self.run(cmd);
+        true
+    }
+
+    fn place_cursor(&mut self, frame: &Frame, i: u32, extend: bool) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let Some((x, y)) = frame.pointer else { return false };
+        let m = frame.metrics;
+        let row = m.cell_at(x, y).1;
+        let lines: Vec<u32> = self.tree.children(i).collect();
+        let Some(&line) = lines.iter().find(|&&c| self.tree.nodes[c as usize].area.row == row).or(if row < n.area.row { lines.first() } else { lines.last() }) else { return false };
+        let l = self.tree.nodes[line as usize];
+        let Kind::EditLine { line: number } = l.kind else { return false };
+        let cells = ((x - m.rect(l.area).x) / m.cell_w).max(0.0);
+        let (mut column, mut used) = (0, 0.0);
+        for c in self.tree.str(l.text).chars() {
+            let w = crate::text::cells(c) as f32;
+            if used + w / 2.0 > cells {
+                break;
+            }
+            (column, used) = (column + 1, used + w);
+        }
+        let Some(info) = self.tree.editors.iter().find(|e| e.node == i).copied() else { return false };
+        let at = (info.line_start)(&self.facts as &dyn Any, info.path, number as usize) + column;
+        if self.placing == Some((n.id, at)) {
+            return false;
+        }
+        self.placing = Some((n.id, at));
+        self.typing = None;
+        let Some(cmd) = <A::Cmd as Commands<A>>::edit(Edit::new(info.path, Change::Typed(ledger::Typed::Place { at, extend }), self.gesture)) else { return false };
+        self.run(cmd);
+        true
+    }
+
+    fn scroll_editor(&mut self, i: u32, by: i32) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let Kind::Editor { count, first, .. } = n.kind else { return false };
+        let to = (first as i32).saturating_add(by).clamp(0, (count as i32 - n.area.rows).max(0)) as u32;
+        if to == first {
+            return false;
+        }
+        let s = self.scrolls.entry(n.id).or_default();
+        s.index = to;
+        self.stale = true;
+        true
+    }
+
     fn caret(&self, i: u32) -> Caret {
         let n = self.tree.nodes[i as usize];
         let len = self.tree.str(n.text).len();
@@ -3569,6 +3669,39 @@ impl<A: App> Runner<A> {
                     self.stale = true;
                 }
                 return done;
+            }
+        }
+        if self.pending.is_empty()
+            && typing
+            && let Some(i) = self.focused_editor()
+        {
+            if chord.types()
+                && let Some(t) = text
+            {
+                return self.type_in(i, ledger::Typed::Insert(t));
+            }
+            let Kind::Editor { single, .. } = self.tree.nodes[i as usize].kind else { return false };
+            let rows = self.tree.nodes[i as usize].area.rows.clamp(1, i32::from(u16::MAX)) as u16;
+            match field::editor_key(chord.key, chord.mods, rows, single) {
+                Some(field::EditorKey::Typed(t)) => return self.type_in(i, t),
+                Some(field::EditorKey::Copy) => {
+                    let text = self.editor_selected(i);
+                    self.copy(text);
+                    return true;
+                }
+                Some(field::EditorKey::Cut) => {
+                    let text = self.editor_selected(i);
+                    if text.is_empty() {
+                        return true;
+                    }
+                    self.copy(text);
+                    return self.type_in(i, ledger::Typed::Delete { forward: false, word: false });
+                }
+                Some(field::EditorKey::Paste) => {
+                    let text = self.clipboard().and_then(|c| c.get_text().ok()).unwrap_or_default().replace("\r\n", "\n").replace('\r', "\n");
+                    return text.is_empty() || self.type_in(i, ledger::Typed::Insert(text));
+                }
+                None => {}
             }
         }
         if self.pending.is_empty()
@@ -3969,6 +4102,9 @@ impl<A: App> Runner<A> {
             self.stale = true;
             return true;
         }
+        if let Some(i) = self.focused_editor() {
+            return self.type_in(i, ledger::Typed::Insert(text.to_string()));
+        }
         match self.focused_field() {
             Some(i) => self.field_action(i, field::insert(self.caret(i), text)),
             None => false,
@@ -4360,6 +4496,9 @@ impl<A: App> Runner<A> {
     }
 
     fn scroll(&mut self, col: i32, row: i32, by: i32) -> bool {
+        if let Some(e) = self.tree.nodes.iter().rposition(|n| matches!(n.kind, Kind::Editor { .. }) && n.area.contains(col, row)) {
+            return self.scroll_editor(e as u32, by);
+        }
         if let Some(d) = self.tree.nodes.iter().rposition(|n| matches!(n.kind, Kind::Diff { .. }) && n.area.contains(col, row)) {
             return self.scroll_diff(d as u32, by);
         }
@@ -4658,6 +4797,11 @@ impl<A: App> Runner<A> {
                     self.stale |= now != was;
                     return now != was;
                 }
+                if let Some((id, _)) = self.placing.filter(|_| self.drag.is_some())
+                    && let Some(i) = self.tree.find(id)
+                {
+                    return self.place_cursor(frame, i, true);
+                }
                 if let Some(id) = self.drag
                     && let Some(i) = self.tree.find(id)
                 {
@@ -4767,6 +4911,16 @@ impl<A: App> Runner<A> {
                     self.stale = true;
                     return true;
                 }
+                if let Kind::Editor { .. } | Kind::EditLine { .. } = n.kind {
+                    let e = if matches!(n.kind, Kind::EditLine { .. }) { n.parent } else { i };
+                    self.reading = None;
+                    self.focus_on(self.tree.nodes[e as usize].id, false);
+                    (self.pressed, self.carry) = (None, None);
+                    self.placing = None;
+                    self.drag = Some(self.tree.nodes[e as usize].id);
+                    self.place_cursor(frame, e, frame.mods.shift);
+                    return true;
+                }
                 if matches!(n.kind, Kind::Field { .. }) && n.path.is_some() {
                     self.reading = None;
                     let at = self.caret_at(frame.text, frame.metrics, i, frame.pointer.unwrap_or_default());
@@ -4787,6 +4941,7 @@ impl<A: App> Runner<A> {
             }
             Input::Release { button: Button::Left } => {
                 self.drag = None;
+                self.placing = None;
                 if self.resizing.take().is_some() {
                     return true;
                 }

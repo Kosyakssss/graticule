@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use std::panic::Location;
 use std::sync::Arc;
 
-use ledger::{FactPath, Field, Key, Record, Selection, Text};
+use ledger::{Editable, FactPath, Field, Key, Record, Selection, Text};
 
 use crate::app::{Moment, Path};
 use crate::canvas::Drawing;
@@ -16,7 +16,7 @@ use crate::ink::Ink;
 use crate::message::Message;
 use crate::picture::Picture;
 use crate::table::{Branch, Cell, Rows, Sort};
-use crate::tree::{Board, Holds, Id, Kind, ListInfo, NONE, Span, Tone, Tree};
+use crate::tree::{Board, EditorInfo, Holds, Id, Kind, ListInfo, NONE, Span, Tone, Tree};
 use crate::value::{Integer, Value, grouped};
 
 const CHECK_MIN: i32 = 12;
@@ -1547,6 +1547,56 @@ impl<'a, C, S> Ui<'a, C, S> {
         }
     }
 
+    /// An editor of the text at `path`, as tall as it is given. Only the lines that show are read, so it costs the same for one line or a hundred megabytes. What is typed, deleted, moved or clicked in it arrives in `update` as an `Edit`, by the platform's own conventions, and the text decides what each means at its cursors: `Cmd::Edit(edit) => edit.apply(self)`. It scrolls by the wheel and follows the primary cursor as it moves.
+    #[track_caller]
+    pub fn editor<F: Field, D: Editable>(&mut self, label: impl AsRef<str>, path: FactPath<F, D>) -> Placed<'_, 'a, C, S> {
+        let at = Location::caller();
+        let erased = path.erased();
+        let i = self.tree.add(self.parent, Kind::Editor { count: 1, first: 0, head: 0, single: true }, Some(Id::ROOT.mix(erased.hash64())), at);
+        let r = self.tree.put(label.as_ref());
+        let node = &mut self.tree.nodes[i as usize];
+        (node.name, node.path, node.span, node.subject) = (r, Some(erased), crate::tree::Fill, self.subject);
+        let id = node.id;
+        self.tree.editors.push(EditorInfo { node: i, path: erased, selected: selected_in::<F, D>, line_start: line_start_in::<F, D> });
+        let Some(doc) = self.facts::<F>().and_then(|f| path.get(f)) else { return Placed { ui: self, node: i } };
+        let count = doc.line_count().max(1);
+        let mut cursors = std::mem::take(&mut self.tree.cursors);
+        cursors.clear();
+        let primary = doc.cursors(&mut cursors);
+        let head = cursors.get(primary).map_or(0, |c| doc.line_of(c.1));
+        let scroll = self.scrolls.get(&id).copied().unwrap_or_default();
+        let first = (scroll.index as usize).min(count - 1);
+        let shown = scroll.rows.max(1) as usize + 1;
+        for line in first..(first + shown).min(count) {
+            let n = self.tree.add(i, Kind::EditLine { line: line as u32 }, Some(id.mix(line as u64)), at);
+            let text = self.tree.write(|out| doc.line(line, &mut |chunk| out.push_str(chunk)));
+            self.tree.nodes[n as usize].text = text;
+            let start = doc.line_start(line);
+            let s = &self.tree.text[text.start as usize..text.end as usize];
+            let end = start + s.chars().count();
+            let byte = |at: usize| s.char_indices().nth(at - start).map_or(s.len(), |(b, _)| b) as u32;
+            let mut marks = Vec::new();
+            let mut carets = Vec::new();
+            for (k, &(anchor, head)) in cursors.iter().enumerate() {
+                let (a, b) = (anchor.min(head), anchor.max(head));
+                if a < b && a <= end && b > start {
+                    marks.push((byte(a.max(start)), byte(b.min(end))));
+                }
+                if (start..=end).contains(&head) {
+                    carets.push((n, byte(head), k == primary));
+                }
+            }
+            if !marks.is_empty() {
+                self.tree.marks.push((n, marks));
+            }
+            self.tree.carets.extend(carets);
+        }
+        let single = matches!(cursors.as_slice(), [(a, b)] if a == b);
+        self.tree.nodes[i as usize].kind = Kind::Editor { count: count as u32, first: first as u32, head: head as u32, single };
+        self.tree.cursors = cursors;
+        Placed { ui: self, node: i }
+    }
+
     /// A node graph: each of `graph`'s nodes a box holding what `node` puts in it for that node's number, set out in layers from left to right with wires between them. A graph too wide for its place lists its nodes one under another, without wires.
     #[track_caller]
     pub fn graph(&mut self, label: impl AsRef<str>, graph: &crate::graph::Graph, mut node: impl FnMut(&mut Ui<'_, C, S>, usize)) {
@@ -1708,6 +1758,14 @@ impl<C, S> DerefMut for Canvas<'_, '_, C, S> {
 /// The id of `day`'s cell in the calendar with id `calendar`, so moving between days can name the one to focus before it is built.
 pub(crate) fn day_id(calendar: Id, day: Day) -> Id {
     calendar.mix(9).mix(day.0 as u32 as u64)
+}
+
+fn selected_in<F: Field, D: Editable>(facts: &dyn Any, path: ledger::ErasedPath) -> String {
+    facts.downcast_ref::<F>().and_then(|f| f.reach(path.steps())).and_then(|d| d.downcast_ref::<D>()).map(Editable::selected).unwrap_or_default()
+}
+
+fn line_start_in<F: Field, D: Editable>(facts: &dyn Any, path: ledger::ErasedPath, line: usize) -> usize {
+    facts.downcast_ref::<F>().and_then(|f| f.reach(path.steps())).and_then(|d| d.downcast_ref::<D>()).map_or(0, |d| d.line_start(line))
 }
 
 fn keys<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, selection: ledger::ErasedPath, ranks: Option<&crate::table::Ranks>, span: Option<(u128, u128)>) -> Vec<u128> {

@@ -352,11 +352,11 @@ fn describe(step: Step) -> String {
 }
 
 fn aim<A: App>(runner: &mut Runner<A>, pick: u32) -> Option<(String, &'static str)> {
-    let fields: Vec<u32> = (0..runner.tree.nodes.len() as u32).filter(|&i| matches!(runner.tree.nodes[i as usize].kind, Kind::Field { .. })).collect();
+    let fields: Vec<u32> = (0..runner.tree.nodes.len() as u32).filter(|&i| matches!(runner.tree.nodes[i as usize].kind, Kind::Field { .. } | Kind::Editor { .. })).collect();
     let node = runner.tree.nodes[*fields.get(pick as usize % fields.len().max(1))? as usize];
     let word = WORDS[(pick as usize / fields.len()) % WORDS.len()];
     runner.act(node.id.0, Action::Focus);
-    Some((runner.tree.str(node.name).to_string(), word))
+    Some((format!("{} “{}”", if matches!(node.kind, Kind::Editor { .. }) { "editor" } else { "text field" }, runner.tree.str(node.name)), word))
 }
 
 fn take<A: App>(runner: &mut Runner<A>, step: Step, aimed: Option<(String, &'static str)>) -> (String, Option<Probe<A>>) {
@@ -383,7 +383,7 @@ fn take<A: App>(runner: &mut Runner<A>, step: Step, aimed: Option<(String, &'sta
                 Kind::ListRow { index, .. } if label.is_empty() => format!("list item {}", index + 1),
                 kind => format!("{} “{label}”", kind.role()),
             };
-            if matches!(node.kind, Kind::Field { .. }) {
+            if matches!(node.kind, Kind::Field { .. } | Kind::Editor { .. }) {
                 runner.act(node.id.0, Action::Focus);
                 return (format!("go to the {what}"), None);
             }
@@ -399,7 +399,7 @@ fn take<A: App>(runner: &mut Runner<A>, step: Step, aimed: Option<(String, &'sta
             for c in word.chars() {
                 runner.press(Chord { key: Pressed::Char(c), mods: Default::default() }, Some(&c.to_string()));
             }
-            return (format!("type “{word}” into the text field “{label}”"), None);
+            return (format!("type “{word}” into the {label}"), None);
         }
     }
     (describe(step), None)

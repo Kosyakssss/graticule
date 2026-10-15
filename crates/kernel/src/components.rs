@@ -966,7 +966,32 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             p.cells((x + (2 * w + 2) as f32 * cw, y), 1, sign, style, ink);
             p.cells((x + start as f32 * cw, y), a.cols - start, text, style, theme.ink);
         }
-        (Layer::Over, Kind::Diff { .. }) if look.focused => {
+        (Layer::Under, Kind::EditLine { .. }) => {
+            let (a, fill) = (n.area, if look.focused { p.theme.selection } else { p.theme.hover });
+            if let Some((_, marks)) = tree.marks.iter().find(|m| m.0 == i) {
+                for &(s, e) in marks {
+                    let (from, to) = (a.col + cells_in(&text[..s as usize]), a.col + cells_in(&text[..e as usize]));
+                    let to = if e as usize == text.len() && s < e { to + 1 } else { to.max(from + 1) }.min(a.right());
+                    if to > from {
+                        p.fill_area(Area::new(from, a.row, to - from, 1), fill);
+                    }
+                }
+            }
+        }
+        (Layer::Over, Kind::EditLine { .. }) => {
+            let (a, style, theme) = (n.area, p.m.mono(), p.theme);
+            let r = p.rect(a);
+            p.cells((r.x, r.y), a.cols, text, style, theme.ink);
+            if look.focused {
+                let bar = (p.m.scale * 2.0).round().max(1.0);
+                for &(_, byte, primary) in tree.carets.iter().filter(|c| c.0 == i) {
+                    let x = r.x + cells_in(&text[..byte as usize]) as f32 * p.m.cell_w;
+                    let ink = if primary { theme.cursor } else { theme.muted };
+                    p.fill(Rect::new(x.floor(), r.y + p.m.cell_h * 0.1, bar, p.m.cell_h * 0.8), ink);
+                }
+            }
+        }
+        (Layer::Over, Kind::Diff { .. } | Kind::Editor { .. }) if look.focused => {
             let (r, t, cursor) = (p.rect(n.area), p.style.line(p.m), p.theme.cursor);
             border(p, r, t, cursor);
         }

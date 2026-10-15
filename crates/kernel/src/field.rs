@@ -115,6 +115,67 @@ fn bind(key: Key, m: Mods) -> Option<(Op, bool)> {
     Some((op, extend))
 }
 
+/// What a key does in an editor: a change the text makes at its cursors, or one that goes through the clipboard.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EditorKey {
+    Typed(ledger::Typed),
+    Copy,
+    Cut,
+    Paste,
+}
+
+/// The key an editor takes, by the platform's conventions, given how many rows it shows and whether it has one cursor with nothing selected.
+pub fn editor_key(key: Key, m: Mods, rows: u16, single: bool) -> Option<EditorKey> {
+    use ledger::{Travel, Typed};
+    let Mods { shift, alt, primary, control } = m;
+    let mac = cfg!(target_os = "macos");
+    let to = match (key, primary, alt, control) {
+        (Key::Left, false, false, false) => Travel::Left,
+        (Key::Right, false, false, false) => Travel::Right,
+        (Key::Up, false, false, false) => Travel::Up,
+        (Key::Down, false, false, false) => Travel::Down,
+        (Key::Char('b'), false, false, true) if mac => Travel::Left,
+        (Key::Char('f'), false, false, true) if mac => Travel::Right,
+        (Key::Char('p'), false, false, true) if mac => Travel::Up,
+        (Key::Char('n'), false, false, true) if mac => Travel::Down,
+        (Key::Left, false, true, false) if mac => Travel::WordLeft,
+        (Key::Right, false, true, false) if mac => Travel::WordRight,
+        (Key::Left, true, false, false) if !mac => Travel::WordLeft,
+        (Key::Right, true, false, false) if !mac => Travel::WordRight,
+        (Key::Left, true, false, false) | (Key::Home, false, false, false) => Travel::LineStart,
+        (Key::Right, true, false, false) | (Key::End, false, false, false) => Travel::LineEnd,
+        (Key::Char('a'), false, false, true) if mac => Travel::LineStart,
+        (Key::Char('e'), false, false, true) if mac => Travel::LineEnd,
+        (Key::Up, true, false, false) if mac => Travel::Start,
+        (Key::Down, true, false, false) if mac => Travel::End,
+        (Key::Home, true, false, false) if !mac => Travel::Start,
+        (Key::End, true, false, false) if !mac => Travel::End,
+        (Key::PageUp, false, false, false) => Travel::PageUp(rows.saturating_sub(1).max(1)),
+        (Key::PageDown, false, false, false) => Travel::PageDown(rows.saturating_sub(1).max(1)),
+        _ => {
+            let typed = match (key, primary, alt, control) {
+                (Key::Char('a'), true, false, false) => Typed::SelectAll,
+                (Key::Char('c'), true, false, false) => return Some(EditorKey::Copy),
+                (Key::Char('x'), true, false, false) => return Some(EditorKey::Cut),
+                (Key::Char('v'), true, false, false) => return Some(EditorKey::Paste),
+                (Key::Backspace, false, false, _) => Typed::Delete { forward: false, word: false },
+                (Key::Char('h'), false, false, true) if mac => Typed::Delete { forward: false, word: false },
+                (Key::Backspace, false, true, _) if mac => Typed::Delete { forward: false, word: true },
+                (Key::Backspace, true, false, _) if !mac => Typed::Delete { forward: false, word: true },
+                (Key::Delete, false, false, false) => Typed::Delete { forward: true, word: false },
+                (Key::Char('d'), false, false, true) if mac => Typed::Delete { forward: true, word: false },
+                (Key::Delete, false, true, false) if mac => Typed::Delete { forward: true, word: true },
+                (Key::Delete, true, false, false) if !mac => Typed::Delete { forward: true, word: true },
+                (Key::Enter, false, false, false) => Typed::NewLine,
+                (Key::Escape, false, false, false) if !single => Typed::Collapse,
+                _ => return None,
+            };
+            return Some(EditorKey::Typed(typed));
+        }
+    };
+    Some(EditorKey::Typed(Typed::Move { to, extend: shift }))
+}
+
 /// Whether a field takes this key for itself, even when it changes nothing, so it never falls through to a command.
 pub fn handles(key: Key, m: Mods) -> bool {
     bind(key, m).is_some()

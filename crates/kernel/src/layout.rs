@@ -196,7 +196,8 @@ impl<'t> Layout<'t> {
             Kind::Scale { vertical: true, .. } => (1, 1),
             Kind::Spark => (6, 12),
             Kind::Diff { .. } => (20, 20),
-            Kind::DiffLine { .. } => (1, 1),
+            Kind::DiffLine { .. } | Kind::EditLine { .. } => (1, 1),
+            Kind::Editor { .. } => (20, 40),
             Kind::Vertex => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref) = (1, 1);
@@ -545,7 +546,8 @@ impl<'t> Layout<'t> {
             Kind::Header | Kind::Head { .. } | Kind::Cell { .. } | Kind::Twig { .. } | Kind::Divider | Kind::Ruler | Kind::Spark => 1,
             Kind::Scale { rows, .. } => rows.max(1),
             Kind::Diff { rows, .. } => rows.max(1),
-            Kind::DiffLine { .. } => 1,
+            Kind::DiffLine { .. } | Kind::EditLine { .. } => 1,
+            Kind::Editor { .. } => 3,
             Kind::Vertex => {
                 let (start, end) = self.children(tree, i);
                 let mut rows = 0;
@@ -770,7 +772,7 @@ impl<'t> Layout<'t> {
             }
             Kind::Root | Kind::Column | Kind::Pane | Kind::Picker | Kind::Matches { .. } | Kind::TimeAxis | Kind::Chart | Kind::Palette => self.stack_down(tree, i, area, 0),
             Kind::Split => self.split(tree, i, area),
-            Kind::Diff { .. } => {
+            Kind::Diff { .. } | Kind::Editor { .. } => {
                 let (start, end) = self.children(tree, i);
                 for k in start..end {
                     let (c, row) = (self.stack[k], area.row + (k - start) as i32);
@@ -1027,7 +1029,7 @@ impl<'t> Layout<'t> {
         let mut fills = 0;
         for k in start..end {
             let c = self.stack[k];
-            if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. } | Kind::Split) {
+            if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. } | Kind::Split | Kind::Editor { .. }) {
                 fills += 1;
             } else {
                 fixed += self.rows(tree, c, area.cols);
@@ -1040,7 +1042,7 @@ impl<'t> Layout<'t> {
         let mut seen = 0;
         for k in start..end {
             let c = self.stack[k];
-            let rows = if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. } | Kind::Split) {
+            let rows = if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. } | Kind::Split | Kind::Editor { .. }) {
                 seen += 1;
                 let share = spare * seen / fills.max(1) - given;
                 given += share;

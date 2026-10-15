@@ -122,87 +122,218 @@ pub enum Kind {
     Row,
     Column,
     Columns,
-    List { count: u32, first: u32, shown: u32, rows: i32 },
-    ListRow { key: u128, index: u32, selected: bool, focused: bool },
-    Field { holds: Holds },
-    Check { on: bool },
+    List {
+        count: u32,
+        first: u32,
+        shown: u32,
+        rows: i32,
+    },
+    ListRow {
+        key: u128,
+        index: u32,
+        selected: bool,
+        focused: bool,
+    },
+    Field {
+        holds: Holds,
+    },
+    Check {
+        on: bool,
+    },
     Link,
     Button,
-    Text { mono: bool, tone: Tone, strong: bool },
+    Text {
+        mono: bool,
+        tone: Tone,
+        strong: bool,
+    },
     Empty,
     Bar,
     Action,
     Status,
     Note,
     Palette,
-    Choice { chosen: bool },
-    Swatch { ink: Ink },
-    Picture { picture: &'static Picture, rows: i32 },
-    Value { value: Value },
-    Overlay { anchor: Anchor },
+    Choice {
+        chosen: bool,
+    },
+    Swatch {
+        ink: Ink,
+    },
+    Picture {
+        picture: &'static Picture,
+        rows: i32,
+    },
+    Value {
+        value: Value,
+    },
+    Overlay {
+        anchor: Anchor,
+    },
     Entry,
     Rule,
     Keys,
-    Gauge { filled: u16, meter: bool },
-    Placeholder { rows: i32 },
+    Gauge {
+        filled: u16,
+        meter: bool,
+    },
+    Placeholder {
+        rows: i32,
+    },
     Tag,
     Avatar,
-    Callout { ink: Ink },
+    Callout {
+        ink: Ink,
+    },
     Card,
-    Toggle { on: bool },
-    IconButton { picture: &'static Picture },
+    Toggle {
+        on: bool,
+    },
+    IconButton {
+        picture: &'static Picture,
+    },
     Group,
-    Radio { on: bool },
-    Switch { on: bool },
+    Radio {
+        on: bool,
+    },
+    Switch {
+        on: bool,
+    },
     Fieldset,
     Labelled,
     Tabs,
     Strip,
-    Tab { on: bool },
-    Place { on: bool },
+    Tab {
+        on: bool,
+    },
+    Place {
+        on: bool,
+    },
     Disclosure,
-    Opener { open: bool },
+    Opener {
+        open: bool,
+    },
     Crumbs,
-    PageLink { on: bool },
+    PageLink {
+        on: bool,
+    },
     Overflow,
     Places,
-    Slider { at: u16, label: u8 },
+    Slider {
+        at: u16,
+        label: u8,
+    },
     More,
-    Cycle { widest: u8 },
+    Cycle {
+        widest: u8,
+    },
     Browse,
     Chip,
-    Range { label: u8 },
-    Thumb { at: u16, high: bool },
-    Select { widest: u8, many: bool, open: bool },
-    Pick { on: bool },
+    Range {
+        label: u8,
+    },
+    Thumb {
+        at: u16,
+        high: bool,
+    },
+    Select {
+        widest: u8,
+        many: bool,
+        open: bool,
+    },
+    Pick {
+        on: bool,
+    },
     MenuButton,
-    Popover { open: bool },
-    Confirm { open: bool },
-    Calendar { month: i32 },
-    Day { on: bool, today: bool, outside: bool },
-    Turn { forward: bool },
-    ColorArea { l: u16, c: u16, h: u16 },
-    Canvas { rows: i32, pressable: bool },
-    Image { rows: i32, width: u32, height: u32 },
+    Popover {
+        open: bool,
+    },
+    Confirm {
+        open: bool,
+    },
+    Calendar {
+        month: i32,
+    },
+    Day {
+        on: bool,
+        today: bool,
+        outside: bool,
+    },
+    Turn {
+        forward: bool,
+    },
+    ColorArea {
+        l: u16,
+        c: u16,
+        h: u16,
+    },
+    Canvas {
+        rows: i32,
+        pressable: bool,
+    },
+    Image {
+        rows: i32,
+        width: u32,
+        height: u32,
+    },
     Header,
-    Head { sorted: i8, sortable: bool, numeric: bool },
-    Cell { numeric: bool, tone: Tone },
-    Twig { depth: u16, branch: crate::table::Branch },
+    Head {
+        sorted: i8,
+        sortable: bool,
+        numeric: bool,
+    },
+    Cell {
+        numeric: bool,
+        tone: Tone,
+    },
+    Twig {
+        depth: u16,
+        branch: crate::table::Branch,
+    },
     Split,
     Pane,
     Divider,
     Picker,
-    Matches { count: u32, first: u32, shown: u32, at: u32 },
-    Match { chosen: bool },
+    Matches {
+        count: u32,
+        first: u32,
+        shown: u32,
+        at: u32,
+    },
+    Match {
+        chosen: bool,
+    },
     TimeAxis,
     Ruler,
     Chart,
-    Scale { vertical: bool, rows: i32 },
+    Scale {
+        vertical: bool,
+        rows: i32,
+    },
     Spark,
     Graph,
     Vertex,
-    Diff { count: u32, first: u32, rows: i32 },
-    DiffLine { change: crate::diff::Change, old: u32, new: u32, digits: u8 },
+    Diff {
+        count: u32,
+        first: u32,
+        rows: i32,
+    },
+    DiffLine {
+        change: crate::diff::Change,
+        old: u32,
+        new: u32,
+        digits: u8,
+    },
+    /// An editor: `count` lines, the first shown, the line the primary cursor is on, and whether there is one cursor with nothing selected.
+    Editor {
+        count: u32,
+        first: u32,
+        head: u32,
+        single: bool,
+    },
+    /// One line of an editor, its text without the line break.
+    EditLine {
+        line: u32,
+    },
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -252,6 +383,7 @@ impl Kind {
                 | Kind::Divider
                 | Kind::Ruler
                 | Kind::Diff { .. }
+                | Kind::Editor { .. }
         )
     }
 
@@ -290,6 +422,7 @@ impl Kind {
                 | Kind::Graph
                 | Kind::Vertex
                 | Kind::Diff { .. }
+                | Kind::Editor { .. }
         )
     }
 
@@ -322,6 +455,8 @@ impl Kind {
             Kind::DiffLine { change: crate::diff::Change::Removed, .. } => "removed line",
             Kind::DiffLine { change: crate::diff::Change::Folded, .. } => "unchanged lines",
             Kind::DiffLine { .. } => "line",
+            Kind::Editor { .. } => "editor",
+            Kind::EditLine { .. } => "line",
             Kind::ListRow { .. } => "list item",
             Kind::Field { holds: Holds::Lines { .. } } => "text area",
             Kind::Field { holds: Holds::Search } => "search field",
@@ -482,6 +617,15 @@ pub type Keys = fn(&dyn std::any::Any, ErasedPath, ErasedPath, Option<&crate::ta
 /// Reads the key of the row at a place in a list, counting from the top.
 pub type Nth = fn(&dyn std::any::Any, ErasedPath, Option<&crate::table::Ranks>, u32) -> Option<u128>;
 
+/// What the kernel knows about an editor's text without knowing its type: where it is in the facts, and how to ask it what copying takes and where a line starts.
+#[derive(Clone, Copy, Debug)]
+pub struct EditorInfo {
+    pub node: u32,
+    pub path: ErasedPath,
+    pub selected: fn(&dyn std::any::Any, ErasedPath) -> String,
+    pub line_start: fn(&dyn std::any::Any, ErasedPath, usize) -> usize,
+}
+
 /// What the kernel knows about a list it can move around in and choose from, without knowing the type of its items.
 #[derive(Clone, Copy, Debug)]
 pub struct ListInfo {
@@ -558,6 +702,12 @@ pub struct Tree<C> {
     pub picks: HashMap<Id, Picking>,
     /// The letters a picker's query matched in its rows' text, as byte ranges, by the text's node.
     pub marks: Vec<(u32, Vec<(u32, u32)>)>,
+    /// The cursors of an editor's lines: the line's node, the byte in its text the cursor is before, and whether it is the primary one.
+    pub carets: Vec<(u32, u32, bool)>,
+    /// What the kernel needs from the text each editor shows, without knowing its type.
+    pub editors: Vec<EditorInfo>,
+    /// Where an editor's cursors are while its lines are made, kept so making them allocates nothing.
+    pub cursors: Vec<(usize, usize)>,
     /// The rulers of time axes, each with what it shows.
     pub rulers: Vec<Ruler>,
     /// The time the playhead is being dragged to, by the ruler's id, shown until it is let go.
@@ -644,6 +794,9 @@ impl<C> Default for Tree<C> {
             declared: Vec::new(),
             picks: HashMap::new(),
             marks: Vec::new(),
+            carets: Vec::new(),
+            editors: Vec::new(),
+            cursors: Vec::new(),
             rulers: Vec::new(),
             scrub: None,
             spans: HashMap::new(),
@@ -669,6 +822,8 @@ impl<C> Tree<C> {
         self.images.clear();
         self.orders.clear();
         self.marks.clear();
+        self.carets.clear();
+        self.editors.clear();
         self.rulers.clear();
         self.scales.clear();
         self.sparks.clear();

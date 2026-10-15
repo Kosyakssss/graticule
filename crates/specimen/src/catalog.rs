@@ -429,10 +429,11 @@ pub enum Component {
     PaintHook,
     Table,
     Tree,
+    SplitPanes,
 }
 
 impl Component {
-    const ALL: [Component; 73] = [
+    const ALL: [Component; 74] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -506,6 +507,7 @@ impl Component {
         Component::PaintHook,
         Component::Table,
         Component::Tree,
+        Component::SplitPanes,
     ];
 
     fn name(self) -> &'static str {
@@ -583,6 +585,7 @@ impl Component {
             Component::PaintHook => "Paint hook",
             Component::Table => "Table",
             Component::Tree => "Tree",
+            Component::SplitPanes => "Split panes",
         }
     }
 
@@ -661,6 +664,7 @@ impl Component {
             Component::PaintHook => include_str!("../../../docs/components/paint-hook.md"),
             Component::Table => include_str!("../../../docs/components/table.md"),
             Component::Tree => include_str!("../../../docs/components/tree.md"),
+            Component::SplitPanes => include_str!("../../../docs/components/split-panes.md"),
         }
     }
 
@@ -1244,6 +1248,18 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::SplitPanes => ui.split(|ui| {
+                ui.pane("Cities", kernel::cols(22).min(14), |ui| {
+                    ui.list(&self.cities, Catalog::picked, |ui, city| ui.text(&city.name)).height(8);
+                });
+                ui.pane("City", kernel::Fill.min(20), |ui| match self.picked.focused().and_then(|k| self.cities.find(k)) {
+                    Some(city) => {
+                        ui.text(&city.name);
+                        ui.muted(format!("{}, {} people", city.country, kernel::value::grouped(city.people)));
+                    }
+                    None => ui.muted("Choose a city to see it here"),
+                });
+            }),
             Component::Tree => {
                 ui.tree(self.shown.of(&self.outline), Catalog::reached, Catalog::unfolded, |ui, part| ui.text(&part.name)).height(8);
             }

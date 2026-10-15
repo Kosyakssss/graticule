@@ -103,6 +103,15 @@ struct Reading {
     head: (Id, usize),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Resizing {
+    id: Id,
+    from: i32,
+    width: i32,
+    sign: i32,
+    most: i32,
+}
+
 /// The list commands act on right now, and the keys they act on.
 type Here = Option<(ListInfo, Vec<u128>)>;
 
@@ -232,8 +241,9 @@ pub struct Runner<A: App> {
     months: HashMap<Id, i32>,
     sliding: Option<(Id, i128)>,
     mixing: Option<(Id, (u16, u16))>,
-    resizing: Option<(Id, i32, i32)>,
+    resizing: Option<Resizing>,
     resized: HashMap<Id, i32>,
+    panes: HashMap<Id, i32>,
     aim: Option<(Id, u64)>,
     opened: Option<Id>,
     browse: Option<Id>,
@@ -323,6 +333,7 @@ impl<A: App> Runner<A> {
             mixing: None,
             resizing: None,
             resized: HashMap::new(),
+            panes: HashMap::new(),
             aim: None,
             opened: None,
             browse: None,
@@ -1159,6 +1170,8 @@ impl<A: App> Runner<A> {
             self.build();
         }
         self.reveal = false;
+        self.panes.clear();
+        self.panes.extend(self.tree.nodes.iter().filter(|n| n.kind == Kind::Pane).map(|n| (n.id, n.area.cols)));
         self.hits.fill(&self.tree, p.m.cols(), p.m.rows());
         self.laid = true;
     }
@@ -1736,7 +1749,13 @@ impl<A: App> Runner<A> {
     pub fn whereabouts(&self) -> Value {
         let caret = self.place().caret.map_or(Value::None, |c| Value::List(vec![Value::UInt(c.caret as u64), Value::UInt(c.anchor as u64)]));
         let scrolls = self.scrolls.iter().map(|(id, s)| Value::List(vec![Value::UInt(id.0), s.anchor.map_or(Value::None, Value::Key), Value::UInt(s.index as u64)]));
-        Value::Map(vec![("focus".into(), self.focus.map_or(Value::None, |f| Value::UInt(f.0))), ("caret".into(), caret), ("scrolls".into(), Value::List(scrolls.collect()))])
+        let widths = self.resized.iter().map(|(id, w)| Value::List(vec![Value::UInt(id.0), Value::Int(i64::from(*w))]));
+        Value::Map(vec![
+            ("focus".into(), self.focus.map_or(Value::None, |f| Value::UInt(f.0))),
+            ("caret".into(), caret),
+            ("scrolls".into(), Value::List(scrolls.collect())),
+            ("widths".into(), Value::List(widths.collect())),
+        ])
     }
 
     /// Puts the user back where `whereabouts` said they were.
@@ -1759,6 +1778,15 @@ impl<A: App> Runner<A> {
                         _ => None,
                     };
                     self.scrolls.insert(Id(*id), Scroll { anchor, index: *index as u32, rows: 0 });
+                }
+            }
+        }
+        if let Some(Value::List(widths)) = place.field("widths") {
+            for w in widths {
+                if let Value::List(parts) = w
+                    && let [Value::UInt(id), Value::Int(width)] = parts.as_slice()
+                {
+                    self.resized.insert(Id(*id), *width as i32);
                 }
             }
         }
@@ -2740,6 +2768,11 @@ impl<A: App> Runner<A> {
         if n.asks != NONE {
             return self.ask_for(n.asks as usize);
         }
+        if n.kind == Kind::Divider {
+            self.focus = Some(n.id);
+            self.stale = true;
+            return true;
+        }
         if let Kind::Turn { forward } = n.kind {
             return self.turn_month(i, forward);
         }
@@ -3234,6 +3267,15 @@ impl<A: App> Runner<A> {
             if l != u16::MAX {
                 return self.mix(i, (l, c));
             }
+        }
+        if self.pending.is_empty()
+            && typing
+            && chord.mods == Mods::default()
+            && let Some(i) = self.focused_control()
+            && self.tree.nodes[i as usize].kind == Kind::Divider
+            && matches!(chord.key, Key::Left | Key::Right)
+        {
+            return self.divider_key(i, chord.key);
         }
         if self.pending.is_empty()
             && typing
@@ -3745,6 +3787,42 @@ impl<A: App> Runner<A> {
         out
     }
 
+    fn divided(&self, i: u32) -> Option<Resizing> {
+        let n = self.tree.nodes[i as usize];
+        let mut c = self.tree.nodes[n.parent as usize].first;
+        let mut left = None;
+        while c != NONE && c != i {
+            left = Some(c);
+            c = self.tree.nodes[c as usize].next;
+        }
+        let (left, right) = (left?, n.next);
+        if right == NONE {
+            return None;
+        }
+        let fill = |p: u32| matches!(self.tree.nodes[p as usize].span.width, crate::tree::Width::Fill(_));
+        let (fixed, other, sign) = if fill(left) && !fill(right) { (right, left, -1) } else { (left, right, 1) };
+        let (f, o) = (self.tree.nodes[fixed as usize], self.tree.nodes[other as usize]);
+        let (laid, others) = (*self.panes.get(&f.id)?, *self.panes.get(&o.id)?);
+        let width = self.resized.get(&f.id).copied().unwrap_or(laid);
+        Some(Resizing { id: f.id, from: 0, width, sign, most: laid + others - o.span.min.max(4) })
+    }
+
+    fn resize(&mut self, id: Id, now: i32) -> bool {
+        let was = self.resized.insert(id, now);
+        self.stale |= was != Some(now);
+        was != Some(now)
+    }
+
+    fn divider_key(&mut self, i: u32, key: Key) -> bool {
+        let Some(r) = self.divided(i) else { return false };
+        let by = match key {
+            Key::Left => -1,
+            Key::Right => 1,
+            _ => return false,
+        };
+        self.resize(r.id, (r.width + r.sign * by).clamp(4, r.most.max(4)))
+    }
+
     /// The column head whose right edge is the gap at `col`, which is dragged to make its column wider or narrower.
     fn column_edge(&self, col: i32, row: i32) -> Option<u32> {
         if self.stale || !self.laid {
@@ -4021,13 +4099,10 @@ impl<A: App> Runner<A> {
                     reading.head = head;
                     return moved;
                 }
-                if let Some((id, from, width)) = self.resizing {
+                if let Some(r) = self.resizing {
                     let Some((x, y)) = frame.pointer else { return false };
                     let col = frame.metrics.cell_at(x, y).0;
-                    let now = (width + col - from).max(4);
-                    let was = self.resized.insert(id, now);
-                    self.stale |= was != Some(now);
-                    return was != Some(now);
+                    return self.resize(r.id, (r.width + r.sign * (col - r.from)).clamp(4, r.most.max(4)));
                 }
                 if let Some((id, was)) = self.mixing
                     && let Some(i) = self.tree.find(id)
@@ -4089,7 +4164,17 @@ impl<A: App> Runner<A> {
                     let (col, row) = frame.metrics.cell_at(x, y);
                     if let Some(head) = self.column_edge(col, row) {
                         let n = self.tree.nodes[head as usize];
-                        self.resizing = Some((n.id, col, n.area.cols));
+                        self.resizing = Some(Resizing { id: n.id, from: col, width: n.area.cols, sign: 1, most: i32::MAX });
+                        return true;
+                    }
+                    if let Some(i) = self.hit(col, row)
+                        && self.tree.nodes[i as usize].kind == Kind::Divider
+                        && let Some(mut r) = self.divided(i)
+                    {
+                        r.from = col;
+                        self.focus = Some(self.tree.nodes[i as usize].id);
+                        self.resizing = Some(r);
+                        self.stale = true;
                         return true;
                     }
                 }

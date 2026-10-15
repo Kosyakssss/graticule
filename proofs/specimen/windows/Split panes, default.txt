@@ -1,0 +1,63 @@
+window		0 0 120 30	
+  page	Split panes	0 0 120 24	
+    list		2 3 116 20	22 items
+      list item		2 3 114 2	
+        text	Panes side by side with a divider between each two, which the user moves to give one pane more room and the other less. A mail app's folders, messages and the message open; a file manager's places and files.	2 3 114 2	
+      list item		2 5 114 1	
+      list item		2 6 114 8	
+        group		2 6 114 8	
+          column		2 6 14 1	
+            text	Live	2 6 14 1	muted
+          column		18 6 98 8	
+            split		18 6 98 8	
+              pane	Cities	18 6 22 8	
+                list		18 6 22 8	12 items
+                  list item		18 6 20 1	
+                    text	Amsterdam	18 6 9 1	
+                  list item		18 7 20 1	
+                    text	Athens	18 7 6 1	
+                  list item		18 8 20 1	
+                    text	Berlin	18 8 5 1	
+                  list item		18 9 20 1	
+                    text	Lisbon	18 9 5 1	
+                  list item		18 10 20 1	
+                    text	London	18 10 6 1	
+                  list item		18 11 20 1	
+                    text	Madrid	18 11 6 1	
+                  list item		18 12 20 1	
+                    text	Oslo	18 12 4 1	
+                  list item		18 13 20 1	
+                    text	Paris	18 13 4 1	
+              divider	Between “Cities” and “City”	42 6 1 8	
+              pane	City	45 6 71 8	
+                text	Choose a city to see it here	45 6 71 1	muted
+      list item		2 14 114 1	
+      list item		2 15 114 1	
+        heading	Use it for	2 15 7 1	strong
+      list item		2 16 114 1	
+        text	Views that show a list and the thing chosen in it at once, or tools beside a canvas, where how much room each part gets is the user's to say.	2 16 104 1	
+      list item		2 17 114 1	
+      list item		2 18 114 1	
+        heading	Code	2 18 4 1	strong
+      list item		2 19 114 4	
+        text	ui.split(|ui| {\n    ui.pane("Folders", cols(24).min(16), |ui| folders(ui));\n    ui.pane("Message", Fill.min(40), |ui| message(ui));\n});	2 19 114 4	mono
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Bold	46 26 6 1	
+    button	Go one level in	54 26 13 1	
+    button	Say it	69 26 7 1	unavailable (Type something first)
+    button	Back to all components	78 26 20 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

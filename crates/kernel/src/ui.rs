@@ -179,6 +179,40 @@ impl<'a, C, S> Ui<'a, C, S> {
         f(&mut self.child(i, subject));
     }
 
+    /// Panes side by side, with a divider between each two that the user drags, or moves with the arrows once it is reached, to make one wider and the other narrower. A split takes the rows the page has to spare, and in a window too narrow for its panes it stacks them.
+    #[track_caller]
+    pub fn split(&mut self, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let i = self.add(Kind::Split, Location::caller());
+        self.tree.nodes[i as usize].span = crate::tree::Fill;
+        let subject = self.subject;
+        f(&mut self.child(i, subject));
+    }
+
+    /// One pane of a `split`, named for its divider and the screen reader, starting `width` columns wide: `30.min(20)` or `Fill`. The width the user gives it is kept with the window.
+    #[track_caller]
+    pub fn pane(&mut self, name: impl Into<Message>, width: impl Into<Span>, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let (name, at) = (name.into(), Location::caller());
+        let parent = self.parent;
+        let id = self.tree.nodes[parent as usize].id.named(name.as_str());
+        let before = self.tree.nodes[parent as usize].last;
+        if self.tree.nodes[parent as usize].kind == Kind::Split && before != NONE && self.tree.nodes[before as usize].kind == Kind::Pane {
+            let d = self.tree.add(parent, Kind::Divider, Some(id.mix(0xd1)), at);
+            let between = format!("Between “{}” and “{}”", self.tree.str(self.tree.nodes[before as usize].name), name.as_str());
+            let r = self.tree.put(&between);
+            self.tree.nodes[d as usize].name = r;
+        }
+        let i = self.tree.add(parent, Kind::Pane, Some(id), at);
+        let span: Span = width.into();
+        self.tree.nodes[i as usize].span = match self.tree.resized.get(&id) {
+            Some(&w) => crate::tree::cols(w).min(span.min.min(w)),
+            None => span,
+        };
+        let r = self.tree.put(name.as_str());
+        self.tree.nodes[i as usize].name = r;
+        let subject = self.subject;
+        f(&mut self.child(i, subject));
+    }
+
     /// One column of `columns`, `width` columns wide: `28.min(20)` or `Fill.min(40)`.
     #[track_caller]
     pub fn column(&mut self, width: impl Into<Span>, f: impl FnOnce(&mut Ui<'_, C, S>)) {

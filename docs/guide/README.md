@@ -132,6 +132,8 @@ Tables have arrived. A table is a list with columns: a row of heads, then a row 
 
 Trees came next: folders inside folders, an outline, places inside places. A branch opens and closes with a click on its arrow, or with the right and left arrow keys, which also move into a branch and back up out of it, the way trees work everywhere else on the computer.
 
+Then split panes: a list on the left and the thing chosen in it on the right, with a line between them that can be dragged to give one side more room. The line can also be reached with Tab and moved with the arrow keys. How wide the user made each side is remembered with the window, like where a list was scrolled, so it isn't something undo takes back. In a window too narrow for both, the panes sit one above the other.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

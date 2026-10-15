@@ -876,6 +876,18 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let muted = p.theme.muted;
             draw_picture(p, r, chevron, Some(muted));
         }
+        (Layer::Over, Kind::Divider) => {
+            let r = p.rect(n.area);
+            let t = p.style.line(p.m);
+            let (w, color) = if look.focused {
+                (t * 2.0, p.theme.cursor)
+            } else if look.hovered {
+                (t * 2.0, p.theme.ink)
+            } else {
+                (t, p.theme.rule)
+            };
+            p.fill(Rect::new((r.x + (r.w - w) / 2.0).round(), r.y, w, r.h), color);
+        }
         (Layer::Over, Kind::Empty) => {}
         (Layer::Under, Kind::Text { .. } | Kind::Value { .. }) if look.chosen.0 < look.chosen.1 => chosen(p, &n, text, look.chosen.0 as usize..look.chosen.1 as usize),
         (Layer::Under, Kind::Swatch { ink }) => {

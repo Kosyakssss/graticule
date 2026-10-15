@@ -188,6 +188,9 @@ pub enum Kind {
     Head { sorted: i8, sortable: bool, numeric: bool },
     Cell { numeric: bool, tone: Tone },
     Twig { depth: u16, branch: crate::table::Branch },
+    Split,
+    Pane,
+    Divider,
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -234,6 +237,7 @@ impl Kind {
                 | Kind::Canvas { pressable: true, .. }
                 | Kind::Head { sortable: true, .. }
                 | Kind::Twig { branch: crate::table::Branch::Closed | crate::table::Branch::Open, .. }
+                | Kind::Divider
         )
     }
 
@@ -262,6 +266,8 @@ impl Kind {
                 | Kind::Overflow
                 | Kind::Places
                 | Kind::Header
+                | Kind::Split
+                | Kind::Pane
         )
     }
 
@@ -276,6 +282,9 @@ impl Kind {
             Kind::Head { .. } => "column head",
             Kind::Cell { .. } => "cell",
             Kind::Twig { .. } => "branch",
+            Kind::Split => "split",
+            Kind::Pane => "pane",
+            Kind::Divider => "divider",
             Kind::ListRow { .. } => "list item",
             Kind::Field { holds: Holds::Lines { .. } } => "text area",
             Kind::Field { holds: Holds::Search } => "search field",

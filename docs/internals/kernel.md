@@ -176,6 +176,10 @@ When a `row` or `columns` can't fit its children's minimums plus the gaps, it st
 
 Two containers hide children instead of stacking them, and both say so. Breadcrumbs hide levels from the middle, keeping the top and the current one, and draw "…" where they were. An overflow row (and the places along the top, which are one) hides its actions from the end and shows its last child, "More…", only when something is hidden. Layout decides what is hidden by giving it an empty area; nothing else is told. Activating "More…" opens the drawn menu with an entry for each sibling whose area is empty, pointing at that sibling's id, so choosing an entry activates the hidden control as if it had been clicked: its command, its edit or its reason for being unavailable.
 
+A split stacks too, but its dividers go with it: a divider between panes stacked one above the other would move nothing. Stacked panes keep their own heights while they fit, and share the split's rows evenly when they don't.
+
+The width a user gives a pane or a table column is the window's, like where a list is scrolled: the runner keeps it by the node's id and copies it into the tree before the view runs, so the view reads it as the pane's starting width and stays a function of the facts and the window. It is not undone and is kept with the rest of the window's whereabouts. A divider resizes the pane with a fixed width beside it, the left one unless only the right one is fixed, and never past the other pane's minimum; the keys read the width the user last gave, since between a key and the next layout the laid widths are a frame old.
+
 ### 6.4 Reuse
 
 A subtree whose subtree hash and maximum width are the same as last frame keeps its layout; only its offset can change. A change in one row re-measures that row and its ancestors, not its siblings. A full layout happens on resize, theme or style change, and on the first frame.

@@ -188,6 +188,21 @@ impl<'t> Layout<'t> {
                 let c = self.cols(tree.str(n.text), false) + 2;
                 (c, c)
             }
+            Kind::Divider => (1, 1),
+            Kind::Split => {
+                let (start, end) = self.children(tree, i);
+                let (mut min, mut pref, mut count) = (0, 0, 0);
+                for k in start..end {
+                    let (a, b) = self.size(tree, self.stack[k]);
+                    if tree.nodes[self.stack[k] as usize].kind != Kind::Divider {
+                        min = min.max(a);
+                    }
+                    pref += b;
+                    count += 1;
+                }
+                self.release(start);
+                (min, pref + GAP * (count - 1).max(0))
+            }
             Kind::Twig { depth, .. } => {
                 let c = i32::from(depth) * 2 + 2;
                 (c, c)
@@ -318,7 +333,7 @@ impl<'t> Layout<'t> {
                 let gaps = GAP * (count - 1).max(0);
                 (min + gaps, pref + gaps)
             }
-            Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Bar | Kind::Palette | Kind::List { .. } | Kind::Overlay { .. } => {
+            Kind::Root | Kind::Page | Kind::Column | Kind::Pane | Kind::Empty | Kind::Bar | Kind::Palette | Kind::List { .. } | Kind::Overlay { .. } => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref) = (0, 0);
                 let table = matches!(n.kind, Kind::List { .. }) && start < end && tree.nodes[self.stack[start] as usize].kind == Kind::Header;
@@ -481,7 +496,27 @@ impl<'t> Layout<'t> {
             }
             Kind::Value { value: Value::Error } => self.wrapped(tree.str(n.text), false, cols),
             Kind::Value { .. } => 1,
-            Kind::Header | Kind::Head { .. } | Kind::Cell { .. } | Kind::Twig { .. } => 1,
+            Kind::Header | Kind::Head { .. } | Kind::Cell { .. } | Kind::Twig { .. } | Kind::Divider => 1,
+            Kind::Split => {
+                let (start, end) = self.children(tree, i);
+                let mut rows = 0;
+                if self.split_fits(tree, start, end, cols) {
+                    let at = self.share(tree, start, end, cols);
+                    for k in start..end {
+                        let w = self.widths[at + k - start];
+                        rows = rows.max(self.rows(tree, self.stack[k], w));
+                    }
+                    self.widths.truncate(at);
+                } else {
+                    for k in start..end {
+                        if tree.nodes[self.stack[k] as usize].kind == Kind::Pane {
+                            rows += self.rows(tree, self.stack[k], cols);
+                        }
+                    }
+                }
+                self.release(start);
+                rows.max(3)
+            }
             Kind::Button
             | Kind::Action
             | Kind::Choice { .. }
@@ -563,7 +598,7 @@ impl<'t> Layout<'t> {
                 self.release(start);
                 rows
             }
-            Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Palette | Kind::Overlay { .. } => {
+            Kind::Root | Kind::Page | Kind::Column | Kind::Pane | Kind::Empty | Kind::Palette | Kind::Overlay { .. } => {
                 let (start, end) = self.children(tree, i);
                 let inner = match n.kind {
                     Kind::Page => cols - MARGIN * 2,
@@ -660,7 +695,8 @@ impl<'t> Layout<'t> {
                 let inner = Area::new(area.col + MARGIN, area.row + 3, area.cols - MARGIN * 2, area.rows - 4);
                 self.stack_down(tree, i, inner, 1);
             }
-            Kind::Root | Kind::Column | Kind::Palette => self.stack_down(tree, i, area, 0),
+            Kind::Root | Kind::Column | Kind::Pane | Kind::Palette => self.stack_down(tree, i, area, 0),
+            Kind::Split => self.split(tree, i, area),
             Kind::Overlay { .. } => self.stack_down(tree, i, Area::new(area.col + 1, area.row, area.cols - 2, area.rows), 0),
             Kind::Empty => self.stack_down(tree, i, area, 1),
             Kind::Row | Kind::ListRow { .. } | Kind::Columns | Kind::Confirm { open: true } => self.side_by_side(tree, i, area),
@@ -842,7 +878,7 @@ impl<'t> Layout<'t> {
         let mut fills = 0;
         for k in start..end {
             let c = self.stack[k];
-            if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. }) {
+            if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. } | Kind::Split) {
                 fills += 1;
             } else {
                 fixed += self.rows(tree, c, area.cols);
@@ -855,7 +891,7 @@ impl<'t> Layout<'t> {
         let mut seen = 0;
         for k in start..end {
             let c = self.stack[k];
-            let rows = if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. }) {
+            let rows = if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. } | Kind::Split) {
                 seen += 1;
                 let share = spare * seen / fills.max(1) - given;
                 given += share;
@@ -928,6 +964,55 @@ impl<'t> Layout<'t> {
                 let a = if rows > 0 { Area::new(area.col, row, w, rows) } else { Area::default() };
                 self.place(tree, c, a);
                 row += rows;
+            }
+        }
+        self.release(start);
+    }
+
+    /// Whether a split's panes fit side by side, each at its narrowest.
+    fn split_fits<C>(&mut self, tree: &Tree<C>, start: usize, end: usize, cols: i32) -> bool {
+        let mut need = -GAP;
+        for k in start..end {
+            need += self.size(tree, self.stack[k]).0 + GAP;
+        }
+        need <= cols
+    }
+
+    /// A split's panes side by side, each as tall as the split, with the dividers between them; stacked, sharing the rows, when they don't fit.
+    fn split<C>(&mut self, tree: &mut Tree<C>, i: u32, area: Area) {
+        let (start, end) = self.children(tree, i);
+        if self.split_fits(tree, start, end, area.cols) {
+            let at = self.share(tree, start, end, area.cols);
+            let mut col = area.col;
+            for k in start..end {
+                let w = self.widths[at + k - start];
+                self.place(tree, self.stack[k], Area::new(col, area.row, w, area.rows));
+                col += w + GAP;
+            }
+            self.widths.truncate(at);
+        } else {
+            let (mut panes, mut need) = (0, 0);
+            for k in start..end {
+                if tree.nodes[self.stack[k] as usize].kind == Kind::Pane {
+                    panes += 1;
+                    need += self.rows(tree, self.stack[k], area.cols);
+                }
+            }
+            let (mut row, mut seen) = (area.row, 0);
+            for k in start..end {
+                let c = self.stack[k];
+                if tree.nodes[c as usize].kind != Kind::Pane {
+                    self.place(tree, c, Area::default());
+                    continue;
+                }
+                seen += 1;
+                let bottom = match (need <= area.rows, seen == panes) {
+                    (_, true) => area.row + area.rows,
+                    (true, false) => row + self.rows(tree, c, area.cols),
+                    (false, false) => area.row + area.rows * seen / panes,
+                };
+                self.place(tree, c, Area::new(area.col, row, area.cols, bottom - row));
+                row = bottom;
             }
         }
         self.release(start);

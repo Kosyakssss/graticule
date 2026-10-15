@@ -95,6 +95,7 @@ Several names on either side are the same component. They are merged into one ro
 | Color picker | ColorPicker | | anchored: a color field and an area and hue slider in a popover; swatch sets are not done |
 | Table | Table | Table, HTMLTable | wave 6: a list of cells in named columns, sorted or filtered by an order worked out in the background, columns resized by dragging; grouping, the glow on change and resizing from the keyboard are not done |
 | Tree | | Tree | wave 6: a list whose rows sit inside one another, its open branches a fact and its rows worked out in the background; Right and Left open, close and move between levels |
+| Split panes | | | wave 6: panes side by side with dividers dragged or moved by the arrows, the widths kept with the window, stacked when narrow; docking and layouts saved as files are not done |
 
 ## Wave 6: beyond both kits
 
@@ -102,7 +103,7 @@ These are the components of spec §6.1 that professional apps need and that neit
 
 | Graticule | HeroUI | Blueprint | Notes |
 |---|---|---|---|
-| Split panes and docking | | | layouts saved as files |
+| Docking | | | panes that move between places; layouts saved as files |
 | Picker and find | | Omnibar, QueryList | one picker behind the palette; find and replace (§7.4) |
 | Typed filter field | | | `price>100 sector:tech`, from the data types |
 | Forms and tables from data | | | derived from the app's types |

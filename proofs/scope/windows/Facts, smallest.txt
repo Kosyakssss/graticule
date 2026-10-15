@@ -1,0 +1,38 @@
+window		0 0 24 25	
+  page	Facts: To do	0 0 24 11	
+    text	The app's facts as they are now, each field inside the one it belongs to.	2 3 20 3	muted
+    list		2 7 20 3	9 items
+      list item		2 7 18 1	
+        group		2 7 18 1	
+          column		2 7 8 1	
+            text	facts	2 7 8 1	
+          column		12 7 8 1	
+            text		12 7 8 1	mono
+      list item		2 8 18 1	
+        group		2 8 18 1	
+          column		2 8 8 1	
+            text	    tasks	2 8 8 1	
+          column		12 8 8 1	
+            text	2 items	12 8 8 1	mono
+      list item		2 9 18 1	
+        group		2 9 18 1	
+          column		2 9 8 1	
+            text	        1	2 9 8 1	
+          column		12 9 8 1	
+            text		12 9 8 1	mono
+  alert		2 11 20 1	
+  status		2 12 20 1	
+  toolbar		2 13 20 12	
+    button	Look for running apps	2 13 19 1	
+    button	Detach	2 14 8 1	
+    button	Running apps	2 15 13 1	
+    button	Time	2 16 6 1	
+    button	Why it redrew	2 17 13 1	
+    button	Boxes	2 18 7 1	
+    button	Commands	11 18 11 1	
+    button	Facts	2 19 6 1	unavailable (It is showing)
+    button	Effects and jobs	2 20 14 1	
+    button	Ask again	2 21 10 1	
+    button	Undo	2 22 13 1	unavailable (Nothing to undo)
+    button	Redo	2 23 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 24 15 1	

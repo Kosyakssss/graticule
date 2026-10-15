@@ -1,0 +1,44 @@
+window		0 0 70 15	
+  page	Effects and jobs: To do	0 0 70 10	
+    text	What the app asked for lately, newest first: files written, links opened, jobs started, and how long each took.	2 3 66 2	muted
+    list		2 6 66 3	3 items
+      list item		2 6 64 2	
+        group		2 6 64 2	
+          column		2 6 8 1	
+            text	job	2 6 8 1	
+          column		12 6 8 2	
+            text	Fetching the feeds	12 6 8 2	
+          column		22 6 14 1	
+            text	2.4 s ago	22 6 14 1	mono
+          column		38 6 16 1	
+            text	for 2400.0 ms	38 6 16 1	mono
+          column		56 6 10 1	
+            text	running	56 6 10 1	
+      list item		2 8 64 1	
+        group		2 8 64 1	
+          column		2 8 8 1	
+            text	write	2 8 8 1	
+          column		12 8 8 1	
+            text	tasks.txt	12 8 8 1	
+          column		22 8 14 1	
+            text	31.0 s ago	22 8 14 1	mono
+          column		38 8 16 1	
+            text	took 3.2 ms	38 8 16 1	mono
+          column		56 8 10 1	
+            text	done	56 8 10 1	
+  alert		2 10 66 1	
+  status		2 11 66 1	
+  toolbar		2 12 66 3	
+    button	Look for running apps	2 12 19 1	
+    button	Detach	23 12 8 1	
+    button	Running apps	33 12 13 1	
+    button	Time	48 12 6 1	
+    button	Why it redrew	2 13 13 1	
+    button	Boxes	17 13 7 1	
+    button	Commands	26 13 11 1	
+    button	Facts	39 13 6 1	
+    button	Effects and jobs	47 13 14 1	unavailable (It is showing)
+    button	Ask again	2 14 10 1	
+    button	Undo	14 14 13 1	unavailable (Nothing to undo)
+    button	Redo	29 14 19 1	unavailable (Nothing to redo)
+    button	Open the palette	50 14 15 1	

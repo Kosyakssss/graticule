@@ -199,7 +199,20 @@ pub enum Slice {
 const SLICE: Duration = Duration::from_micros(300);
 
 /// Background work an effect started: its name for the status line, and what turns its result into the app's command. A result of `None` means it ended with nothing to say, such as when the user called off a save.
+struct Errand {
+    number: u64,
+    at: Instant,
+    kind: &'static str,
+    what: String,
+    took: Option<Duration>,
+    outcome: &'static str,
+}
+
+const ERRANDS: usize = 200;
+const FACT_LINES: usize = 5000;
+
 struct Job<C> {
+    errand: u64,
     name: String,
     receive: mpsc::Receiver<Option<Box<dyn Any + Send>>>,
     reply: Reply<C>,
@@ -305,6 +318,9 @@ pub struct Runner<A: App> {
     overlay: crate::scope::Overlay,
     overlaid: bool,
     answers: Vec<String>,
+    errands: VecDeque<Errand>,
+    errands_made: u64,
+    facts_answer: Option<mpsc::Receiver<String>>,
 }
 
 impl<A: App> Runner<A> {
@@ -403,6 +419,9 @@ impl<A: App> Runner<A> {
             overlay: crate::scope::Overlay::default(),
             overlaid: false,
             answers: Vec::new(),
+            errands: VecDeque::new(),
+            errands_made: 0,
+            facts_answer: None,
         }
     }
 
@@ -763,6 +782,34 @@ impl<A: App> Runner<A> {
         (self.stack, self.widths) = layout.finish();
         out.push_str("boxes\tdone\n");
         out
+    }
+
+    fn effects_answer(&self) -> String {
+        let one_line = |s: &str| s.chars().map(|c| if c.is_control() { ' ' } else { c }).take(120).collect::<String>();
+        let mut out = String::from("effects\tbegin\n");
+        for e in self.errands.iter().rev() {
+            let took = match e.took {
+                Some(took) => format!("{:.1}", took.as_secs_f64() * 1000.0),
+                None => format!("{:.1}", e.at.elapsed().as_secs_f64() * 1000.0),
+            };
+            let _ = writeln!(out, "effect\t{}\t{}\t{:.1}\t{took}\t{}", e.kind, one_line(&e.what), e.at.elapsed().as_secs_f64(), e.outcome);
+        }
+        out.push_str("effects\tdone\n");
+        out
+    }
+
+    fn facts_asked(&mut self) {
+        let (send, receive) = mpsc::channel();
+        let (facts, waker) = (self.facts.clone(), self.waker.clone());
+        let started = std::thread::Builder::new().name("graticule facts for scope".into()).spawn(move || {
+            let _ = send.send(crate::scope::facts_lines(&ledger::Field::value(&facts), FACT_LINES));
+            if let Some(waker) = waker {
+                waker.wake();
+            }
+        });
+        if started.is_ok() {
+            self.facts_answer = Some(receive);
+        }
     }
 
     fn commands_answer(&self) -> String {
@@ -2287,7 +2334,31 @@ impl<A: App> Runner<A> {
         &self.effects
     }
 
+    fn errand(&mut self, kind: &'static str, what: String, outcome: &'static str) {
+        if self.errands.len() == ERRANDS {
+            self.errands.pop_front();
+        }
+        self.errands_made += 1;
+        let took = (outcome != "running").then_some(Duration::ZERO);
+        self.errands.push_back(Errand { number: self.errands_made, at: Instant::now(), kind, what, took, outcome });
+    }
+
+    fn errand_ended(&mut self, number: u64, outcome: &'static str) {
+        if let Some(e) = self.errands.iter_mut().find(|e| e.number == number) {
+            e.took = Some(e.at.elapsed());
+            e.outcome = outcome;
+        }
+    }
+
     fn start(&mut self, effect: Effect<A::Cmd>, window: &winit::window::Window) {
+        match &effect {
+            Effect::SaveAs { name, .. } => self.errand("save", format!("Save “{name}” as"), "running"),
+            Effect::Write { path, .. } => self.errand("write", path.0.display().to_string(), "running"),
+            Effect::Job { name, .. } => self.errand("job", name.clone(), "running"),
+            Effect::Stream { name, .. } => self.errand("stream", name.clone(), "running"),
+            Effect::Open { target } => self.errand("open", target.clone(), "done"),
+            Effect::Copy { text } => self.errand("copy", format!("{} characters", text.chars().count()), "done"),
+        }
         match effect {
             Effect::SaveAs { name, write, reply } => {
                 let dialog = rfd::AsyncFileDialog::new().set_file_name(&name).set_parent(window).save_file();
@@ -2337,6 +2408,7 @@ impl<A: App> Runner<A> {
                     "xdg-open"
                 };
                 if let Err(e) = std::process::Command::new(opener).arg(&target).spawn() {
+                    self.errand_ended(self.errands_made, "failed");
                     self.said = Some(Said::Failure(format!("{target} couldn't be opened: {e}")));
                 }
             }
@@ -2392,12 +2464,19 @@ impl<A: App> Runner<A> {
             }
         });
         match started {
-            Ok(_) => self.jobs.push(Job { name, receive, reply, lost }),
-            Err(e) => self.said = Some(Said::Failure(format!("{name} couldn't start: {e}"))),
+            Ok(_) => self.jobs.push(Job { errand: self.errands_made, name, receive, reply, lost }),
+            Err(e) => {
+                self.errand_ended(self.errands_made, "failed");
+                self.said = Some(Said::Failure(format!("{name} couldn't start: {e}")));
+            }
         }
     }
 
     fn collect(&mut self) {
+        if let Some(answer) = self.facts_answer.as_ref().and_then(|r| r.try_recv().ok()) {
+            self.answers.push(answer);
+            self.facts_answer = None;
+        }
         self.arrive();
         self.file_chosen();
         if self.keys_watch.as_ref().is_some_and(|(_, changed)| changed.try_iter().count() > 0) {
@@ -2410,10 +2489,12 @@ impl<A: App> Runner<A> {
                 Err(mpsc::TryRecvError::Empty) => at += 1,
                 Ok(done) => {
                     let job = self.jobs.remove(at);
+                    self.errand_ended(job.errand, "done");
                     results.extend(done.and_then(job.reply));
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     let job = self.jobs.remove(at);
+                    self.errand_ended(job.errand, "stopped");
                     match job.lost {
                         Some(lost) => results.push(lost),
                         None => self.said = Some(Said::Failure(format!("“{}” stopped before it finished", job.name))),
@@ -4301,6 +4382,11 @@ impl<A: App> Face for Runner<A> {
             let answer = match ask {
                 crate::scope::Ask::Boxes => self.boxes_answer(p),
                 crate::scope::Ask::Commands => self.commands_answer(),
+                crate::scope::Ask::Effects => self.effects_answer(),
+                crate::scope::Ask::Facts => {
+                    self.facts_asked();
+                    continue;
+                }
                 crate::scope::Ask::Overlay(_) => continue,
             };
             self.answers.push(answer);

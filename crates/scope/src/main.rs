@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, channel};
 
-use app::{Cmd, Frame, Listed, Measure, Running, Scope, Stage, View};
+use app::{Answer, Cmd, Frame, Running, Scope, Stage, View};
 use kernel::accesskit;
 use kernel::kept::Kept;
 use kernel::metrics::Metrics;
@@ -21,8 +21,7 @@ use ledger::Key;
 enum Heard {
     Launch(String, f32),
     Frame(Stamp),
-    Boxes(Vec<Measure>),
-    Commands(Vec<Listed>),
+    Answer(Answer),
     Closed,
 }
 
@@ -100,32 +99,25 @@ impl Window {
                     w.wake();
                 }
             };
-            let (mut boxes, mut depths, mut commands) = (Vec::new(), std::collections::HashMap::new(), Vec::new());
+            let mut block: Option<(String, Vec<String>)> = None;
             for line in BufReader::new(stream).lines() {
                 let Ok(line) = line else { break };
                 let got = if let Some((stage, ms)) = line.strip_prefix("launch\t").and_then(|l| l.split_once('\t')) {
                     Heard::Launch(stage.to_string(), ms.parse().unwrap_or(0.0))
                 } else if let Some(stamp) = Stamp::read(&line) {
                     Heard::Frame(stamp)
-                } else if line == "boxes\tbegin" {
-                    boxes.clear();
-                    depths.clear();
+                } else if let Some(name) = line.strip_suffix("\tbegin") {
+                    block = Some((name.to_string(), Vec::new()));
                     continue;
-                } else if line == "boxes\tdone" {
-                    Heard::Boxes(std::mem::take(&mut boxes))
-                } else if line == "commands\tbegin" {
-                    commands.clear();
-                    continue;
-                } else if line == "commands\tdone" {
-                    Heard::Commands(std::mem::take(&mut commands))
-                } else if let Some((i, seen)) = Measure::read(boxes.len() as u64 + 1, &line, |p| p.and_then(|p| depths.get(&p).map(|d| d + 1)).unwrap_or(0)) {
-                    depths.insert(i, seen.depth);
-                    boxes.push(seen);
-                    continue;
-                } else if let Some(listed) = Listed::read(commands.len() as u64 + 1, &line) {
-                    commands.push(listed);
-                    continue;
+                } else if let Some(name) = line.strip_suffix("\tdone") {
+                    match block.take().filter(|(started, _)| started == name).and_then(|(name, lines)| Answer::read(&name, &lines)) {
+                        Some(answer) => Heard::Answer(answer),
+                        None => continue,
+                    }
                 } else {
+                    if let Some((_, lines)) = &mut block {
+                        lines.push(line);
+                    }
                     continue;
                 };
                 if send.send(got).is_err() {
@@ -158,6 +150,8 @@ impl Window {
             match facts.view {
                 View::Boxes => asks.push(Ask::Boxes),
                 View::Commands => asks.push(Ask::Commands),
+                View::Facts => asks.push(Ask::Facts),
+                View::Effects => asks.push(Ask::Effects),
                 _ => {}
             }
         }
@@ -174,8 +168,7 @@ impl Window {
             match heard {
                 Heard::Launch(name, ms) => stages.push(Stage::of(stages.len() as u64 + 1, &name, ms)),
                 Heard::Frame(stamp) => frames.push(Frame::of(stamp)),
-                Heard::Boxes(boxes) => answered |= self.runner.run(Cmd::Measured(boxes)),
-                Heard::Commands(commands) => answered |= self.runner.run(Cmd::Listed(commands)),
+                Heard::Answer(answer) => answered |= self.runner.run(Cmd::Answered(answer)),
                 Heard::Closed => closed = true,
             }
         }

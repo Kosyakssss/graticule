@@ -148,7 +148,9 @@ window		0 0 120 30
     button	Why it redrew	56 28 13 1	
     button	Boxes	71 28 7 1	
     button	Commands	80 28 11 1	
-    button	Ask again	93 28 10 1	unavailable (Only boxes and commands are asked for)
-    button	Undo	105 28 13 1	unavailable (Nothing to undo)
-    button	Redo	2 29 19 1	unavailable (Nothing to redo)
-    button	Open the palette	23 29 15 1	
+    button	Facts	93 28 6 1	
+    button	Effects and jobs	101 28 14 1	
+    button	Ask again	2 29 10 1	unavailable (Time and redraws arrive by themselves)
+    button	Undo	14 29 13 1	unavailable (Nothing to undo)
+    button	Redo	29 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	50 29 15 1	

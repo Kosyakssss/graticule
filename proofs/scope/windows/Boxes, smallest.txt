@@ -1,4 +1,4 @@
-window		0 0 50 21	
+window		0 0 50 22	
   page	Boxes: To do	0 0 50 15	
     text	Every box on the app's screen, inside the one it sits in: its place in cells, the line of code that made it, and why it is that size.	2 3 46 3	muted
     switch	Show the grid over the app	2 7 46 1	
@@ -16,7 +16,7 @@ window		0 0 50 21
             text	the whole window	38 11 8 2	muted
   alert		2 15 46 1	
   status		2 16 46 1	
-  toolbar		2 17 46 4	
+  toolbar		2 17 46 5	
     button	Look for running apps	2 17 19 1	
     button	Detach	23 17 8 1	
     button	Running apps	33 17 13 1	
@@ -24,7 +24,9 @@ window		0 0 50 21
     button	Why it redrew	10 18 13 1	
     button	Boxes	25 18 7 1	unavailable (It is showing)
     button	Commands	34 18 11 1	
-    button	Ask again	2 19 10 1	
-    button	Undo	14 19 13 1	unavailable (Nothing to undo)
-    button	Redo	29 19 19 1	unavailable (Nothing to redo)
-    button	Open the palette	2 20 15 1	
+    button	Facts	2 19 6 1	
+    button	Effects and jobs	10 19 14 1	
+    button	Ask again	26 19 10 1	
+    button	Undo	2 20 13 1	unavailable (Nothing to undo)
+    button	Redo	17 20 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 21 15 1	

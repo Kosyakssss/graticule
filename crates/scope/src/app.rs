@@ -36,6 +36,14 @@ pub struct Scope {
     #[session]
     listing: Selection<Listed>,
     #[session]
+    facts: List<Fact>,
+    #[session]
+    reading_facts: Selection<Fact>,
+    #[session]
+    errands: List<Errand>,
+    #[session]
+    reading_errands: Selection<Errand>,
+    #[session]
     pub asked: u32,
     #[session]
     pub grid: bool,
@@ -51,6 +59,86 @@ pub enum View {
     Redraws,
     Boxes,
     Commands,
+    Facts,
+    Effects,
+}
+
+/// A block of lines the attached app sent in answer to an ask, read on Scope's reading thread.
+#[derive(Facts)]
+pub enum Answer {
+    Boxes(Vec<Measure>),
+    Commands(Vec<Listed>),
+    Facts(Vec<Fact>),
+    Effects(Vec<Errand>),
+}
+
+impl Answer {
+    /// Reads the lines between `<name> begin` and `<name> done`.
+    pub fn read(name: &str, lines: &[String]) -> Option<Answer> {
+        let numbered = || lines.iter().zip(1u64..);
+        match name {
+            "boxes" => {
+                let mut depths = std::collections::HashMap::new();
+                let mut boxes = Vec::new();
+                for (line, n) in numbered() {
+                    if let Some((i, b)) = Measure::read(n, line, |p| p.and_then(|p| depths.get(&p).map(|d| d + 1)).unwrap_or(0)) {
+                        depths.insert(i, b.depth);
+                        boxes.push(b);
+                    }
+                }
+                Some(Answer::Boxes(boxes))
+            }
+            "commands" => Some(Answer::Commands(numbered().filter_map(|(l, n)| Listed::read(n, l)).collect())),
+            "facts" => Some(Answer::Facts(numbered().filter_map(|(l, n)| Fact::read(n, l)).collect())),
+            "effects" => Some(Answer::Effects(numbered().filter_map(|(l, n)| Errand::read(n, l)).collect())),
+            _ => None,
+        }
+    }
+}
+
+/// One field, item or variant of the attached app's facts.
+#[derive(Facts)]
+pub struct Fact {
+    #[key]
+    id: Key<Fact>,
+    pub depth: u32,
+    pub name: String,
+    pub value: String,
+}
+
+impl Fact {
+    /// Reads a `fact` line of the wire.
+    pub fn read(n: u64, line: &str) -> Option<Fact> {
+        let mut f = line.strip_prefix("fact\t")?.split('\t');
+        Some(Fact { id: Key::fixed(n), depth: f.next()?.parse().ok()?, name: f.next()?.to_string(), value: f.next().unwrap_or_default().to_string() })
+    }
+}
+
+/// An effect the attached app asked for, or a job it started: what, how long ago in seconds, how long it took in milliseconds, and how it ended.
+#[derive(Facts)]
+pub struct Errand {
+    #[key]
+    id: Key<Errand>,
+    pub kind: String,
+    pub what: String,
+    pub ago: String,
+    pub took: String,
+    pub outcome: String,
+}
+
+impl Errand {
+    /// Reads an `effect` line of the wire.
+    pub fn read(n: u64, line: &str) -> Option<Errand> {
+        let mut f = line.strip_prefix("effect\t")?.split('\t');
+        Some(Errand {
+            id: Key::fixed(n),
+            kind: f.next()?.to_string(),
+            what: f.next()?.to_string(),
+            ago: f.next()?.to_string(),
+            took: f.next()?.to_string(),
+            outcome: f.next().unwrap_or_default().to_string(),
+        })
+    }
 }
 
 /// One box of the attached app's tree, as it answered when asked.
@@ -189,6 +277,10 @@ pub enum Cmd {
     Boxes,
     #[label("Commands")]
     Commands,
+    #[label("Facts")]
+    Facts,
+    #[label("Effects and jobs")]
+    Effects,
     #[label("Ask again")]
     Again,
     #[internal]
@@ -200,9 +292,7 @@ pub enum Cmd {
     #[internal]
     Lost,
     #[internal]
-    Measured(Vec<Measure>),
-    #[internal]
-    Listed(Vec<Listed>),
+    Answered(Answer),
 }
 
 impl App for Scope {
@@ -232,8 +322,16 @@ impl App for Scope {
                 Available::Yes => here(View::Commands),
                 no => no,
             },
-            Cmd::Again => kernel::no_if(!matches!(self.view, View::Boxes | View::Commands), Message::from("Only boxes and commands are asked for")),
-            Cmd::Look | Cmd::Found(_) | Cmd::Launched(_) | Cmd::Arrived(_) | Cmd::Lost | Cmd::Measured(_) | Cmd::Listed(_) => Available::Yes,
+            Cmd::Facts => match attached() {
+                Available::Yes => here(View::Facts),
+                no => no,
+            },
+            Cmd::Effects => match attached() {
+                Available::Yes => here(View::Effects),
+                no => no,
+            },
+            Cmd::Again => kernel::no_if(matches!(self.view, View::Apps | View::Time | View::Redraws), Message::from("Time and redraws arrive by themselves")),
+            Cmd::Look | Cmd::Found(_) | Cmd::Launched(_) | Cmd::Arrived(_) | Cmd::Lost | Cmd::Answered(_) => Available::Yes,
         }
     }
 
@@ -257,6 +355,8 @@ impl App for Scope {
                 let _ = self.frames.replace([]);
                 let _ = self.boxes.replace([]);
                 let _ = self.commands.replace([]);
+                let _ = self.facts.replace([]);
+                let _ = self.errands.replace([]);
                 self.view = View::Time;
                 Outcome::Changed
             }
@@ -280,12 +380,21 @@ impl App for Scope {
                 self.asked += 1;
                 Outcome::Changed
             }
-            Cmd::Measured(boxes) => {
-                let _ = self.boxes.replace(boxes);
-                Outcome::Changed
+            Cmd::Facts => {
+                self.asked += 1;
+                self.show(View::Facts)
             }
-            Cmd::Listed(commands) => {
-                let _ = self.commands.replace(commands);
+            Cmd::Effects => {
+                self.asked += 1;
+                self.show(View::Effects)
+            }
+            Cmd::Answered(answer) => {
+                let _ = match answer {
+                    Answer::Boxes(boxes) => self.boxes.replace(boxes),
+                    Answer::Commands(commands) => self.commands.replace(commands),
+                    Answer::Facts(facts) => self.facts.replace(facts),
+                    Answer::Effects(errands) => self.errands.replace(errands),
+                };
                 Outcome::Changed
             }
             Cmd::Launched(stages) => {
@@ -365,6 +474,22 @@ impl App for Scope {
         let commands = commands.iter().zip(1..).filter_map(|(l, n)| Listed::read(n, l)).collect();
         let measured = Scope { boxes: seen.into_iter().collect(), outlines: true, ..attached(View::Boxes) };
         let listed = Scope { commands, ..attached(View::Commands) };
+        let facts = [
+            "fact\t0\tfacts\t",
+            "fact\t1\ttasks\t2 items",
+            "fact\t2\t1\t",
+            "fact\t3\ttitle\t“Water the plants”",
+            "fact\t3\tdone\tno",
+            "fact\t2\t2\t",
+            "fact\t3\ttitle\t“Call the bank”",
+            "fact\t3\tdone\tyes",
+            "fact\t1\tfilter\tAll",
+        ];
+        let facts = facts.iter().zip(1..).filter_map(|(l, n)| Fact::read(n, l)).collect();
+        let errands = ["effect\tjob\tFetching the feeds\t2.4\t2400.0\trunning", "effect\twrite\ttasks.txt\t31.0\t3.2\tdone", "effect\topen\thttps://example.org\t95.5\t0.0\tdone"];
+        let errands = errands.iter().zip(1..).filter_map(|(l, n)| Errand::read(n, l)).collect();
+        let read_facts = Scope { facts, ..attached(View::Facts) };
+        let effects = Scope { errands, ..attached(View::Effects) };
         kernel::States::new()
             .add("No apps", Scope::default())
             .add("Two apps running", running)
@@ -372,6 +497,8 @@ impl App for Scope {
             .add("Why it redrew", attached(View::Redraws))
             .add("Boxes", measured)
             .add("Commands", listed)
+            .add("Facts", read_facts)
+            .add("Effects and jobs", effects)
     }
 
     fn view(&self, ui: &mut Ui<Cmd>) {
@@ -380,6 +507,8 @@ impl App for Scope {
             (View::Redraws, Some(_)) => self.redraws(ui),
             (View::Boxes, Some(_)) => self.measured(ui),
             (View::Commands, Some(_)) => self.listed(ui),
+            (View::Facts, Some(_)) => self.read_facts(ui),
+            (View::Effects, Some(_)) => self.effects(ui),
             _ => self.running(ui),
         }
     }
@@ -491,6 +620,42 @@ impl Scope {
                     ui.column(14, |ui| ui.mono(&b.area));
                     ui.column(kernel::Fill, |ui| ui.mono(&b.at));
                     ui.column(kernel::Fill, |ui| ui.muted(&b.why));
+                });
+            });
+        });
+    }
+
+    fn read_facts(&self, ui: &mut Ui<Cmd>) {
+        ui.page(Message::plain(format!("Facts: {}", self.name())), |ui| {
+            ui.muted("The app's facts as they are now, each field inside the one it belongs to.");
+            if self.facts.is_empty() {
+                ui.empty(Message::from("No answer yet. The app answers after its next frame."), Cmd::Again);
+                return;
+            }
+            ui.list(&self.facts, Scope::reading_facts, |ui, f| {
+                let indent = "    ".repeat(f.depth.min(12) as usize);
+                ui.columns(|ui| {
+                    ui.column(kernel::Fill, |ui| ui.text(format!("{indent}{}", f.name)));
+                    ui.column(kernel::Fill, |ui| ui.mono(&f.value));
+                });
+            });
+        });
+    }
+
+    fn effects(&self, ui: &mut Ui<Cmd>) {
+        ui.page(Message::plain(format!("Effects and jobs: {}", self.name())), |ui| {
+            ui.muted("What the app asked for lately, newest first: files written, links opened, jobs started, and how long each took.");
+            if self.errands.is_empty() {
+                ui.empty(Message::from("The app hasn't asked for anything yet."), Cmd::Again);
+                return;
+            }
+            ui.list(&self.errands, Scope::reading_errands, |ui, e| {
+                ui.columns(|ui| {
+                    ui.column(8, |ui| ui.text(&e.kind));
+                    ui.column(kernel::Fill, |ui| ui.text(&e.what));
+                    ui.column(14, |ui| ui.mono(format!("{} s ago", e.ago)));
+                    ui.column(16, |ui| ui.mono(format!("{} {} ms", if e.outcome == "running" { "for" } else { "took" }, e.took)));
+                    ui.column(10, |ui| ui.text(&e.outcome));
                 });
             });
         });

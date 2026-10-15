@@ -115,6 +115,10 @@ pub enum Ask {
     Boxes,
     /// Every command, available or not and why, with its keys.
     Commands,
+    /// The app's facts as a tree.
+    Facts,
+    /// The effects the app asked for lately and the jobs still running, with their timings.
+    Effects,
     /// Draw this over the window.
     Overlay(Overlay),
 }
@@ -125,6 +129,8 @@ impl Ask {
         match self {
             Ask::Boxes => "ask\tboxes\n".into(),
             Ask::Commands => "ask\tcommands\n".into(),
+            Ask::Facts => "ask\tfacts\n".into(),
+            Ask::Effects => "ask\teffects\n".into(),
             Ask::Overlay(o) => format!("ask\toverlay\t{}\t{}\n", u8::from(o.grid), u8::from(o.boxes)),
         }
     }
@@ -135,9 +141,73 @@ impl Ask {
         match f.next()? {
             "boxes" => Some(Ask::Boxes),
             "commands" => Some(Ask::Commands),
+            "facts" => Some(Ask::Facts),
+            "effects" => Some(Ask::Effects),
             "overlay" => Some(Ask::Overlay(Overlay { grid: f.next()? == "1", boxes: f.next()? == "1" })),
             _ => None,
         }
+    }
+}
+
+/// The facts as lines of the wire: `fact <depth> <name> <value>` for every field, item and variant, at most `most` of them, between `facts begin` and `facts done`.
+pub fn facts_lines(facts: &ledger::Value, most: usize) -> String {
+    let mut out = String::from("facts\tbegin\n");
+    let mut left = most;
+    fact_lines(facts, 0, "facts", &mut out, &mut left);
+    if left == 0 {
+        out.push_str("fact\t0\t…\tmore than can be shown\n");
+    }
+    out.push_str("facts\tdone\n");
+    out
+}
+
+fn fact_lines(value: &ledger::Value, depth: usize, name: &str, out: &mut String, left: &mut usize) {
+    use ledger::Value as V;
+    if *left == 0 {
+        return;
+    }
+    *left -= 1;
+    let one_line = |s: &str| s.chars().map(|c| if c.is_control() { ' ' } else { c }).take(120).collect::<String>();
+    let said = match value {
+        V::Unit => String::new(),
+        V::Bool(b) => if *b { "yes" } else { "no" }.into(),
+        V::Int(n) => n.to_string(),
+        V::UInt(n) => n.to_string(),
+        V::Float(f) => f.to_string(),
+        V::Str(s) => format!("“{}”", one_line(s)),
+        V::Key(k) => format!("{k:x}"),
+        V::None => "none".into(),
+        V::Some(inner) => {
+            *left += 1;
+            return fact_lines(inner, depth, name, out, left);
+        }
+        V::List(items) if items.len() == 1 => "1 item".into(),
+        V::List(items) => format!("{} items", items.len()),
+        V::Map(_) => String::new(),
+        V::Variant(variant, _) => variant.clone(),
+    };
+    out.push_str(&format!("fact\t{depth}\t{}\t{said}\n", one_line(name)));
+    match value {
+        V::List(items) => {
+            for (i, item) in items.iter().enumerate() {
+                fact_lines(item, depth + 1, &format!("{}", i + 1), out, left);
+            }
+        }
+        V::Map(fields) => {
+            for (field, v) in fields {
+                fact_lines(v, depth + 1, field, out, left);
+            }
+        }
+        V::Variant(_, inner) => match inner.as_ref() {
+            V::Unit => {}
+            V::Map(fields) => {
+                for (field, v) in fields {
+                    fact_lines(v, depth + 1, field, out, left);
+                }
+            }
+            inner => fact_lines(inner, depth + 1, "with", out, left),
+        },
+        _ => {}
     }
 }
 

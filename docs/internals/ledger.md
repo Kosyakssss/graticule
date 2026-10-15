@@ -17,6 +17,10 @@ Every write happens on a thread named `ledger`. The main thread sends the entry 
 
 The log keeps growing: it is the command log as well as the crash record, and the `ledger` command (item 21) reads it to show history and replay it. Trimming it is left for when its size matters.
 
+## The face
+
+`--ledger` on any app's command line (`graticule::run`, in `crates/graticule/src/face.rs`) reads its store without writing to it: `ledger::read` loads the snapshot and applies the whole log records after it, the same loop `Store::open` uses, but sets nothing aside and truncates nothing. History replays the log from the app's fresh facts one entry at a time, so each command is labelled from the facts as they were just before it ran, which is what its label read when it was chosen; entries that are only the rest of a long change (`turn`, `slice`) are not listed. Replay prints the facts after N entries as an indented tree; verify replays everything and compares with what the store holds, path by path; compare reads two stores and lists where their facts differ. A replay runs undo whole rather than in slices, as replays always do.
+
 ## Replays
 
 An entry is a command (its commands as `Value`s, and the replica, counter, time and seed `Cx` handed out), or "undo", or "redo". `Runner::replay` runs entries again through the same transaction path with the same clock, so keys, times and random numbers come out the same and the facts do too (the law `replaying_the_command_log_gives_the_same_facts`). Focus repair after a removal is its own entry, so a replay switches repair off rather than doing it twice.

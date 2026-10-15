@@ -74,17 +74,8 @@ impl Store {
             Err(e) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
             Err(e) => return Err(e),
         };
-        let mut end = snapshot_at.min(bytes.len() as u64);
-        let mut since = 0;
-        for (record, next) in records(&bytes, end as usize) {
-            let Some((ops, c)) = read_record(&record) else { break };
-            for op in &ops {
-                facts.apply(op.path().steps(), op);
-            }
-            counter = counter.max(c);
-            end = next as u64;
-            since += 1;
-        }
+        let (end, since, last) = apply_log(&mut facts, &bytes, snapshot_at);
+        counter = counter.max(last);
         if end < bytes.len() as u64 && trouble.is_none() {
             trouble = Some("The last change before the app closed was cut short, so it was left out".into());
         }
@@ -183,6 +174,38 @@ impl Files {
         self.since = 0;
         Ok(())
     }
+}
+
+/// Applies the whole records of a log after `from` to the facts: where the last whole record ends, how many there were and the highest key counter among them.
+fn apply_log<F: Field>(facts: &mut F, bytes: &[u8], from: u64) -> (u64, u64, u64) {
+    let (mut end, mut since, mut counter) = (from.min(bytes.len() as u64), 0, 0);
+    for (record, next) in records(bytes, end as usize) {
+        let Some((ops, c)) = read_record(&record) else { break };
+        for op in &ops {
+            facts.apply(op.path().steps(), op);
+        }
+        counter = counter.max(c);
+        end = next as u64;
+        since += 1;
+    }
+    (end, since, counter)
+}
+
+/// Reads the facts a store in `folder` holds, as the app would open them, without writing anything: the last snapshot and every whole change logged after it. `fresh` makes the facts when no snapshot was written yet.
+pub fn read<F: Field>(folder: &Path, fresh: impl FnOnce() -> F) -> io::Result<F> {
+    let mut facts = match fs::read(folder.join("facts")) {
+        Ok(bytes) => read_snapshot::<F>(&bytes).map(|(facts, at, _)| (facts, at)).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "the snapshot can't be read"))?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => (fresh(), 0),
+        Err(e) => return Err(e),
+    };
+    facts.0.attach(ErasedPath::ROOT);
+    let bytes = match fs::read(folder.join("log")) {
+        Ok(b) => b,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(e),
+    };
+    apply_log(&mut facts.0, &bytes, facts.1);
+    Ok(facts.0)
 }
 
 fn report(problems: &Mutex<Option<String>>, done: io::Result<()>) {

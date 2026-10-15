@@ -660,7 +660,7 @@ pub struct ListInfo {
 pub type Takes<C> = fn(crate::app::Path) -> C;
 
 /// The command a drag on a canvas makes when it is let go.
-pub type Drags<C> = fn(crate::canvas::Drag) -> C;
+pub type Drags<C> = Box<dyn Fn(crate::canvas::Drag) -> C>;
 
 /// The command a row dragged to a new place makes, from its key and the place.
 pub type Mover<C> = Box<dyn Fn(u128, usize) -> C>;

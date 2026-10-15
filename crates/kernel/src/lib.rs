@@ -61,7 +61,7 @@ pub use form::{Control, Setting, Settings};
 pub use graph::Graph;
 pub use image::Image;
 pub use ink::Ink;
-pub use live::{Derived, Feed, Live};
+pub use live::{Derived, Feed, Live, Watch};
 pub use message::Message;
 pub use picture::{Layer, Picture, icons};
 pub use table::{Decimal, Order, Rows, Sort};

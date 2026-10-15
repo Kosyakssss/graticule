@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ledger::{FactPath, Facts, Field, Key, Outcome, Value};
 
 use crate::command::{Available, Commands};
-use crate::live::{Feed, Live};
+use crate::live::{Derived, Feed, Live, Watch};
 use crate::message::Message;
 use crate::ui::Ui;
 
@@ -197,7 +197,11 @@ pub enum Effect<C> {
     Paste { reply: fn(String) -> C },
     Job { name: String, work: ledger::Work, reply: Reply<C> },
     Stream { name: String, field: u16, run: Box<dyn FnOnce(Box<dyn Any + Send>) + Send> },
+    Serve { name: String, from: u16, field: u16, run: Serving },
 }
+
+/// What a job that follows a derived value and writes a live one runs, given the reading and writing ends.
+pub type Serving = Box<dyn FnOnce(Box<dyn Any + Send>, Box<dyn Any + Send>) + Send>;
 
 /// What turns a job's finished result back into a command.
 pub type Reply<C> = Box<dyn FnOnce(Box<dyn Any + Send>) -> Option<C> + Send>;
@@ -223,6 +227,23 @@ impl<C: 'static> Jobs<C> {
         self.effects.push(Effect::Stream { name: name.into().to_string(), field, run: Box::new(run) });
     }
 
+    /// Runs `source` on its own thread with the reading end of a derived value and the writing end of a `#[live]` field, for as long as it keeps going: an audio engine that plays what the facts say and tells the view where it is. `jobs.serve(t!("Audio"), audio::run, Song::mix, Song::deck)`.
+    pub fn serve<F: Field, A: Send + Sync + 'static, B: Send + Sync + 'static>(
+        &mut self,
+        name: impl Into<Message>,
+        source: impl FnOnce(Watch<A>, Feed<B>) + Send + 'static,
+        from: FactPath<F, Derived<A>>,
+        field: FactPath<F, Live<B>>,
+    ) {
+        let (Some(from), Some(field)) = (from.erased().first_field(), field.erased().first_field()) else { return };
+        let run = move |watch: Box<dyn Any + Send>, feed: Box<dyn Any + Send>| {
+            if let (Ok(watch), Ok(feed)) = (watch.downcast::<Watch<A>>(), feed.downcast::<Feed<B>>()) {
+                source(*watch, *feed);
+            }
+        };
+        self.effects.push(Effect::Serve { name: name.into().to_string(), from, field, run: Box::new(run) });
+    }
+
     /// Runs `work` once in the background, like `Cx::job`.
     pub fn job<T: Send + 'static>(&mut self, name: impl Into<Message>, work: impl FnOnce() -> T + Send + 'static, reply: fn(T) -> C) {
         self.effects.push(job(name.into(), work, reply));
@@ -245,6 +266,7 @@ impl<C> fmt::Debug for Effect<C> {
             Effect::Paste { .. } => write!(f, "paste"),
             Effect::Job { name, .. } => write!(f, "run “{name}”"),
             Effect::Stream { name, .. } => write!(f, "stream “{name}”"),
+            Effect::Serve { name, .. } => write!(f, "serve “{name}”"),
         }
     }
 }

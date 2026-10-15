@@ -283,6 +283,11 @@ pub trait Moving {
     fn feed(&self) -> Option<Box<dyn Any + Send>> {
         None
     }
+
+    /// The reading end of a derived value, for a job that follows it.
+    fn watch(&self) -> Option<Box<dyn Any + Send>> {
+        None
+    }
 }
 
 /// Work that runs on another thread and hands back a value of any type.

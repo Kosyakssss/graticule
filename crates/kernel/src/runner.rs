@@ -2606,7 +2606,7 @@ impl<A: App> Runner<A> {
             Effect::SaveAs { name, .. } => self.errand("save", format!("Save “{name}” as"), "running"),
             Effect::Write { path, .. } => self.errand("write", path.0.display().to_string(), "running"),
             Effect::Job { name, .. } => self.errand("job", name.clone(), "running"),
-            Effect::Stream { name, .. } => self.errand("stream", name.clone(), "running"),
+            Effect::Stream { name, .. } | Effect::Serve { name, .. } => self.errand("stream", name.clone(), "running"),
             Effect::Open { target } => self.errand("open", target.clone(), "done"),
             Effect::Copy { text } => self.errand("copy", format!("{} characters", text.chars().count()), "done"),
             Effect::Paste { .. } => self.errand("paste", "the clipboard".to_string(), "running"),
@@ -2649,6 +2649,29 @@ impl<A: App> Runner<A> {
                         None,
                     ),
                     None => self.said = Some(Said::Failure(format!("“{name}” has no live value to write"))),
+                }
+            }
+            Effect::Serve { name, from, field, run } => {
+                let (mut watch, mut feed) = (None, None);
+                self.facts.moving(&mut |at, value| {
+                    if at == from {
+                        watch = value.watch();
+                    }
+                    if at == field {
+                        feed = value.feed();
+                    }
+                });
+                match (watch, feed) {
+                    (Some(watch), Some(feed)) => self.spawn(
+                        name,
+                        move || {
+                            run(watch, feed);
+                            None
+                        },
+                        Box::new(|_| None),
+                        None,
+                    ),
+                    _ => self.said = Some(Said::Failure(format!("“{name}” has no derived value to follow or live value to write"))),
                 }
             }
             Effect::Open { target } => {
@@ -3208,9 +3231,9 @@ impl<A: App> Runner<A> {
         if let Some(path) = steer {
             return self.steer(path, drag.to);
         }
-        let cmd = self.tree.find(id).and_then(|i| self.tree.drags.iter().find(|(n, _)| *n == i)).map(|(_, cmd)| *cmd);
+        let cmd = self.tree.find(id).and_then(|i| self.tree.drags.iter().find(|(n, _)| *n == i)).map(|(_, cmd)| cmd(drag));
         match cmd {
-            Some(cmd) => self.run(cmd(drag)),
+            Some(cmd) => self.run(cmd),
             None => true,
         }
     }

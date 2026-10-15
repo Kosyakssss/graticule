@@ -17,7 +17,8 @@ playhead: i64,
 ui.time_axis(Clock::Beats { per_beat: 96, beats_per_bar: 4 }, Song::view, Song::playhead, |axis| {
     for track in &self.tracks {
         axis.track(&track.name, 2, |lane| {
-            for clip in track.clips.iter().filter(|c| lane.shows(c.start, c.end)) {
+            let shown: Vec<_> = track.clips.iter().filter(|c| lane.shows(c.start, c.end)).collect();
+            for clip in shown {
                 lane.span(clip.start, clip.end).ink(Ink::Selection).fill();
                 lane.label(clip.start, &clip.name);
             }
@@ -28,7 +29,7 @@ ui.time_axis(Clock::Beats { per_beat: 96, beats_per_bar: 4 }, Song::view, Song::
 
 Time is a whole number in the app's own unit: samples, milliseconds, ticks. `TimeView` is the stretch that shows, the time at the left edge and how much each column holds; scrolling and zooming change it, so keep it a session fact. `Clock` says how the time is counted: `Plain` numbers, `Seconds` or bars and `Beats`. The ruler's marks fall where the clock says, labelled at least ten columns apart, with smaller marks between; labels sit on whole cells.
 
-A lane is a canvas whose space runs across in the axis's time and down from 0 to 1, so anything can be drawn on it. `span` draws a box between two times, `label` writes at a time, and `press` names a shape that runs a command, as on any canvas. Draw only what `shows` says is in view, so a long piece costs what a screenful does.
+A lane is a canvas whose space runs across in the axis's time and down from 0 to 1, so anything can be drawn on it. `span` draws a box between two times, `label` writes at a time, and `press` names a shape that runs a command, as on any canvas. Draw only what `shows` says is in view, so a long piece costs what a screenful does. A lane is a canvas, so `lane.on_drag(move |drag| Cmd::Dragged(track, drag))` moves what is on it: the drag's `from` and `to` are in the lane's space, so the time is `view.start` plus the drag's across, and down past 1 is the lanes below. Four-track is built this way.
 
 ## Mouse
 

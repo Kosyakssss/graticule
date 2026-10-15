@@ -3,9 +3,10 @@
 use std::any::Any;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Sender, channel};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError};
+use std::time::Duration;
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use ledger::{ErasedPath, Field, Moving, Op, Value};
 
 struct Slot<T> {
@@ -114,6 +115,53 @@ impl<T: 'static> Field for Live<T> {
 pub struct Derived<T> {
     value: Option<Arc<T>>,
     coming: bool,
+    out: Arc<Out<T>>,
+}
+
+struct Out<T> {
+    value: ArcSwapOption<T>,
+    version: Mutex<u64>,
+    changed: Condvar,
+}
+
+impl<T> Out<T> {
+    fn new() -> Self {
+        Self { value: ArcSwapOption::empty(), version: Mutex::new(0), changed: Condvar::new() }
+    }
+}
+
+/// The reading end of a derived value, for another thread: an audio callback that plays what the facts say. It reads the newest finished value without locks, so a real-time thread can read it every time it runs. `Jobs::serve` hands one to a job.
+pub struct Watch<T> {
+    out: Arc<Out<T>>,
+}
+
+impl<T> Clone for Watch<T> {
+    fn clone(&self) -> Self {
+        Self { out: self.out.clone() }
+    }
+}
+
+impl<T> Watch<T> {
+    /// Runs `f` with the newest finished value, or `None` before the first one, without taking a lock or a reference count.
+    pub fn read<R>(&self, f: impl FnOnce(Option<&T>) -> R) -> R {
+        let now = self.out.value.load();
+        f(now.as_deref())
+    }
+
+    /// The newest finished value, kept for as long as it is needed.
+    pub fn latest(&self) -> Option<Arc<T>> {
+        self.out.value.load_full()
+    }
+
+    /// Waits until a value newer than the one numbered `seen` has arrived, or until `most` has passed when it is given, and gives the newest one's number, counting from 1. A thread that waits costs nothing while nothing changes.
+    pub fn wait(&self, seen: u64, most: Option<Duration>) -> u64 {
+        let version = self.out.version.lock().unwrap_or_else(PoisonError::into_inner);
+        let newer = |v: &mut u64| *v <= seen;
+        match most {
+            Some(most) => *self.out.changed.wait_timeout_while(version, most, newer).unwrap_or_else(PoisonError::into_inner).0,
+            None => *self.out.changed.wait_while(version, newer).unwrap_or_else(PoisonError::into_inner),
+        }
+    }
 }
 
 impl<T> Derived<T> {
@@ -130,23 +178,32 @@ impl<T> Derived<T> {
 
 impl<T> Default for Derived<T> {
     fn default() -> Self {
-        Self { value: None, coming: false }
+        Self { value: None, coming: false, out: Arc::new(Out::new()) }
     }
 }
 
 impl<T> Clone for Derived<T> {
     fn clone(&self) -> Self {
-        Self { value: self.value.clone(), coming: self.coming }
+        Self { value: self.value.clone(), coming: self.coming, out: self.out.clone() }
     }
 }
 
 impl<T: Send + Sync + 'static> Moving for Derived<T> {
     fn arrive(&mut self, value: Box<dyn Any + Send>) {
-        if let Ok(value) = value.downcast::<T>()
-            && let Some(old) = self.value.replace(Arc::from(value))
-        {
+        let Ok(value) = value.downcast::<T>() else { return };
+        let value: Arc<T> = Arc::from(value);
+        if let Some(old) = self.out.value.swap(Some(value.clone())) {
             discard(Box::new(old));
         }
+        *self.out.version.lock().unwrap_or_else(PoisonError::into_inner) += 1;
+        self.out.changed.notify_all();
+        if let Some(old) = self.value.replace(value) {
+            discard(Box::new(old));
+        }
+    }
+
+    fn watch(&self) -> Option<Box<dyn Any + Send>> {
+        Some(Box::new(Watch { out: self.out.clone() }))
     }
 
     fn coming(&mut self, coming: bool) {

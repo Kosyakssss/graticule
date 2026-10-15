@@ -1850,9 +1850,9 @@ impl<C, S> Canvas<'_, '_, C, S> {
         self.board.camera = Some((None, camera));
     }
 
-    /// Runs `cmd` with each drag on the canvas, a press and a let-go with any moves between, when it is let go: `canvas.on_drag(Cmd::Drew)`. Escape drops a drag under way.
-    pub fn on_drag(&mut self, cmd: crate::tree::Drags<C>) {
-        self.ui.tree.drags.push((self.board.node, cmd));
+    /// Runs `cmd` with each drag on the canvas, a press and a let-go with any moves between, when it is let go: `canvas.on_drag(Cmd::Drew)`, or `canvas.on_drag(move |drag| Cmd::Moved(track, drag))` to say which canvas it was on. Escape drops a drag under way.
+    pub fn on_drag(&mut self, cmd: impl Fn(crate::canvas::Drag) -> C + 'static) {
+        self.ui.tree.drags.push((self.board.node, Box::new(cmd)));
     }
 
     /// Makes a press on this canvas, or a drag let go on it, move the camera at `path` so the point under it is in the middle of the canvas that camera belongs to: a map of a larger canvas, drawn in that canvas's page units. Each move is one change to the camera.

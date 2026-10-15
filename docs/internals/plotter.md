@@ -42,7 +42,7 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **tldraw.** While moving or resizing, edges and centres snap to other shapes' edges and centres, gaps snap to equal spacing, and guides show what snapped. The threshold is in screen pixels, so it feels the same at every zoom.
 
-**Here.** `snap` takes the moving box and the other boxes and returns the smallest nudge, on each axis, that lines up an edge or centre within the threshold, with the lines it lined up for drawing guides; arrows are not snapped to. Equal gaps and handles come after.
+**Here.** `snap` takes the moving box and the other boxes and returns the smallest nudge, on each axis, that lines up an edge or centre within the threshold, with the lines it lined up for drawing guides; arrows are not snapped to. It also spaces the box evenly along each axis: midway between its nearest neighbours in the same row or column, or one gap past the end of a run, as wide as the gap between the run's last two; whichever of lining up and spacing needs the smaller nudge wins, and the equal gaps come back for drawing. A row or a column is what overlaps the box across the other axis, looked up through the index in a band 1,200 screen points long each way, so the cost of a drag stays with what is near it on screen at any zoom. Snapping handles comes later.
 
 ## Culling and many shapes
 
@@ -65,4 +65,4 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 ## Also in tldraw, later here
 
-Groups, frames and pages; a read-only board; pasting anything and dropping files; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; rotation, and a minimap. Export to SVG comes with the core, since a board must render without a screen.
+Groups, frames and pages; a read-only board, which waits on a way for an app to say that undo can't run, since undo would otherwise change a board meant to stay as it is; pasting anything and dropping files; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; rotation, and a minimap. Export to SVG comes with the core, since a board must render without a screen.

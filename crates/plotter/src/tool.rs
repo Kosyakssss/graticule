@@ -6,7 +6,7 @@ use ledger::{Choose, Key, Outcome, Selection};
 use crate::board::{Board, End, Kind, Shape};
 use crate::geometry::{Bounds, Point};
 use crate::index::Index;
-use crate::snap::{Guide, snap};
+use crate::snap::{Gap, Guide, snap};
 
 /// What a drag on the board does.
 #[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
@@ -36,8 +36,8 @@ pub struct Gesture {
 pub enum Intent {
     /// Choose `shape`, or with `adding` add it to the chosen ones or take it away; no shape lets go of them all.
     Choose { shape: Option<Key<Shape>>, adding: bool },
-    /// Move shapes by a distance, snapped to the others, with the lines they snapped to.
-    Translate { keys: Vec<Key<Shape>>, dx: f64, dy: f64, guides: Vec<Guide> },
+    /// Move shapes by a distance, snapped to the others, with the lines and the equal gaps they snapped to.
+    Translate { keys: Vec<Key<Shape>>, dx: f64, dy: f64, guides: Vec<Guide>, gaps: Vec<Gap> },
     /// Choose the shapes wholly inside a box, which are `keys`, with `adding` as well as the chosen ones.
     Brush { area: Bounds, keys: Vec<Key<Shape>>, adding: bool },
     /// Give a shape a new box by dragging one of its handles: a corner, or the middle of a side, which moves only that side.
@@ -49,6 +49,8 @@ pub enum Intent {
 /// How close, in screen points, the pointer must be to a line or a handle to take it, and how close an edge must come to snap.
 const REACH: f64 = 6.0;
 const SNAP: f64 = 8.0;
+/// How far along a row or a column, in screen points, a moved shape looks for others to space itself evenly with.
+const ROW: f64 = 1_200.0;
 const NEW: f64 = 100.0;
 
 impl Intent {
@@ -80,10 +82,14 @@ impl Intent {
                         let moving = keys.iter().filter_map(|k| board.shapes.find(*k)).map(|s| s.bounds()).reduce(|a, b| a.union(&b)).unwrap_or_default();
                         let moved = Bounds { x: moving.x + dx, y: moving.y + dy, ..moving };
                         let mine: HashSet<Key<Shape>> = keys.iter().copied().collect();
-                        let others: Vec<Bounds> =
-                            index.query(moved.expand(SNAP / zoom)).into_iter().filter(|e| !e.arrow && !mine.contains(&e.key)).filter_map(|e| board.shapes.find(e.key)).map(Shape::bounds).collect();
-                        let snapped = snap(moved, &others, SNAP / zoom);
-                        Intent::Translate { keys, dx: dx + snapped.dx, dy: dy + snapped.dy, guides: snapped.guides }
+                        let (near, row) = (SNAP / zoom, ROW / zoom);
+                        let mut found = index.query(Bounds::new(moved.x - row, moved.y - near, moved.w + 2.0 * row, moved.h + 2.0 * near));
+                        found.extend(index.query(Bounds::new(moved.x - near, moved.y - row, moved.w + 2.0 * near, moved.h + 2.0 * row)));
+                        found.sort_unstable_by_key(|e| e.key);
+                        found.dedup_by_key(|e| e.key);
+                        let others: Vec<Bounds> = found.into_iter().filter(|e| !e.arrow && !mine.contains(&e.key)).filter_map(|e| board.shapes.find(e.key)).map(Shape::bounds).collect();
+                        let snapped = snap(moved, &others, near);
+                        Intent::Translate { keys, dx: dx + snapped.dx, dy: dy + snapped.dy, guides: snapped.guides, gaps: snapped.gaps }
                     }
                     (None, false) => Intent::Choose { shape: None, adding: gesture.shift },
                     (None, true) => {

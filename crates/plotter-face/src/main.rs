@@ -346,11 +346,19 @@ impl App for Whiteboard {
                     Some(Intent::Brush { area, .. }) => {
                         corners(canvas, *area, Ink::Muted);
                     }
-                    Some(Intent::Translate { guides, .. }) => {
+                    Some(Intent::Translate { guides, gaps, .. }) => {
                         let reach = moved.iter().map(Shape::bounds).reduce(|a, b| a.union(&b)).unwrap_or_default().expand(400.0);
                         for g in guides {
                             let (from, to) = if g.vertical { ((g.at, reach.y), (g.at, reach.bottom())) } else { ((reach.x, g.at), (reach.right(), g.at)) };
                             canvas.line(at(from.0, from.1), at(to.0, to.1)).ink(Ink::Danger).stroke(Weight::Hair);
+                        }
+                        let tick = 6.0 / self.camera.zoom;
+                        for g in gaps {
+                            let point = |along: f64, off: f64| if g.across { at(along, g.at + off) } else { at(g.at + off, along) };
+                            canvas.line(point(g.from, 0.0), point(g.to, 0.0)).ink(Ink::Danger).stroke(Weight::Hair);
+                            for end in [g.from, g.to] {
+                                canvas.line(point(end, -tick), point(end, tick)).ink(Ink::Danger).stroke(Weight::Hair);
+                            }
                         }
                     }
                     _ => {}

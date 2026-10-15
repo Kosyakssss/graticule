@@ -1,0 +1,16 @@
+[package]
+name = "lightbox"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+graticule.workspace = true
+ledger.workspace = true
+png = "0.18.1"
+zune-core = "0.5"
+zune-jpeg = "0.5.15"

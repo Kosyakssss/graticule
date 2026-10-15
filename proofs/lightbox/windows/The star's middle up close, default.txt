@@ -1,0 +1,53 @@
+window		0 0 120 30	
+  page	Lightbox	0 0 120 26	
+    group		2 3 116 1	
+      group		2 3 17 1	
+        toggle button	Move	2 3 7 1	unavailable (Moving already)
+        toggle button	Measure	9 3 10 1	
+      button	Zoom in	21 3 10 1	
+      button	Zoom out	33 3 11 1	
+      button	Fit	46 3 6 1	
+      button	Actual pixels	54 3 16 1	
+    split		2 5 116 18	
+      pane	Scan	2 5 81 18	
+        canvas	Scan, 2400 by 1600 pixels	2 5 81 17	
+        text	2400 by 1600 pixels, 16-bit gray, 2400 pixels to the inch	2 22 81 1	muted
+      divider	Between “Scan” and “Levels”	85 5 1 18	
+      pane	Levels	88 5 30 18	
+        canvas	How many pixels are at each level	88 5 30 6	
+        group		88 11 30 1	
+          text	Show as	88 11 7 1	
+          cycling choice	Positive	97 11 16 1	
+        labelled	Black and white	88 12 30 2	
+          range slider	0–65,535	88 13 30 1	
+            slider handle	0	88 13 16 1	
+            slider handle	65,535	88 13 16 1	
+        labelled	Gamma, in hundredths	88 14 30 2	
+          slider	100	88 15 30 1	
+        group		88 16 30 2	
+          button	Stretch the levels	88 16 21 1	
+          button	Reset the levels	88 17 19 1	unavailable (The levels are as the file has them)
+        text	Choose Measure and drag across the scan to measure it	88 18 30 2	muted
+        list		88 20 30 3	0 items
+    group		2 24 116 1	
+      group		2 24 73 1	
+        text field	Scan file	2 24 61 1	
+        button	Choose…	65 24 10 1	
+      button	Open the scan	77 24 16 1	unavailable (Choose a file first)
+      button	Show the sample scan	95 24 23 1	unavailable (The sample is showing)
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Move	2 28 8 1	unavailable (Moving already)
+    button	Measure	12 28 11 1	
+    button	Zoom in	25 28 11 1	
+    button	Zoom out	38 28 12 1	
+    button	Fit	52 28 6 1	
+    button	Actual pixels	60 28 14 1	
+    button	Stretch the levels	76 28 15 1	
+    button	Reset the levels	93 28 14 1	unavailable (The levels are as the file has them)
+    button	Open the scan	2 29 13 1	unavailable (Choose a file first)
+    button	Show the sample scan	17 29 19 1	unavailable (The sample is showing)
+    button	Undo	38 29 13 1	unavailable (Nothing to undo)
+    button	Redo	53 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	74 29 15 1	

@@ -1,0 +1,7 @@
+=: zoom-in
+-: zoom-out
+0: fit
+1: actual-pixels
+v: move
+m: measure
+delete: remove

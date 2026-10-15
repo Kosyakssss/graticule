@@ -211,6 +211,10 @@ pub struct Catalog {
     #[derived(City::matching, from = [cities, narrowed])]
     matching: Derived<Order<City>>,
     #[session]
+    arranged: Sort,
+    #[derived(City::arranged, from = [cities, arranged])]
+    in_order: Derived<Order<City>>,
+    #[session]
     outline: List<Part>,
     #[session]
     reached: Selection<Part>,
@@ -264,6 +268,10 @@ pub struct City {
 }
 
 impl City {
+    fn arranged(cities: &List<City>, arranged: &Sort) -> Order<City> {
+        Order::sorted(cities, arranged)
+    }
+
     fn matching(cities: &List<City>, narrowed: &Text) -> Order<City> {
         Order::of(cities).matching(cities, narrowed.as_str())
     }
@@ -448,10 +456,11 @@ pub enum Component {
     SplitPanes,
     Picker,
     TypedFilter,
+    Records,
 }
 
 impl Component {
-    const ALL: [Component; 76] = [
+    const ALL: [Component; 77] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -528,6 +537,7 @@ impl Component {
         Component::SplitPanes,
         Component::Picker,
         Component::TypedFilter,
+        Component::Records,
     ];
 
     fn name(self) -> &'static str {
@@ -608,6 +618,7 @@ impl Component {
             Component::SplitPanes => "Split panes",
             Component::Picker => "Picker",
             Component::TypedFilter => "Typed filter",
+            Component::Records => "Table from data",
         }
     }
 
@@ -689,6 +700,7 @@ impl Component {
             Component::SplitPanes => include_str!("../../../docs/components/split-panes.md"),
             Component::Picker => include_str!("../../../docs/components/picker.md"),
             Component::TypedFilter => include_str!("../../../docs/components/typed-filter.md"),
+            Component::Records => include_str!("../../../docs/components/table-from-data.md"),
         }
     }
 
@@ -830,6 +842,8 @@ impl Default for Catalog {
             found: Derived::default(),
             narrowed: Text::default(),
             matching: Derived::default(),
+            arranged: Sort::default(),
+            in_order: Derived::default(),
             outline: OUTLINE.iter().zip(1..).map(|(&(name, inside), n)| Part { id: Key::fixed(n), name: name.to_string(), inside: (inside > 0).then(|| Key::fixed(inside)) }).collect(),
             reached: Selection::default(),
             unfolded: vec![Key::fixed(1), Key::fixed(4)],
@@ -1283,6 +1297,9 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::Records => {
+                ui.records(self.in_order.of(&self.cities), Catalog::picked).sort(Catalog::arranged).height(6);
+            }
             Component::TypedFilter => {
                 ui.filter(&self.cities, Catalog::narrowed);
                 ui.table(self.matching.of(&self.cities), Catalog::picked, |row, city| {

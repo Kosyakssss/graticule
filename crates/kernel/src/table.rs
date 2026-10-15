@@ -155,6 +155,19 @@ impl<T: Record> Order<T> {
         Order::from_keys(keyed.into_iter().map(|(_, k)| k).collect())
     }
 
+    /// The list's items sorted as `sort` says by the field its column is named for, as a table made by `ui.records` heads it. Numbers compare as numbers and words without regard to case; an item with nothing in the field comes last.
+    pub fn sorted(list: &List<T>, sort: &Sort) -> Order<T> {
+        let mut keyed: Vec<(Value, u128)> = list.iter().filter_map(|t| fields_of(t).into_iter().find(|(head, _)| head == sort.column()).map(|(_, v)| (v, t.key().raw()))).collect();
+        if keyed.len() != list.len() {
+            return Order::of(list);
+        }
+        keyed.sort_by(|a, b| {
+            let order = compare(&a.0, &b.0);
+            if sort.descending && !matches!((&a.0, &b.0), (Value::None, _) | (_, Value::None)) { order.reverse() } else { order }
+        });
+        Order::from_keys(keyed.into_iter().map(|(_, k)| k).collect())
+    }
+
     /// The rows of a tree: each item under the one `parent` names, the items with none at the top, and the items inside a branch shown only while `open` holds its key. Items keep the list's order among their siblings.
     pub fn tree(list: &List<T>, open: &[Key<T>], parent: impl Fn(&T) -> Option<Key<T>>) -> Order<T> {
         let mut under: HashMap<u128, Vec<u128>> = HashMap::new();
@@ -384,6 +397,82 @@ impl Cell for crate::days::Time {
 
     fn numeric(&self) -> bool {
         true
+    }
+}
+
+/// A record's fields as a table made from them shows them: each field's name as a head, `people` as "People", with its value, leaving out the record's own key.
+pub(crate) fn fields_of<T: Record>(item: &T) -> Vec<(String, Value)> {
+    let own = Value::Key(item.key().raw());
+    let Value::Map(fields) = item.value() else { return Vec::new() };
+    fields.into_iter().filter(|(_, v)| *v != own).map(|(name, v)| (heading(&name), v)).collect()
+}
+
+fn heading(name: &str) -> String {
+    let mut out = name.replace('_', " ");
+    if let Some(first) = out.get_mut(..1) {
+        first.make_ascii_uppercase();
+    }
+    out
+}
+
+fn compare(a: &Value, b: &Value) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    let number = |v: &Value| match v {
+        Value::Int(n) => Some(*n as f64),
+        Value::UInt(n) => Some(*n as f64),
+        Value::Float(n) => Some(*n),
+        _ => None,
+    };
+    match (a, b) {
+        (Value::None, Value::None) => Ordering::Equal,
+        (Value::None, _) => Ordering::Greater,
+        (_, Value::None) => Ordering::Less,
+        (Value::Some(a), b) => compare(a, b),
+        (a, Value::Some(b)) => compare(a, b),
+        (Value::Str(a), Value::Str(b)) => a.to_lowercase().cmp(&b.to_lowercase()),
+        (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
+        (Value::Variant(a, _), Value::Variant(b, _)) => a.cmp(b),
+        (Value::List(a), Value::List(b)) => a.len().cmp(&b.len()),
+        _ => match (number(a), number(b)) {
+            (Some(a), Some(b)) => a.partial_cmp(&b).unwrap_or(Ordering::Equal),
+            _ => Ordering::Equal,
+        },
+    }
+}
+
+/// A record's value in one field, as a table made from the record's fields shows it.
+pub(crate) struct Plain(pub Value);
+
+impl Cell for Plain {
+    fn shown(&self) -> String {
+        match &self.0 {
+            Value::Str(s) => s.clone(),
+            Value::Bool(b) => if *b { "Yes" } else { "No" }.to_string(),
+            Value::Int(n) => crate::value::grouped(*n),
+            Value::UInt(n) => crate::value::grouped(*n),
+            Value::Float(n) => n.to_string(),
+            Value::Variant(name, _) => name.clone(),
+            Value::Some(inner) => Plain((**inner).clone()).shown(),
+            Value::List(items) => crate::value::grouped(items.len()),
+            _ => String::new(),
+        }
+    }
+
+    fn numeric(&self) -> bool {
+        match &self.0 {
+            Value::Some(inner) => Plain((**inner).clone()).numeric(),
+            v => matches!(v, Value::Int(_) | Value::UInt(_) | Value::Float(_) | Value::List(_)),
+        }
+    }
+
+    fn sign(&self) -> i8 {
+        match &self.0 {
+            Value::Int(n) => n.signum() as i8,
+            Value::Float(n) if *n > 0.0 => 1,
+            Value::Float(n) if *n < 0.0 => -1,
+            Value::UInt(n) if *n > 0 => 1,
+            _ => 0,
+        }
     }
 }
 

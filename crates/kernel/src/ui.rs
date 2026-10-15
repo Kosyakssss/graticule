@@ -1360,6 +1360,16 @@ impl<'a, C, S> Ui<'a, C, S> {
         Picked { ui: self, node: m, items: PhantomData }
     }
 
+    /// A table of `items` with a column for each of the record's fields, headed by its name, so a record's table needs no describing: `ui.records(self.order.of(&self.cities), Atlas::picked)`. Numbers line up on the right and yes-or-no fields say Yes or No. With `.sort(path)`, sort the rows by [`Order::sorted`](crate::table::Order::sorted), which sorts by the field a column is named for.
+    #[track_caller]
+    pub fn records<'r, T: Record, F: Field>(&mut self, items: impl Into<Rows<'r, T>>, selection: FactPath<F, Selection<T>>) -> Tabled<'_, 'a, C, S, T> {
+        self.table(items, selection, |row, item| {
+            for (head, value) in crate::table::fields_of(item) {
+                row.cell(Message::plain(head), crate::table::Plain(value));
+            }
+        })
+    }
+
     fn rows<T: Record, F: Field>(
         &mut self,
         items: &Rows<'_, T>,

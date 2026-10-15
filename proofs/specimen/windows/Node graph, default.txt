@@ -38,7 +38,7 @@ window		0 0 120 30
       list item		2 14 114 1	
         heading	Use it for	2 14 7 1	strong
       list item		2 15 114 2	
-        text	Showing how things lead to one another: the states a post moves through, the steps of a build, which tasks wait on which. Patchbay uses it for nodes the user wires by hand.	2 15 114 2	
+        text	Showing how things lead to one another: the states a post moves through, the steps of a build, which tasks wait on which. Graticule lays it out, so it is for graphs the app reads, not ones the user draws: Patchbay, where the user places and wires modules by hand, is a Plotter board instead.	2 15 114 2	
       list item		2 17 114 1	
       list item		2 18 114 1	
         heading	Code	2 18 4 1	strong

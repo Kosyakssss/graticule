@@ -189,6 +189,7 @@ pub enum Effect<C> {
     Write { path: Path, write: Contents, reply: fn(Result<Path, Failure>) -> C },
     Open { target: String },
     Copy { text: String },
+    Paste { reply: fn(String) -> C },
     Job { name: String, work: ledger::Work, reply: Reply<C> },
     Stream { name: String, field: u16, run: Box<dyn FnOnce(Box<dyn Any + Send>) + Send> },
 }
@@ -236,6 +237,7 @@ impl<C> fmt::Debug for Effect<C> {
             Effect::Write { path, .. } => write!(f, "write {}", path.0.display()),
             Effect::Open { target } => write!(f, "open {target}"),
             Effect::Copy { text } => write!(f, "copy {} characters", text.chars().count()),
+            Effect::Paste { .. } => write!(f, "paste"),
             Effect::Job { name, .. } => write!(f, "run “{name}”"),
             Effect::Stream { name, .. } => write!(f, "stream “{name}”"),
         }
@@ -314,6 +316,11 @@ impl<C> Cx<C> {
 
     pub fn copy(&mut self, text: impl Into<String>) {
         self.effects.push(Effect::Copy { text: text.into() });
+    }
+
+    /// Reads the text on the clipboard and hands it to `reply`, empty when there is none: `cx.paste(Cmd::Pasted)`. The command log keeps what was pasted, so a replay pastes the same.
+    pub fn paste(&mut self, reply: fn(String) -> C) {
+        self.effects.push(Effect::Paste { reply });
     }
 
     /// Runs `work` in the background, shown by `name` in the status line while it runs. Its result comes back as `reply`. Give it the parts of the facts it needs; Ledger's types share their storage, so cloning a long list costs little.

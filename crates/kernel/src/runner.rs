@@ -2426,6 +2426,7 @@ impl<A: App> Runner<A> {
             Effect::Stream { name, .. } => self.errand("stream", name.clone(), "running"),
             Effect::Open { target } => self.errand("open", target.clone(), "done"),
             Effect::Copy { text } => self.errand("copy", format!("{} characters", text.chars().count()), "done"),
+            Effect::Paste { .. } => self.errand("paste", "the clipboard".to_string(), "running"),
         }
         match effect {
             Effect::SaveAs { name, write, reply } => {
@@ -2481,6 +2482,10 @@ impl<A: App> Runner<A> {
                 }
             }
             Effect::Copy { text } => self.copy(text),
+            Effect::Paste { reply } => {
+                let text = self.clipboard().and_then(|c| c.get_text().ok()).unwrap_or_default();
+                self.spawn("Pasting".to_string(), move || Some(Box::new(text)), Box::new(move |done| done.downcast::<String>().ok().map(|text| reply(*text))), None);
+            }
         }
         self.stale = true;
     }

@@ -164,6 +164,36 @@ impl Board {
         })
     }
 
+    /// A board of only `keys` and the bindings between them: what copying them takes.
+    pub fn excerpt(&self, keys: &[Key<Shape>]) -> Board {
+        let inside: HashSet<Key<Shape>> = keys.iter().copied().filter(|k| self.shapes.has(*k)).collect();
+        let mut part = Board::default();
+        for shape in self.stacked().into_iter().filter(|s| inside.contains(&s.id)) {
+            let _ = part.shapes.push(shape.clone());
+        }
+        for b in self.touching(keys).into_iter().filter_map(|b| self.bindings.find(b)).filter(|b| inside.contains(&b.arrow) && inside.contains(&b.to)) {
+            let _ = part.bindings.push(b.clone());
+        }
+        part
+    }
+
+    /// Puts every shape of `other` on top of the stack, in its own order, moved by `dx` and `dy`, with new keys from `key` and its bindings between them, and says what the new shapes' keys are.
+    pub fn paste(&mut self, other: &Board, dx: f64, dy: f64, mut key: impl FnMut() -> u128) -> Vec<Key<Shape>> {
+        let mut made = Vec::new();
+        for shape in other.stacked() {
+            let id = Key::from_raw(key());
+            let _ = self.add(Shape { id, x: shape.x + dx, y: shape.y + dy, ..shape.clone() });
+            made.push((shape.id, id));
+        }
+        let new = |old: Key<Shape>| made.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
+        for b in other.bindings.iter() {
+            if let (Some(arrow), Some(to)) = (new(b.arrow), new(b.to)) {
+                let _ = self.bindings.push(Binding { id: Key::from_raw(key()), arrow, to, ..b.clone() });
+            }
+        }
+        made.into_iter().map(|(_, n)| n).collect()
+    }
+
     /// Locks or unlocks shapes. A locked shape can't be moved, resized, written in or drawn in another ink.
     pub fn lock(&mut self, keys: &[Key<Shape>], locked: bool) -> Outcome {
         let mut outcome = Outcome::Nothing;

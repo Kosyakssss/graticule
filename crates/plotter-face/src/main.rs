@@ -86,6 +86,9 @@ const SMALL: usize = 4_096;
 /// How far the arrow keys move the chosen shapes, in page units.
 const STEP: f64 = 10.0;
 
+/// How far a pasted board lands from where it was, in page units, across and down.
+const PASTED: f64 = 16.0;
+
 /// The most a canvas shows, in points: what is in sight through the camera on the largest screen.
 const SIGHT: (f64, f64) = (3_840.0, 2_160.0);
 
@@ -132,6 +135,12 @@ enum Cmd {
     MoveUp,
     #[label("Move down")]
     MoveDown,
+    #[label("Copy")]
+    Copy,
+    #[label("Paste")]
+    Paste,
+    #[internal]
+    Pasted(String),
     #[label("Lock")]
     Lock,
     #[label("Unlock")]
@@ -165,7 +174,7 @@ impl App for Whiteboard {
 
     fn available(&self, cmd: &Cmd) -> Available {
         match cmd {
-            Cmd::Remove | Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::ToFront | Cmd::ToBack | Cmd::Lock | Cmd::Unlock => {
+            Cmd::Remove | Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::ToFront | Cmd::ToBack | Cmd::Lock | Cmd::Unlock | Cmd::Copy => {
                 no_if(self.chosen.is_empty(), t!("Choose a shape first"))
             }
             Cmd::ChooseAll if self.chosen.len() == self.board.shapes.len() && !self.board.shapes.is_empty() => No(t!("Everything is chosen already")),
@@ -178,7 +187,7 @@ impl App for Whiteboard {
             Cmd::Arrow => no_if(self.tool == Tool::Arrow, t!("Drawing arrows already")),
             Cmd::Draw => no_if(self.tool == Tool::Draw, t!("Drawing freehand already")),
             Cmd::Write { .. } => no_if(self.chosen.len() > 1, t!("Choose one shape at most")),
-            Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
+            Cmd::Paste | Cmd::Pasted(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
         }
     }
 
@@ -199,6 +208,18 @@ impl App for Whiteboard {
                 let _ = self.chosen.choose(&ledger::Choose::Clear);
                 self.board.delete(&keys)
             }
+            Cmd::Copy => {
+                let keys: Vec<_> = self.chosen.iter().collect();
+                let part = self.board.excerpt(&keys);
+                let count = part.shapes.len();
+                cx.copy(plotter::svg(&part));
+                cx.say(t!("Copied {count} shapes"))
+            }
+            Cmd::Paste => {
+                cx.paste(Cmd::Pasted);
+                Outcome::Nothing
+            }
+            Cmd::Pasted(text) => self.paste(&text, cx),
             Cmd::Lock | Cmd::Unlock => {
                 let keys: Vec<_> = self.chosen.iter().collect();
                 let locking = matches!(cmd, Cmd::Lock);
@@ -427,6 +448,26 @@ impl Whiteboard {
             None => Point::new(self.camera.x + 40.0, self.camera.y + 40.0),
         };
         let mut shape = Shape::new(Key::default(), Kind::Text(words.to_string()), Bounds::new(at.x, at.y, plotter::text_width(words), plotter::LINE));
+        shape.ink = self.pen.ink();
+        let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None };
+        self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw())
+    }
+
+    /// Puts what was pasted on the board: a board copied from here or saved as SVG, moved a little so it doesn't hide what it came from, or any other text as a text shape.
+    fn paste(&mut self, text: &str, cx: &mut Cx<Cmd>) -> Outcome {
+        if let Some(board) = Board::from_svg(text) {
+            let made = self.board.paste(&board, PASTED, PASTED, || cx.key::<Shape>().raw());
+            let count = made.len();
+            let _ = self.chosen.choose(&ledger::Choose::All(made.into_iter().map(Key::raw).collect()));
+            let _ = cx.say(t!("Pasted {count} shapes"));
+            return Outcome::Changed;
+        }
+        let words = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if words.is_empty() {
+            return cx.say(t!("The clipboard holds nothing to paste"));
+        }
+        let at = Point::new(self.camera.x + 40.0, self.camera.y + 40.0);
+        let mut shape = Shape::new(Key::default(), Kind::Text(words.clone()), Bounds::new(at.x, at.y, plotter::text_width(&words), plotter::LINE));
         shape.ink = self.pen.ink();
         let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None };
         self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw())

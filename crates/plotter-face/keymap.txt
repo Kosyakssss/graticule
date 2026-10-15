@@ -11,3 +11,5 @@ up: move-up
 down: move-down
 primary+a: choose-all
 primary+shift+p: palette
+primary+c: copy
+primary+v: paste

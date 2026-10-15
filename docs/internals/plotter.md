@@ -63,6 +63,12 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **Here.** `Board::lock` and `Board::restyle` change what the keys name and leave locked shapes alone, as moving, resizing and writing already did. The style for the next shape belongs to the app, not the board: the face keeps its ink as a session fact chosen by a select, and since the view never writes back, the face's `update` notices an edit that touches that fact and restyles the chosen shapes in the same step, so one undo takes back both. A locked shape shows no handles, since none would take a drag.
 
+## Copy and paste
+
+**tldraw.** Copying puts the chosen shapes and the bindings between them on the clipboard; pasting puts them back with new ids, and pasting text, images or URLs makes shapes of them.
+
+**Here.** `Board::excerpt` is the chosen shapes and only the bindings whose two ends are both among them, and the face copies it as SVG, the same file a board saves as, so it pastes into anything that reads SVG and comes back whole through the metadata. `Board::paste` lays another board on top of the stack in its own order, with new keys from the app and its bindings remapped, so an arrow pasted with its boxes stays on them. Reading the clipboard is an effect, `cx.paste(Cmd::Pasted)`, so the text arrives as an internal command and the log keeps it; a replay pastes the same thing whatever the clipboard holds then. Text that isn't a board becomes a text shape. Images wait on an image shape.
+
 ## Also in tldraw, later here
 
-Groups, frames and pages; a read-only board, which waits on a way for an app to say that undo can't run, since undo would otherwise change a board meant to stay as it is; pasting anything and dropping files; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; rotation, and a minimap. Export to SVG comes with the core, since a board must render without a screen.
+Groups, frames and pages; a read-only board, which waits on a way for an app to say that undo can't run, since undo would otherwise change a board meant to stay as it is; pasting images and dropping files; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; rotation, and a minimap. Export to SVG comes with the core, since a board must render without a screen.

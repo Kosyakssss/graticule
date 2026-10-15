@@ -27,14 +27,16 @@ window		0 0 99 15
     button	Move right	15 12 12 1	
     button	Move up	29 12 11 1	
     button	Move down	42 12 13 1	
-    button	Lock	57 12 6 1	
-    button	Unlock	65 12 8 1	
-    button	Choose everything	2 13 23 1	
-    button	Bring to front	27 13 12 1	
-    button	Send to back	41 13 12 1	
-    button	Show everything	55 13 15 1	
-    button	Open	72 13 6 1	unavailable (Choose a file first)
-    button	Save	80 13 6 1	unavailable (Choose a file first)
+    button	Copy	57 12 13 1	
+    button	Paste	72 12 14 1	
+    button	Lock	88 12 6 1	
+    button	Unlock	2 13 8 1	
+    button	Choose everything	12 13 23 1	
+    button	Bring to front	37 13 12 1	
+    button	Send to back	51 13 12 1	
+    button	Show everything	65 13 15 1	
+    button	Open	82 13 6 1	unavailable (Choose a file first)
+    button	Save	90 13 6 1	unavailable (Choose a file first)
     button	Export a picture	2 14 14 1	unavailable (Choose a file first)
     button	Undo	18 14 13 1	unavailable (Nothing to undo)
     button	Redo	33 14 19 1	unavailable (Nothing to redo)

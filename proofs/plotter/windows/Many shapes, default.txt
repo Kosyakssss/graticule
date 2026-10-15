@@ -1,5 +1,5 @@
 window		0 0 120 30	
-  page	Plotter	0 0 120 25	
+  page	Plotter	0 0 120 24	
     group		2 3 116 1	
       group		2 3 46 1	
         toggle button	Choose	2 3 9 1	unavailable (Choosing already)
@@ -12,36 +12,38 @@ window		0 0 120 30
         select	Ink	55 3 11 1	
       button	Remove	68 3 9 1	unavailable (Choose a shape first)
       button	Show everything	79 3 18 1	
-    canvas	Board, 2000 shapes	2 5 116 17	
-    group		2 23 116 1	
-      group		2 23 98 1	
-        text field	File	2 23 86 1	
-        button	Choose…	90 23 10 1	
-      button	Open	102 23 7 1	unavailable (Choose a file first)
-      button	Save	111 23 7 1	unavailable (Choose a file first)
-  alert		2 25 116 1	
-  status		2 26 116 1	
-  toolbar		2 27 116 3	
-    button	Choose	2 27 10 1	unavailable (Choosing already)
-    button	Rectangle	14 27 12 1	
-    button	Ellipse	28 27 9 1	
-    button	Arrow	39 27 9 1	
-    button	Draw	50 27 8 1	
-    button	Write…	60 27 10 1	
-    button	Remove	72 27 16 1	unavailable (Choose a shape first)
-    button	Move left	90 27 11 1	unavailable (Choose a shape first)
-    button	Move right	103 27 12 1	unavailable (Choose a shape first)
-    button	Move up	2 28 11 1	unavailable (Choose a shape first)
-    button	Move down	15 28 13 1	unavailable (Choose a shape first)
-    button	Lock	30 28 6 1	unavailable (Choose a shape first)
-    button	Unlock	38 28 8 1	unavailable (Choose a shape first)
-    button	Choose everything	48 28 23 1	
-    button	Bring to front	73 28 12 1	unavailable (Choose a shape first)
-    button	Send to back	87 28 12 1	unavailable (Choose a shape first)
-    button	Show everything	101 28 15 1	
-    button	Open	2 29 6 1	unavailable (Choose a file first)
-    button	Save	10 29 6 1	unavailable (Choose a file first)
-    button	Export a picture	18 29 14 1	unavailable (Choose a file first)
-    button	Undo	34 29 13 1	unavailable (Nothing to undo)
-    button	Redo	49 29 19 1	unavailable (Nothing to redo)
-    button	Open the palette	70 29 28 1	
+    canvas	Board, 2000 shapes	2 5 116 16	
+    group		2 22 116 1	
+      group		2 22 98 1	
+        text field	File	2 22 86 1	
+        button	Choose…	90 22 10 1	
+      button	Open	102 22 7 1	unavailable (Choose a file first)
+      button	Save	111 22 7 1	unavailable (Choose a file first)
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Choose	2 26 10 1	unavailable (Choosing already)
+    button	Rectangle	14 26 12 1	
+    button	Ellipse	28 26 9 1	
+    button	Arrow	39 26 9 1	
+    button	Draw	50 26 8 1	
+    button	Write…	60 26 10 1	
+    button	Remove	72 26 16 1	unavailable (Choose a shape first)
+    button	Move left	90 26 11 1	unavailable (Choose a shape first)
+    button	Move right	103 26 12 1	unavailable (Choose a shape first)
+    button	Move up	2 27 11 1	unavailable (Choose a shape first)
+    button	Move down	15 27 13 1	unavailable (Choose a shape first)
+    button	Copy	30 27 13 1	unavailable (Choose a shape first)
+    button	Paste	45 27 14 1	
+    button	Lock	61 27 6 1	unavailable (Choose a shape first)
+    button	Unlock	69 27 8 1	unavailable (Choose a shape first)
+    button	Choose everything	79 27 23 1	
+    button	Bring to front	104 27 12 1	unavailable (Choose a shape first)
+    button	Send to back	2 28 12 1	unavailable (Choose a shape first)
+    button	Show everything	16 28 15 1	
+    button	Open	33 28 6 1	unavailable (Choose a file first)
+    button	Save	41 28 6 1	unavailable (Choose a file first)
+    button	Export a picture	49 28 14 1	unavailable (Choose a file first)
+    button	Undo	65 28 13 1	unavailable (Nothing to undo)
+    button	Redo	80 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 28 1	

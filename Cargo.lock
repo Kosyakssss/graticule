@@ -1199,6 +1199,7 @@ dependencies = [
  "ledger",
  "proptest",
  "ropey",
+ "skrifa",
  "unicode-segmentation",
 ]
 

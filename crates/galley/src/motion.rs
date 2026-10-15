@@ -84,9 +84,9 @@ impl Doc {
                 let column = at - self.line(line).start;
                 let target = match motion {
                     Motion::Up if line == 0 => return 0,
-                    Motion::Up => line - 1,
-                    _ if line + 1 >= self.lines() => return self.len(),
-                    _ => line + 1,
+                    Motion::Up => self.shown(line - 1),
+                    _ if line + 1 + self.folded(line) >= self.lines() => return self.len(),
+                    _ => line + 1 + self.folded(line),
                 };
                 let range = self.line(target);
                 (range.start + column).min(range.end)
@@ -131,11 +131,11 @@ impl Doc {
         let count = wrap::rows(&text, width).count();
         let (line, k) = match (down, k) {
             (false, 0) if line == 0 => return 0,
-            (false, 0) => (line - 1, usize::MAX),
+            (false, 0) => (self.shown(line - 1), usize::MAX),
             (false, k) => (line, k - 1),
             (true, k) if k + 1 < count => (line, k + 1),
-            (true, _) if line + 1 >= self.lines() => return self.len(),
-            (true, _) => (line + 1, 0),
+            (true, _) if line + 1 + self.folded(line) >= self.lines() => return self.len(),
+            (true, _) => (line + 1 + self.folded(line), 0),
         };
         let span = self.line(line);
         let text = self.text(span.clone());

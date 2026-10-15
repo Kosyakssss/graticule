@@ -36,6 +36,14 @@ The kernel can't depend on Galley, since Galley must build without a screen, and
 
 The keys follow each platform's conventions in `field::editor_key`, beside a text field's, so the two never disagree. Typing joins into one undo step per word by the same rule as a field's.
 
+## Folding
+
+Folds are kept by the `Doc` beside its selections, not by the view, because they have to move with the text the same way: each fold is the characters from the start of its first hidden line to the end of its last, mapped through every change as a cursor is, and dropped when a change reaches into it, its line breaks included, since then its lines are no longer the ones that were folded. Typing at the end of the line a fold hangs under leaves it closed. A cursor that ends up inside a fold, by a click, a find or select all, opens it, so nothing the user is working on is ever hidden. Up and Down step over a fold, as from the line it hangs under to the line after it.
+
+Folds travel with the selections in the same `Op::Select`, as a `folds` entry beside the spans, which is left out when there are none, so a log written before folding reads the same. That makes folding behave as moving the cursor does: never an undo step of its own, and undo of the next change brings back the folds as they were before it.
+
+Which lines to fold is the app's. `Doc::fold` takes any lines, which is where a syntax tree's blocks would come in; `Doc::block` finds, on a copy in a job, the lines indented further than the cursor's, or else the block the cursor's line belongs to, since a block may run to the end of a long file. The kernel reads folds through `Editable::folded` and `Editable::shown`, which default to none, so the editor skips folded lines and the wheel scrolls by the lines that show.
+
 ## Laws
 
-`crates/galley/src/laws.rs`: any sequence of edits at any cursors, over text with combining marks, emoji and line breaks, undoes to the start and redoes to the end through its recorded operations, bringing back the selections each time as well as the text; and the selections are valid after every step. Every app with an editor also gets the universal laws, which Assay drives by typing into its editors as well as its fields.
+`crates/galley/src/laws.rs`: any sequence of edits at any cursors, over text with combining marks, emoji and line breaks, undoes to the start and redoes to the end through its recorded operations, bringing back the selections each time as well as the text; and the selections are valid after every step. The edits include folding any lines, folding the block at the cursor and unfolding, and validity includes the folds: in order, apart, each whole lines under a line that shows, with no cursor inside one; undo and redo bring the folds back with the selections. Every app with an editor also gets the universal laws, which Assay drives by typing into its editors as well as its fields.

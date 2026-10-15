@@ -330,10 +330,11 @@ pub enum Kind {
         head: u32,
         single: bool,
     },
-    /// One line of an editor, its text without the line break, and how many rows it wraps into.
+    /// One line of an editor, its text without the line break, how many rows it wraps into, and how many lines are folded away under it.
     EditLine {
         line: u32,
         rows: u16,
+        folded: u32,
     },
 }
 
@@ -626,6 +627,7 @@ pub struct EditorInfo {
     pub path: ErasedPath,
     pub selected: fn(&dyn std::any::Any, ErasedPath) -> String,
     pub line_start: fn(&dyn std::any::Any, ErasedPath, usize) -> usize,
+    pub step: fn(&dyn std::any::Any, ErasedPath, usize, i32) -> usize,
 }
 
 /// What the kernel knows about a list it can move around in and choose from, without knowing the type of its items.

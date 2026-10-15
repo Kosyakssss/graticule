@@ -998,8 +998,19 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
                 }
             }
         }
-        (Layer::Over, Kind::EditLine { .. }) => {
+        (Layer::Over, Kind::EditLine { folded, .. }) => {
             let (a, style, theme) = (n.area, p.m.mono(), p.theme);
+            if folded > 0
+                && let Some((k, row)) = crate::field::rows(text, a.cols.max(1) as usize).enumerate().take(a.rows.max(0) as usize).last()
+            {
+                let used = cells_in(&text[row]) + 1;
+                let marker = match folded {
+                    1 => "… 1 line".to_string(),
+                    n => format!("… {n} lines"),
+                };
+                let r = p.rect(a);
+                p.cells((r.x + used as f32 * p.m.cell_w, r.y + k as f32 * p.m.cell_h), (a.cols - used).max(0), &marker, style, theme.faint);
+            }
             let r = p.rect(a);
             let (width, cell_h, cw) = (a.cols.max(1) as usize, p.m.cell_h, p.m.cell_w);
             let composing = tree.str(look.composing);

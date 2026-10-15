@@ -3684,7 +3684,8 @@ impl<A: App> Runner<A> {
     fn scroll_editor(&mut self, i: u32, by: i32) -> bool {
         let n = self.tree.nodes[i as usize];
         let Kind::Editor { count, first, .. } = n.kind else { return false };
-        let to = (first as i32).saturating_add(by).clamp(0, (count as i32 - n.area.rows).max(0)) as u32;
+        let Some(info) = self.tree.editors.iter().find(|e| e.node == i).copied() else { return false };
+        let to = ((info.step)(&self.facts as &dyn Any, info.path, first as usize, by) as u32).min((count as i32 - n.area.rows).max(0) as u32).max(if by < 0 { 0 } else { first });
         if to == first {
             return false;
         }

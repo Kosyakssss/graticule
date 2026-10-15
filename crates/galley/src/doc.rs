@@ -5,6 +5,7 @@ use ledger::{Change, Editable, ErasedPath, Field, Op, Outcome, Step, Travel, Typ
 use ropey::Rope;
 
 use crate::changes::Changes;
+use crate::fold::Folds;
 use crate::motion::{self, Motion};
 use crate::selection::{Selections, Span};
 
@@ -13,13 +14,14 @@ use crate::selection::{Selections, Span};
 pub struct Doc {
     rope: Rope,
     selections: Selections,
+    pub(crate) folds: Folds,
     at: ErasedPath,
     revision: u64,
 }
 
 impl Doc {
     pub fn new(text: &str) -> Self {
-        Doc { rope: Rope::from_str(text), selections: Selections::default(), at: ErasedPath::ROOT, revision: 0 }
+        Doc { rope: Rope::from_str(text), selections: Selections::default(), folds: Folds::default(), at: ErasedPath::ROOT, revision: 0 }
     }
 
     /// How many characters it holds.
@@ -73,6 +75,7 @@ impl Doc {
     /// Puts the cursors and selections somewhere else.
     pub fn select(&mut self, selections: Selections) {
         self.selections = Selections::new(selections.spans().to_vec(), selections.primary_index(), self.len());
+        self.open_at_cursors();
     }
 
     /// Replaces a range of characters with new text, carrying the cursors with it. A range past the end changes nothing.
@@ -90,6 +93,7 @@ impl Doc {
         }
         let len = self.len();
         self.selections.map(changes, len);
+        self.folds.map(changes);
         outcome
     }
 
@@ -157,6 +161,7 @@ impl Doc {
             (false, _) => Span::cursor(doc.motion(s.head, motion)),
         });
         self.selections = selections;
+        self.open_at_cursors();
     }
 
     /// Puts a single cursor at `at`, or extends the primary selection to it.
@@ -164,12 +169,14 @@ impl Doc {
         let at = at.min(self.len());
         let anchor = if extend { self.selections.primary().anchor } else { at };
         self.selections = Selections::new(vec![Span::new(anchor, at)], 0, self.len());
+        self.open_at_cursors();
     }
 
     /// Adds a cursor at `at` and makes it primary.
     pub fn add_cursor(&mut self, at: usize) {
         let len = self.len();
         self.selections.add(Span::cursor(at), len);
+        self.open_at_cursors();
     }
 
     /// Adds a cursor on the line above or below the primary one, as near its column as that line allows, and makes it primary.
@@ -181,6 +188,7 @@ impl Doc {
 
     pub fn select_all(&mut self) {
         self.selections = Selections::new(vec![Span::new(0, self.len())], 0, self.len());
+        self.open_at_cursors();
     }
 
     /// Keeps only the primary cursor or selection, and when that is all there is, lets go of what it selects.
@@ -249,6 +257,7 @@ impl Doc {
     pub(crate) fn swap(&mut self, rope: Rope, selections: Selections) {
         self.rope = rope;
         self.selections = selections;
+        self.folds = Folds::default();
         self.revision += 1;
     }
 
@@ -293,18 +302,23 @@ impl From<&str> for Doc {
 }
 
 impl Field for Doc {
-    type Snap = Selections;
+    type Snap = (Selections, Folds);
 
-    fn snap(&self) -> Selections {
-        self.selections.clone()
+    fn snap(&self) -> (Selections, Folds) {
+        (self.selections.clone(), self.folds.clone())
     }
 
-    fn diff(&self, before: &Selections, at: ErasedPath, out: &mut Vec<Op>) {
+    fn diff(&self, before: &(Selections, Folds), at: ErasedPath, out: &mut Vec<Op>) {
         if self.at != at {
             ledger::replaced(std::any::type_name::<Self>());
         }
-        if self.selections != *before {
-            out.push(Op::Select { selection: at, before: before.value(), after: self.selections.value() });
+        if self.selections != before.0 || self.folds != before.1 {
+            let value = |selections: &Selections, folds: &Folds| {
+                let mut value = selections.value();
+                folds.value_into(&mut value);
+                value
+            };
+            out.push(Op::Select { selection: at, before: value(&before.0, &before.1), after: value(&self.selections, &self.folds) });
         }
     }
 
@@ -343,15 +357,17 @@ impl Field for Doc {
                 self.revision += 1;
                 true
             }
-            ([], Op::Select { after, .. }) => match Selections::from_value(after) {
-                Some(selections) => {
+            ([], Op::Select { after, .. }) => match (Selections::from_value(after), Folds::from_value(after)) {
+                (Some(selections), Some(folds)) => {
                     self.selections = selections;
+                    self.folds = folds;
                     true
                 }
-                None => false,
+                _ => false,
             },
             ([], Op::Set { after: Value::Str(s), .. }) => {
                 self.rope = Rope::from_str(s);
+                self.folds = Folds::default();
                 self.revision += 1;
                 let len = self.len();
                 self.selections.each(len, |s| s);
@@ -398,6 +414,14 @@ impl Editable for Doc {
         let len = self.len();
         out.extend(self.selections.spans().iter().map(|s| (s.anchor.min(len), s.head.min(len))));
         self.selections.primary_index()
+    }
+
+    fn folded(&self, line: usize) -> usize {
+        Doc::folded(self, line)
+    }
+
+    fn shown(&self, line: usize) -> usize {
+        Doc::shown(self, line)
     }
 
     fn selected(&self) -> String {

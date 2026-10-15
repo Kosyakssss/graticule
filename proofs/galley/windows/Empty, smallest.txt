@@ -27,6 +27,9 @@ window		0 0 114 16
     button	Add a cursor below	32 14 28 1	unavailable (The cursor is on the last line)
     button	Add the next match	62 14 24 1	unavailable (Select some text first)
     button	Replace all	88 14 11 1	unavailable (Type what to find first)
-    button	Undo	2 15 13 1	unavailable (Nothing to undo)
-    button	Redo	17 15 19 1	unavailable (Nothing to redo)
-    button	Open the palette	38 15 28 1	
+    button	Fold the block	2 15 13 1	unavailable (There is only one line)
+    button	Unfold	17 15 7 1	unavailable (Nothing is folded under this line)
+    button	Unfold everything	26 15 16 1	unavailable (Nothing is folded)
+    button	Undo	44 15 13 1	unavailable (Nothing to undo)
+    button	Redo	59 15 19 1	unavailable (Nothing to redo)
+    button	Open the palette	80 15 28 1	

@@ -42,6 +42,14 @@ enum Cmd {
     ReplaceAll,
     #[internal]
     Replaced(Replacement),
+    #[label("Fold the block")]
+    Fold,
+    #[internal]
+    Folding(Option<galley::Block>),
+    #[label("Unfold")]
+    Unfold,
+    #[label("Unfold everything")]
+    UnfoldAll,
     #[internal]
     Edit(Edit),
 }
@@ -56,7 +64,10 @@ impl App for Galley {
             Cmd::AddCursorAbove => no_if(self.text.line_of(self.text.selections().primary().head) == 0, t!("The cursor is on the first line")),
             Cmd::AddCursorBelow => no_if(self.text.line_of(self.text.selections().primary().head) + 1 >= self.text.lines(), t!("The cursor is on the last line")),
             Cmd::AddNextMatch => no_if(self.text.selections().primary().is_empty(), t!("Select some text first")),
-            Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Replaced(_) | Cmd::NextFound(_) | Cmd::Found(_) | Cmd::Edit(_) => Yes,
+            Cmd::Fold => no_if(self.text.lines() < 2, t!("There is only one line")),
+            Cmd::Unfold => no_if(self.text.folded(self.text.line_of(self.text.selections().primary().head)) == 0, t!("Nothing is folded under this line")),
+            Cmd::UnfoldAll => no_if(self.text.folds().is_empty(), t!("Nothing is folded")),
+            Cmd::Folding(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Replaced(_) | Cmd::NextFound(_) | Cmd::Found(_) | Cmd::Edit(_) => Yes,
         }
     }
 
@@ -132,6 +143,24 @@ impl App for Galley {
                     Err(_) => cx.say(t!("The text changed while the matches were being found, so nothing was replaced")),
                 }
             }
+            Cmd::Fold => {
+                let text = self.text.clone();
+                cx.job(t!("Finding the block"), move || text.block(), Cmd::Folding);
+                Outcome::Nothing
+            }
+            Cmd::Folding(None) => cx.say(t!("Nothing here is indented under another line")),
+            Cmd::Folding(Some(block)) => match self.text.fold_found(&block) {
+                Ok(count) => cx.say(t!("Folded {count} lines")),
+                Err(_) => cx.say(t!("The text changed while the block was being found")),
+            },
+            Cmd::Unfold => {
+                let count = self.text.unfold();
+                cx.say(t!("{count} lines show again"))
+            }
+            Cmd::UnfoldAll => {
+                let count = self.text.unfold_all();
+                cx.say(t!("Unfolded {count} folds"))
+            }
             Cmd::Edit(edit) => edit.apply(self),
         }
     }
@@ -165,6 +194,13 @@ impl App for Galley {
                 galley
             })
             .add("Finding a word", Galley { find: Text::from("the"), ..Galley::with_text(LETTER) })
+            .add("A folded block", {
+                let mut galley = Galley::with_text(CODE);
+                let _ = galley.text.fold(3..7);
+                let at = galley.text.line(2).start;
+                galley.text.place(at, false);
+                galley
+            })
             .add("A long file", Galley::with_text(&(1..=100_000).map(|n| format!("Line {n}\n")).collect::<String>()))
     }
 }
@@ -176,6 +212,8 @@ impl Galley {
 }
 
 const LETTER: &str = "Dear reader,\n\nThe text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.\nEvery change is an operation the ledger keeps, and undo takes it back with the cursors where they were.\n\n    Indented lines keep their indent when Return starts the next one.\n\nWith thanks,\nthe galley\n";
+
+const CODE: &str = "fn main() {\n    let lines = read();\n    for line in lines {\n        if line.is_empty() {\n            continue;\n        }\n        print(line);\n    }\n}\n";
 
 fn main() {
     graticule::run::<Galley>(t!("Galley"));

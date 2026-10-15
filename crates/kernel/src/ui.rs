@@ -1582,7 +1582,7 @@ impl<'a, C, S> Ui<'a, C, S> {
         let node = &mut self.tree.nodes[i as usize];
         (node.name, node.path, node.span, node.subject) = (r, Some(erased), crate::tree::Fill, self.subject);
         let id = node.id;
-        self.tree.editors.push(EditorInfo { node: i, path: erased, selected: selected_in::<F, D>, line_start: line_start_in::<F, D> });
+        self.tree.editors.push(EditorInfo { node: i, path: erased, selected: selected_in::<F, D>, line_start: line_start_in::<F, D>, step: step_in::<F, D> });
         let Some(doc) = self.facts::<F>().and_then(|f| path.get(f)) else { return Placed { ui: self, node: i } };
         let count = doc.line_count().max(1);
         let mut cursors = std::mem::take(&mut self.tree.cursors);
@@ -1598,13 +1598,13 @@ impl<'a, C, S> Ui<'a, C, S> {
             doc.line(line, &mut |chunk| line_text.push_str(chunk));
             crate::field::rows(&line_text, cols).count().max(1)
         };
-        let mut first = (scroll.index as usize).min(count - 1);
+        let mut first = doc.shown((scroll.index as usize).min(count - 1));
         if self.tree.reveal && head < first {
             first = head;
         } else if self.tree.reveal {
             let (mut top, mut used) = (head, wrapped(head));
-            while top > first && used + wrapped(top - 1) <= visible {
-                top -= 1;
+            while top > first && used + wrapped(doc.shown(top - 1)) <= visible {
+                top = doc.shown(top - 1);
                 used += wrapped(top);
             }
             first = top;
@@ -1614,7 +1614,8 @@ impl<'a, C, S> Ui<'a, C, S> {
             let text = self.tree.write(|out| doc.line(line, &mut |chunk| out.push_str(chunk)));
             let s = &self.tree.text[text.start as usize..text.end as usize];
             let rows = crate::field::rows(s, cols).count().max(1);
-            let n = self.tree.add(i, Kind::EditLine { line: line as u32, rows: rows.min(usize::from(u16::MAX)) as u16 }, Some(id.mix(line as u64)), at);
+            let folded = doc.folded(line);
+            let n = self.tree.add(i, Kind::EditLine { line: line as u32, rows: rows.min(usize::from(u16::MAX)) as u16, folded: folded.min(u32::MAX as usize) as u32 }, Some(id.mix(line as u64)), at);
             self.tree.nodes[n as usize].text = text;
             let start = doc.line_start(line);
             let s = &self.tree.text[text.start as usize..text.end as usize];
@@ -1633,7 +1634,7 @@ impl<'a, C, S> Ui<'a, C, S> {
                     carets.push((n, byte(head), k == primary));
                 }
             }
-            (line, used) = (line + 1, used + rows);
+            (line, used) = (line + 1 + folded, used + rows);
             if !marks.is_empty() {
                 self.tree.marks.push((n, marks));
             }
@@ -1881,6 +1882,20 @@ fn selected_in<F: Field, D: Editable>(facts: &dyn Any, path: ledger::ErasedPath)
 
 fn line_start_in<F: Field, D: Editable>(facts: &dyn Any, path: ledger::ErasedPath, line: usize) -> usize {
     facts.downcast_ref::<F>().and_then(|f| f.reach(path.steps())).and_then(|d| d.downcast_ref::<D>()).map_or(0, |d| d.line_start(line))
+}
+
+fn step_in<F: Field, D: Editable>(facts: &dyn Any, path: ledger::ErasedPath, line: usize, by: i32) -> usize {
+    let Some(doc) = facts.downcast_ref::<F>().and_then(|f| f.reach(path.steps())).and_then(|d| d.downcast_ref::<D>()) else { return line };
+    let last = doc.line_count().saturating_sub(1);
+    let mut line = doc.shown(line.min(last));
+    for _ in 0..by.unsigned_abs() {
+        line = match by > 0 {
+            true if line + 1 + doc.folded(line) <= last => line + 1 + doc.folded(line),
+            false if line > 0 => doc.shown(line - 1),
+            _ => break,
+        };
+    }
+    line
 }
 
 fn keys<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, selection: ledger::ErasedPath, ranks: Option<&crate::table::Ranks>, span: Option<(u128, u128)>) -> Vec<u128> {

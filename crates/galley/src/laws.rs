@@ -12,6 +12,10 @@ enum Act {
     ReplaceAll(String, String),
     Replacement(String, String, bool),
     SelectMatches(String),
+    Fold(usize, usize),
+    FoldBlock,
+    Unfold,
+    UnfoldAll,
 }
 
 fn text() -> impl Strategy<Value = String> {
@@ -78,6 +82,10 @@ fn act() -> impl Strategy<Value = Act> {
         (text(), text()).prop_map(|(a, b)| Act::ReplaceAll(a, b)),
         (text(), text(), any::<bool>()).prop_map(|(a, b, logged)| Act::Replacement(a, b, logged)),
         text().prop_map(Act::SelectMatches),
+        (0..8usize, 0..4usize).prop_map(|(from, count)| Act::Fold(from, count)),
+        Just(Act::FoldBlock),
+        Just(Act::Unfold),
+        Just(Act::UnfoldAll),
     ]
 }
 
@@ -99,6 +107,20 @@ fn run(doc: &mut Doc, act: &Act) {
         Act::SelectMatches(needle) => {
             let _ = doc.select_matches(needle);
         }
+        Act::Fold(from, count) => {
+            let _ = doc.fold(*from..from + count);
+        }
+        Act::FoldBlock => {
+            if let Some(block) = doc.block() {
+                let _ = doc.fold_found(&block);
+            }
+        }
+        Act::Unfold => {
+            let _ = doc.unfold();
+        }
+        Act::UnfoldAll => {
+            let _ = doc.unfold_all();
+        }
     }
 }
 
@@ -109,13 +131,24 @@ fn valid(doc: &Doc) -> bool {
         && selections.primary_index() < spans.len()
         && spans.iter().all(|s| s.anchor <= doc.len() && s.head <= doc.len())
         && spans.windows(2).all(|w| w[0].range().end <= w[1].range().start && w[0].range() != w[1].range())
+        && folds_valid(doc)
+}
+
+fn folds_valid(doc: &Doc) -> bool {
+    let folds = doc.folds().ranges();
+    folds.windows(2).all(|w| w[0].end < w[1].start)
+        && folds.iter().all(|f| {
+            let (first, last) = (doc.line_of(f.start), doc.line_of(f.end));
+            first > 0 && doc.line(first).start == f.start && doc.line(last).end == f.end && doc.folded(first - 1) == last - first + 1 && doc.shown(last) == first - 1
+        })
+        && doc.selections().spans().iter().all(|s| doc.shown(doc.line_of(s.head)) == doc.line_of(s.head))
 }
 
 proptest! {
     #[test]
     fn any_sequence_of_edits_undoes_to_the_start_and_redoes_to_the_end(start in text(), acts in proptest::collection::vec(act(), 0..24)) {
         let mut doc = Doc::new(&start);
-        let first = doc.selections().clone();
+        let first = (doc.selections().clone(), doc.folds().clone());
         let tx = Transaction::begin();
         for act in &acts {
             let before = doc.snap();
@@ -127,17 +160,17 @@ proptest! {
             }
         }
         let ops = tx.end();
-        let (end, last) = (doc.clone(), doc.selections().clone());
+        let (end, last) = (doc.clone(), (doc.selections().clone(), doc.folds().clone()));
         for op in ops.iter().rev() {
             prop_assert!(doc.apply(&[], &op.inverse()));
         }
         prop_assert_eq!(doc.to_string(), start);
-        prop_assert_eq!(doc.selections(), &first);
+        prop_assert_eq!((doc.selections(), doc.folds()), (&first.0, &first.1));
         for op in &ops {
             prop_assert!(doc.apply(&[], op));
         }
         prop_assert_eq!(&doc, &end);
-        prop_assert_eq!(doc.selections(), &last);
+        prop_assert_eq!((doc.selections(), doc.folds()), (&last.0, &last.1));
     }
 
     #[test]

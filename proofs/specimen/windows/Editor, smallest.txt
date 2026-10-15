@@ -1,6 +1,6 @@
 window		0 0 42 22	
   page	Editor	0 0 42 7	
-    list		2 3 38 3	22 items
+    list		2 3 38 3	23 items
       list item		2 3 36 3	
         text	A box of plain text to read and edit, of any length: a note, a letter, a source file, a log of a hundred megabytes. It shows the text in mono, each line wrapped at the editor's width, with every cursor and selection the user has made.	2 3 36 3	
   alert		2 7 38 1	

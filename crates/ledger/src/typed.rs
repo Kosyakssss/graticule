@@ -58,6 +58,17 @@ pub trait Editable: Field {
     /// Each cursor or selection as where it began and where it is, in order; returns which is primary.
     fn cursors(&self, out: &mut Vec<(usize, usize)>) -> usize;
 
+    /// How many lines are folded away under `line`, hidden until they are unfolded.
+    fn folded(&self, line: usize) -> usize {
+        let _ = line;
+        0
+    }
+
+    /// The line that shows for `line`: itself, or the line it is folded away under.
+    fn shown(&self, line: usize) -> usize {
+        line
+    }
+
     /// What the selections hold, one line each: what copying takes.
     fn selected(&self) -> String;
 }

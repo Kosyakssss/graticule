@@ -3,6 +3,7 @@
 mod changes;
 mod doc;
 mod find;
+mod fold;
 mod motion;
 mod selection;
 
@@ -12,5 +13,6 @@ mod laws;
 pub use changes::Changes;
 pub use doc::Doc;
 pub use find::{Next, Replacement, Stale};
+pub use fold::{Block, Folds};
 pub use motion::Motion;
 pub use selection::{Selections, Span};

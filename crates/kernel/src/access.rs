@@ -146,8 +146,12 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 node.set_value(text);
             }
             Kind::Editor { .. } => node.set_label(name),
-            Kind::EditLine { line, .. } => {
-                node.set_label(format!("Line {}", line + 1));
+            Kind::EditLine { line, folded, .. } => {
+                node.set_label(match folded {
+                    0 => format!("Line {}", line + 1),
+                    1 => format!("Line {}, with a line folded away under it", line + 1),
+                    n => format!("Line {}, with {n} lines folded away under it", line + 1),
+                });
                 node.set_value(text);
             }
             Kind::Canvas { .. } => {

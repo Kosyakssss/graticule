@@ -106,6 +106,7 @@ pub struct FactPath<F, T> {
     path: ErasedPath,
     name: &'static str,
     flag: Option<u8>,
+    link: Option<u8>,
     types: PhantomData<fn(&F) -> &T>,
 }
 
@@ -124,8 +125,8 @@ impl<F, T> fmt::Debug for FactPath<F, T> {
 }
 
 impl<F: Field, T: Field> FactPath<F, T> {
-    pub const fn field(index: u16, name: &'static str, kind: Kind, flag: Option<u8>) -> Self {
-        Self { path: ErasedPath::field(index, kind), name, flag, types: PhantomData }
+    pub const fn field(index: u16, name: &'static str, kind: Kind, flag: Option<u8>, link: Option<u8>) -> Self {
+        Self { path: ErasedPath::field(index, kind), name, flag, link, types: PhantomData }
     }
 
     pub const fn erased(&self) -> ErasedPath {
@@ -144,6 +145,10 @@ impl<F: Field, T: Field> FactPath<F, T> {
         self.flag
     }
 
+    pub const fn link(&self) -> Option<u8> {
+        self.link
+    }
+
     pub fn get<'a>(&self, facts: &'a F) -> Option<&'a T> {
         facts.reach(self.path.steps())?.downcast_ref()
     }
@@ -157,7 +162,7 @@ impl<F: Field, T: Field> FactPath<F, T> {
         for step in next.path.steps() {
             path = path.push(*step, next.kind());
         }
-        FactPath { path, name: next.name, flag: next.flag, types: PhantomData }
+        FactPath { path, name: next.name, flag: next.flag, link: next.link, types: PhantomData }
     }
 }
 
@@ -167,7 +172,7 @@ where
 {
     /// The record with this key inside a list: `Todo::items.at(key).then(Item::title)`.
     pub fn at(self, key: Key<T>) -> FactPath<F, T> {
-        FactPath { path: self.path.push(Step::Key(key.raw()), self.kind()), name: self.name, flag: None, types: PhantomData }
+        FactPath { path: self.path.push(Step::Key(key.raw()), self.kind()), name: self.name, flag: None, link: None, types: PhantomData }
     }
 }
 
@@ -292,13 +297,17 @@ pub struct FieldInfo {
     pub kind: Kind,
 }
 
-/// A `Facts` type with a `#[key]` field, so it can live in a `List`. Its yes-or-no fields are counted by every list that holds it.
+/// A `Facts` type with a `#[key]` field, so it can live in a `List`. Its yes-or-no fields are counted by every list that holds it, and its fields holding another record's key are its links, which every list that holds it can follow backwards.
 pub trait Record: Facts {
     const FLAGS: usize;
+    const LINKS: usize;
 
     fn key(&self) -> Key<Self>;
 
     fn flags(&self) -> u64;
+
+    /// The raw key its `i`th link holds.
+    fn link(&self, i: usize) -> u128;
 }
 
 /// These facts can find a `T` by its key. Generated for every `List<T>` field; labels and `available` use it.

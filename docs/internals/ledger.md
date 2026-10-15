@@ -59,3 +59,7 @@ Loro is ten to twenty times faster per change and twenty-five times faster to lo
 ## Why saving doesn't go through the CRDT yet
 
 The spec first had the CRDT save the facts. Ledger's own snapshot is a plain `Value`: it loads in the time it takes to decode, it is readable by a newer version through declared migrations (field names, not CRDT internals), and it needs no CRDT at all on a single device. The CRDT document is needed once there is a second device, and it can be built then from the snapshot. So for now Ledger saves its own format, and the question of whether to switch is spec §15, question 3, for the owner.
+
+## Links
+
+A list keeps, for each field of its records that holds another record's key (a `Key<U>` other than the record's own `#[key]`), an ordered set of (the key held, the record holding it), next to the tallies and kept at the same four places: inserting, removing, changing a record and applying an operation to one, which is how undo and sync reach it. `List::linked(Binding::to, shape)` then gives the records holding that key at the cost of the ones found, which is how Plotter keeps arrows on their shapes without looking at every binding. The sets are persistent (`imbl::OrdSet`), so a list copied for a background job still costs about its chunks. Plotter's bound-arrow law covers them: if a link goes missing, an arrow is left behind and the law fails.

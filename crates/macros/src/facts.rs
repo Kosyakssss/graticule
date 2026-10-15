@@ -40,6 +40,10 @@ fn last_segment(ty: &Type) -> Option<&syn::PathSegment> {
     }
 }
 
+fn is_key(ty: &Type) -> bool {
+    last_segment(ty).is_some_and(|s| s.ident == "Key" && !s.arguments.is_empty())
+}
+
 fn is_bool(ty: &Type) -> bool {
     last_segment(ty).is_some_and(|s| s.ident == "bool" && s.arguments.is_empty())
 }
@@ -92,6 +96,7 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
 
     let mut flag = 0u8;
     let mut flag_bits = Vec::new();
+    let mut links = Vec::new();
     let mut consts = Vec::new();
     let mut infos = Vec::new();
     for (i, f) in fields.iter().enumerate() {
@@ -107,9 +112,17 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
         } else {
             quote!(::std::option::Option::None)
         };
+        let is_record_key = record.is_some_and(|k| k.ident == *ident);
+        let link_tokens = if record.is_some() && !is_record_key && is_key(ty) && f.kind != Kind::Live {
+            let n = links.len() as u8;
+            links.push(ident.clone());
+            quote!(::std::option::Option::Some(#n))
+        } else {
+            quote!(::std::option::Option::None)
+        };
         consts.push(quote! {
             #[allow(non_upper_case_globals, dead_code)]
-            pub const #ident: #ledger::FactPath<#name, #ty> = #ledger::FactPath::field(#index, #label, #kind, #flag_tokens);
+            pub const #ident: #ledger::FactPath<#name, #ty> = #ledger::FactPath::field(#index, #label, #kind, #flag_tokens, #link_tokens);
         });
         infos.push(quote!(#ledger::FieldInfo { name: #label, kind: #kind }));
     }
@@ -188,9 +201,18 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
         let key = &k.ident;
         let flags = if flag_bits.is_empty() { quote!(0) } else { quote!(#(#flag_bits)|*) };
         let count = flag as usize;
+        let link_count = links.len();
+        let link_arms = links.iter().enumerate().map(|(n, ident)| quote!(#n => self.#ident.raw(),));
         quote! {
             impl #ledger::Record for #name {
                 const FLAGS: usize = #count;
+                const LINKS: usize = #link_count;
+                fn link(&self, i: usize) -> u128 {
+                    match i {
+                        #(#link_arms)*
+                        _ => 0,
+                    }
+                }
                 fn key(&self) -> #ledger::Key<Self> {
                     self.#key
                 }

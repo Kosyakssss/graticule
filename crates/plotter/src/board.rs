@@ -176,8 +176,7 @@ impl Board {
 
     /// Takes shapes off the board, with every binding to or from them. An arrow whose target goes keeps its end where it was.
     pub fn delete(&mut self, keys: &[Key<Shape>]) -> Outcome {
-        let gone: Vec<_> = self.bindings.iter().filter(|b| keys.contains(&b.arrow) || keys.contains(&b.to)).map(|b| b.id).collect();
-        for b in gone {
+        for b in self.touching(keys) {
             let _ = self.bindings.remove(b);
         }
         let mut outcome = Outcome::Nothing;
@@ -203,7 +202,7 @@ impl Board {
 
     /// Lets go of an arrow's end, leaving it where it is.
     pub fn unbind(&mut self, arrow: Key<Shape>, end: End) -> Outcome {
-        let held: Vec<_> = self.bindings.iter().filter(|b| b.arrow == arrow && b.end == end).map(|b| b.id).collect();
+        let held: Vec<_> = self.bindings.linked(Binding::arrow, arrow).filter(|b| b.end == end).map(|b| b.id).collect();
         let mut outcome = Outcome::Nothing;
         for b in held {
             outcome = self.bindings.remove(b);
@@ -255,10 +254,18 @@ impl Board {
         self.shapes.iter().filter(|s| area.holds(&s.bounds())).map(|s| s.id).collect()
     }
 
+    /// The bindings held to one of `keys` or belonging to one of them, found through the list's links, so it costs the bindings found.
+    pub fn touching(&self, keys: &[Key<Shape>]) -> Vec<Key<Binding>> {
+        let mut found: Vec<Key<Binding>> = keys.iter().flat_map(|&k| self.bindings.linked(Binding::to, k).chain(self.bindings.linked(Binding::arrow, k))).map(|b| b.id).collect();
+        found.sort_unstable();
+        found.dedup();
+        found
+    }
+
     /// Puts every arrow end held to one of `moved`, or belonging to one of them, where its binding says.
     fn settle(&mut self, moved: &[Key<Shape>]) {
         let due: Vec<(Key<Shape>, End, Point)> =
-            self.bindings.iter().filter(|b| moved.contains(&b.to) || moved.contains(&b.arrow)).filter_map(|b| self.shapes.find(b.to).map(|to| (b.arrow, b.end, b.anchor(to)))).collect();
+            self.touching(moved).into_iter().filter_map(|b| self.bindings.find(b)).filter_map(|b| self.shapes.find(b.to).map(|to| (b.arrow, b.end, b.anchor(to)))).collect();
         for (arrow, end, at) in due {
             if self.shapes.find(arrow).is_some_and(|a| a.end(end) != at) {
                 let _ = self.shapes.change(arrow, |a| a.place_end(end, at));

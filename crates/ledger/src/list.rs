@@ -16,7 +16,7 @@ const CHUNK: usize = 512;
 const SEARCH_AT_ONCE: usize = 20_000;
 const REMOVE_AT_ONCE: usize = 200;
 
-/// An ordered list of records, found by key. Its storage is shared in chunks, so a copy for a background job costs about the number of chunks, not the number of items, and it keeps a count of each yes-or-no field of its records, so asking whether any item is done is instant at any size.
+/// An ordered list of records, found by key. Its storage is shared in chunks, so a copy for a background job costs about the number of chunks, not the number of items. It keeps a count of each yes-or-no field of its records, so asking whether any item is done is instant at any size, and for each field holding another record's key, which records hold each key, so finding every arrow tied to a shape costs the arrows found.
 pub struct List<T: Record> {
     chunks: Vec<Arc<Vec<T>>>,
     ids: Vec<u32>,
@@ -25,6 +25,7 @@ pub struct List<T: Record> {
     index: imbl::HashMap<u128, u32>,
     starts: RefCell<Starts>,
     tallies: Vec<u64>,
+    links: Vec<imbl::OrdSet<(u128, u128)>>,
     len: usize,
     at: ErasedPath,
 }
@@ -45,6 +46,7 @@ impl<T: Record> Default for List<T> {
             index: imbl::HashMap::new(),
             starts: RefCell::default(),
             tallies: vec![0; T::FLAGS],
+            links: vec![imbl::OrdSet::new(); T::LINKS],
             len: 0,
             at: ErasedPath::ROOT,
         }
@@ -61,6 +63,7 @@ impl<T: Record> Clone for List<T> {
             index: self.index.clone(),
             starts: RefCell::new(self.starts.borrow().clone()),
             tallies: self.tallies.clone(),
+            links: self.links.clone(),
             len: self.len,
             at: self.at,
         }
@@ -152,6 +155,13 @@ impl<T: Record> List<T> {
         self.tallies[i] as usize
     }
 
+    /// The records whose `field` holds `key`, in no particular order, kept as the list changes.
+    pub fn linked<U: 'static>(&self, field: FactPath<T, Key<U>>, key: Key<U>) -> impl Iterator<Item = &T> + '_ {
+        let i = field.link().expect("a list follows every field of a record that holds a key") as usize;
+        let to = key.raw();
+        self.links[i].range((to, 0)..=(to, u128::MAX)).filter_map(|&(_, k)| self.find(Key::from_raw(k)))
+    }
+
     pub fn push(&mut self, mut value: T) -> Outcome {
         let key = value.key();
         if self.has(key) {
@@ -229,9 +239,11 @@ impl<T: Record> List<T> {
         record.attach(path);
         let before = record.snap();
         let flags = record.flags();
+        let linked = links_of(record);
         f(record);
         assert!(record.key() == key, "a record's key never changes");
         let after = record.flags();
+        let relinked = links_of(record);
         if journal::recording() {
             let mut ops = Vec::new();
             record.diff(&before, path, &mut ops);
@@ -240,6 +252,7 @@ impl<T: Record> List<T> {
             }
         }
         self.retally(flags, after);
+        self.relink(key.raw(), &linked, &relinked);
         Outcome::Changed
     }
 
@@ -375,6 +388,7 @@ impl<T: Record> List<T> {
     fn insert_at(&mut self, index: usize, value: T) {
         let key = value.key().raw();
         let flags = value.flags();
+        let linked = links_of(&value);
         if self.chunks.is_empty() {
             self.new_id(0);
             self.chunks.push(Arc::new(Vec::with_capacity(CHUNK)));
@@ -404,6 +418,7 @@ impl<T: Record> List<T> {
         self.len += 1;
         self.invalidate(p + 1);
         self.add_tally(flags, 1);
+        self.relink(key, &[], &linked);
     }
 
     fn remove_at(&mut self, p: usize, i: usize) {
@@ -411,6 +426,7 @@ impl<T: Record> List<T> {
         self.index.remove(&removed.key().raw());
         self.len -= 1;
         self.add_tally(removed.flags(), -1);
+        self.relink(removed.key().raw(), &links_of(&removed), &[]);
         if self.chunks[p].is_empty() {
             self.drop_chunk(p);
         } else {
@@ -422,6 +438,21 @@ impl<T: Record> List<T> {
         for (i, t) in self.tallies.iter_mut().enumerate() {
             if flags & (1 << i) != 0 {
                 *t = (*t as i64 + sign) as u64;
+            }
+        }
+    }
+
+    fn relink(&mut self, key: u128, before: &[u128], after: &[u128]) {
+        for (i, set) in self.links.iter_mut().enumerate() {
+            let (was, is) = (before.get(i).copied(), after.get(i).copied());
+            if was == is {
+                continue;
+            }
+            if let Some(to) = was {
+                set.remove(&(to, key));
+            }
+            if let Some(to) = is {
+                set.insert((to, key));
             }
         }
     }
@@ -462,6 +493,10 @@ impl<T: Record> List<T> {
             _ => false,
         }
     }
+}
+
+fn links_of<T: Record>(record: &T) -> Vec<u128> {
+    (0..T::LINKS).map(|i| record.link(i)).collect()
 }
 
 impl<T: Record> FromIterator<T> for List<T> {
@@ -521,9 +556,12 @@ impl<T: Record> Field for List<T> {
                 let Some((p, i)) = self.locate(key) else { return false };
                 let record = &mut Arc::make_mut(&mut self.chunks[p])[i];
                 let before = record.flags();
+                let linked = links_of(record);
                 let applied = record.apply(rest, op);
                 let after = record.flags();
+                let relinked = links_of(record);
                 self.retally(before, after);
+                self.relink(key.raw(), &linked, &relinked);
                 applied
             }
             _ => false,

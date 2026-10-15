@@ -168,8 +168,9 @@ impl Board {
     /// A board of only `keys`, the arrows held to them and what those arrows are held to, with their bindings: enough to work out how a change to `keys` would move the rest.
     fn part(&self, keys: &[Key<Shape>]) -> Board {
         let touched: HashSet<Key<Shape>> = keys.iter().copied().collect();
-        let held: HashSet<Key<Shape>> = self.bindings.iter().filter(|b| touched.contains(&b.to) || touched.contains(&b.arrow)).map(|b| b.arrow).collect();
-        let bindings: Vec<_> = self.bindings.iter().filter(|b| held.contains(&b.arrow)).cloned().collect();
+        let held: HashSet<Key<Shape>> = self.touching(keys).into_iter().filter_map(|b| self.bindings.find(b)).map(|b| b.arrow).collect();
+        let arrows: Vec<Key<Shape>> = held.iter().copied().collect();
+        let bindings: Vec<_> = self.touching(&arrows).into_iter().filter_map(|b| self.bindings.find(b)).filter(|b| held.contains(&b.arrow)).cloned().collect();
         let mut inside: Vec<Key<Shape>> = touched.iter().chain(&held).copied().chain(bindings.iter().map(|b| b.to)).collect();
         inside.sort_unstable();
         inside.dedup();

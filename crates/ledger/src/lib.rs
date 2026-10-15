@@ -13,6 +13,7 @@ mod plain;
 mod selection;
 mod store;
 mod text;
+mod typed;
 mod value;
 
 pub use bulk::{Bulk, Search, deferred};
@@ -28,4 +29,5 @@ pub use plain::Document;
 pub use selection::{Choose, Selection};
 pub use store::{Migration, Opened, Stopped, Store, entries, fresh_replica, migrate, note_failures, read, stopped_session};
 pub use text::Text;
+pub use typed::{Editable, Travel, Typed};
 pub use value::{Malformed, Value};

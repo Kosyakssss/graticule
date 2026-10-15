@@ -66,7 +66,7 @@ impl<P: Clone> History<P> {
             return Kept::Nothing;
         }
         let typed = ops.iter().any(|op| matches!(op, Op::Splice { .. }));
-        let step = typed || ops.iter().any(|op| op.path().kind() == Kind::Document);
+        let step = typed || ops.iter().any(|op| !matches!(op, Op::Select { .. }) && op.path().kind() == Kind::Document);
         if !step {
             let gone: Vec<u128> = ops.iter().filter_map(Op::deleted).collect();
             if !gone.is_empty() {

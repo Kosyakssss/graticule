@@ -35,7 +35,7 @@ An entry is a command (its commands as `Value`s, and the replica, counter, time 
 
 ## Moves and rows that are gone
 
-A change to a selection alone is not an undo step, but history keeps it as a move, so undoing the next step also puts the selection back where it was. A session list can lose rows without an undo step, as when Specimen closes a page and its lines go. A move that names those rows would bring back, on undo, a selection of rows that no longer exist, since the rows themselves don't come back. So when a change that isn't a step deletes rows, history forgets every move that names any of their keys, pending or kept with a step. It compares raw keys, so a key of another list with the same value is forgotten too; that costs only a selection undo would have restored. The walk is over the whole history, and happens only on such a deletion.
+A change to a selection alone is not an undo step, even when the selection is part of a document, as an editor's cursors are; history keeps it as a move, so undoing the next step also puts the selection back where it was. A session list can lose rows without an undo step, as when Specimen closes a page and its lines go. A move that names those rows would bring back, on undo, a selection of rows that no longer exist, since the rows themselves don't come back. So when a change that isn't a step deletes rows, history forgets every move that names any of their keys, pending or kept with a step. It compares raw keys, so a key of another list with the same value is forgotten too; that costs only a selection undo would have restored. The walk is over the whole history, and happens only on such a deletion.
 
 ## Why Loro
 

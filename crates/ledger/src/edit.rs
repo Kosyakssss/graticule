@@ -31,6 +31,7 @@ pub enum Change {
     Splice { range: Range<usize>, text: String },
     Select(Choose),
     Set(Value),
+    Typed(crate::Typed),
 }
 
 impl Edit {
@@ -48,7 +49,7 @@ impl Edit {
     }
 
     pub fn is_typing(&self) -> bool {
-        matches!(self.change, Change::Splice { .. })
+        matches!(self.change, Change::Splice { .. } | Change::Typed(crate::Typed::Insert(_) | crate::Typed::NewLine | crate::Typed::Delete { .. }))
     }
 
     /// Makes the change. An app that wants to validate a value or keep an invariant does it next to this call.
@@ -73,6 +74,7 @@ impl Field for Edit {
             Change::Splice { range, text } => Value::Variant("splice".into(), Box::new(Value::List(vec![Value::UInt(range.start as u64), Value::UInt(range.end as u64), Value::Str(text.clone())]))),
             Change::Select(c) => Value::Variant("select".into(), Box::new(choice_value(c))),
             Change::Set(v) => Value::Variant("set".into(), Box::new(v.clone())),
+            Change::Typed(t) => Value::Variant("typed".into(), Box::new(t.value())),
         };
         Value::List(vec![Value::List(steps.collect()), Value::UInt(kind_index(self.path.kind())), change, Value::UInt(self.gesture)])
     }
@@ -100,6 +102,7 @@ impl Field for Edit {
             },
             ("select", v) => Change::Select(choice_of(v)?),
             ("set", v) => Change::Set(v.clone()),
+            ("typed", v) => Change::Typed(crate::Typed::from_value(v)?),
             _ => return None,
         };
         Some(Edit::new(path, change, *gesture))

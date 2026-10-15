@@ -30,26 +30,26 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **tldraw.** Tools are a state chart: a tree of `StateNode`s, one branch active at a time, each with `onEnter`, `onExit` and handlers for pointer and key events. An event enters at the root and passes down the active branch until a node handles it. The select tool alone has states for idle, pointing at a shape, translating, brushing a selection box, resizing, rotating and editing text.
 
-**Here.** A tool is an enum and its states are enums inside it, so impossible combinations can't be written: `Tool::Select(Select::Idle | Select::Pointing { .. } | Select::Translating { .. } | Select::Brushing { .. } | Select::Resizing { .. })`, `Tool::Draw(Draw::Idle | Draw::Drawing { .. })`, and so on. Handling an event is a pure function from the tool, the event and the board to the next tool and the change to make, so tools are tested like everything else, by laws over generated pointer sequences. Which tool is active is a session fact and every tool is a command in the registry, so the bar, the palette and the keymap reach them.
+**Here.** Smaller than a state chart, because the kernel hands the app a whole drag as data (`kernel::Drag`: where it was pressed, where it is, the trail, whether it moved past a click's wobble, whether Shift was held). The state a tool is in is then a pure function of the board, the chosen shapes, the tool and the drag: `Intent::of` returns an enum, `Choose`, `Translate`, `Brush`, `Resize` or `Create`, so impossible combinations can't be written and no state is kept between events. The view calls it on the drag under way to show what letting go would do, and the command calls it on the finished drag to do it, so the two can never disagree. `Board::perform` makes the change as one transaction; `Intent::preview` performs it on a small board of only the shapes it touches and the arrows held to them, which costs what the drag moves, not what the board holds. Which tool is in hand is a session fact and every tool is a command in the registry, so the bar, the palette and the keymap reach them. The bound-arrow law drives gestures through every tool. This is simpler than the state chart planned at first; hovering, double clicks and keys inside a tool (Escape drops a drag, which the kernel does) are what a state chart would add, and none needs one yet.
 
 ## Camera
 
 **tldraw.** The camera is a record: `x`, `y` and `z` (zoom). Screen points convert to page points and back through it; wheel and pinch pan and zoom around the pointer.
 
-**Here.** The same, as a session fact, with `Camera::to_page` and `to_screen`. Its screen space is the canvas box the kernel gives it, which sits on whole cells like everything else; inside the box anything goes (AGENTS.md, rule 1).
+**Here.** The same, as a session fact, but the kernel's (`kernel::Camera`), not Plotter's: the conversion needs the canvas's size in pixels, which only the kernel knows, and any canvas can use it. `Canvas::camera(path)` makes what the canvas draws page units, one per screen point at zoom 1; the wheel pans it and, with the primary key, zooms around the pointer, each as one change to the fact, as the time axis does with its view. Drags arrive in page units. The canvas box sits on whole cells like everything else; inside it anything goes (AGENTS.md, rule 1). Strokes and words stay the same size on screen at every zoom.
 
 ## Snapping
 
 **tldraw.** While moving or resizing, edges and centres snap to other shapes' edges and centres, gaps snap to equal spacing, and guides show what snapped. The threshold is in screen pixels, so it feels the same at every zoom.
 
-**Here.** `snap::offset` takes the moving box and the boxes near it and returns the smallest nudge, on each axis, that lines up an edge or centre within the threshold, with the lines it lined up for drawing guides. Equal gaps and handles come after.
+**Here.** `snap` takes the moving box and the other boxes and returns the smallest nudge, on each axis, that lines up an edge or centre within the threshold, with the lines it lined up for drawing guides; arrows are not snapped to. Equal gaps and handles come after.
 
 ## Culling and many shapes
 
 **tldraw.** Shapes outside the viewport are not rendered.
 
-**Here.** Drawing asks a spatial index for the shapes that touch the visible page box, so a million shapes cost what the visible ones cost (spec §13.4's budget). The index is built off the main thread as a derived value of the shapes.
+**Here, so far.** The whiteboard draws the board off the main thread, as a derived value of the shapes, in slices of 512 from the bottom of the stack. A drag draws again only the slices holding what it moves, and the box around the chosen shapes is a derived value too, so typing elsewhere or dragging one shape costs what that shape costs. Two things still grow with the board: snapping looks at every other shape, and the frame right after a change, before the new slices arrive, draws the board directly. Both go when a spatial index, built off the main thread the same way, answers "which shapes touch this box", and drawing asks it for the visible page box only, so a million shapes cost what the visible ones cost (spec §13.4's budget).
 
 ## Also in tldraw, later here
 
-Groups, frames and pages; locking and read-only; shared styles where the next shape takes the last one's; pasting anything and dropping files; side effects on record changes beyond bindings; pressure-sensitive strokes, which port perfect-freehand (MIT) with its notice; rubber-band selection, transform handles and a minimap. Export to SVG comes with the core, since a board must render without a screen.
+Groups, frames and pages; locking and read-only; shared styles where the next shape takes the last one's; pasting anything and dropping files; side effects on record changes beyond bindings; pressure-sensitive strokes, which port perfect-freehand (MIT) with its notice; rotation and handles on every side, and a minimap. Export to SVG comes with the core, since a board must render without a screen.

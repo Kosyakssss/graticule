@@ -2677,6 +2677,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "plotter-face"
+version = "0.1.0"
+dependencies = [
+ "graticule",
+ "ledger",
+ "plotter",
+]
+
+[[package]]
 name = "png"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

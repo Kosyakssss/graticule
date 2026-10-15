@@ -1,0 +1,8 @@
+v: select
+r: rect
+o: ellipse
+a: arrow
+d: draw
+delete: remove
+primary+a: choose-all
+primary+shift+p: palette

@@ -1,0 +1,36 @@
+window		0 0 81 14	
+  page	Plotter	0 0 81 9	
+    group		2 3 77 1	
+      group		2 3 46 1	
+        toggle button	Choose	2 3 9 1	unavailable (Choosing already)
+        toggle button	Rectangle	11 3 12 1	
+        toggle button	Ellipse	23 3 10 1	
+        toggle button	Arrow	33 3 8 1	
+        toggle button	Draw	41 3 7 1	
+      button	Remove	50 3 9 1	
+      button	Show everything	61 3 18 1	
+    canvas	Board, 9 shapes	2 5 77 1	
+    group		2 7 77 1	
+      group		2 7 59 1	
+        text field	File	2 7 47 1	
+        button	Choose…	51 7 10 1	
+      button	Open	63 7 7 1	unavailable (Choose a file first)
+      button	Save	72 7 7 1	unavailable (Choose a file first)
+  alert		2 9 77 1	
+  status		2 10 77 1	
+  toolbar		2 11 77 3	
+    button	Choose	2 11 10 1	unavailable (Choosing already)
+    button	Rectangle	14 11 12 1	
+    button	Ellipse	28 11 9 1	
+    button	Arrow	39 11 9 1	
+    button	Draw	50 11 8 1	
+    button	Remove	60 11 16 1	
+    button	Choose everything	2 12 23 1	
+    button	Bring to front	27 12 12 1	
+    button	Send to back	41 12 12 1	
+    button	Show everything	55 12 15 1	
+    button	Open	72 12 6 1	unavailable (Choose a file first)
+    button	Save	2 13 6 1	unavailable (Choose a file first)
+    button	Undo	10 13 13 1	unavailable (Nothing to undo)
+    button	Redo	25 13 19 1	unavailable (Nothing to redo)
+    button	Open the palette	46 13 28 1	

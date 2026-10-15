@@ -1,7 +1,7 @@
-use ledger::{ErasedPath, Field, Key, Transaction};
+use ledger::{ErasedPath, Field, Key, Op, Selection, Transaction};
 use proptest::prelude::*;
 
-use crate::{Board, Bounds, End, Kind, Point, Shape, order};
+use crate::{Board, Bounds, End, Gesture, Intent, Kind, Point, Shape, Tool, order};
 
 #[derive(Clone, Debug)]
 enum Act {
@@ -13,6 +13,7 @@ enum Act {
     Delete(u8),
     Front(u8),
     Back(u8),
+    Gesture(u8, f64, f64, f64, f64, bool),
 }
 
 fn coord() -> impl Strategy<Value = f64> {
@@ -29,6 +30,7 @@ fn act() -> impl Strategy<Value = Act> {
         any::<u8>().prop_map(Act::Delete),
         any::<u8>().prop_map(Act::Front),
         any::<u8>().prop_map(Act::Back),
+        (any::<u8>(), coord(), coord(), coord(), coord(), any::<bool>()).prop_map(|(t, a, b, c, d, s)| Act::Gesture(t, a, b, c, d, s)),
     ]
 }
 
@@ -37,9 +39,19 @@ fn nth(board: &Board, k: u8) -> Option<Key<Shape>> {
     (n > 0).then(|| board.shapes.get(k as usize % n).map(|s| s.id)).flatten()
 }
 
-fn run(board: &mut Board, act: &Act, next: &mut u64) {
+fn run(board: &mut Board, chosen: &mut Selection<Shape>, act: &Act, next: &mut u64) {
     *next += 1;
     match *act {
+        Act::Gesture(t, a, b, c, d, shift) => {
+            let tool = [Tool::Select, Tool::Rect, Tool::Ellipse, Tool::Arrow, Tool::Draw][t as usize % 5];
+            let (from, to) = (Point::new(a, b), Point::new(c, d));
+            let gesture = Gesture { from, to, trail: vec![from, to], moved: from.distance(to) > 3.0, shift };
+            let intent = Intent::of(board, chosen, tool, &gesture, 1.0);
+            let _ = board.perform(chosen, intent, || {
+                *next += 1;
+                Key::<Shape>::fixed(*next).raw()
+            });
+        }
         Act::Add(k, x, y, w, h) => {
             let kind = if k % 2 == 0 { Kind::Rect } else { Kind::Ellipse };
             let _ = board.add(Shape::new(Key::fixed(*next), kind, Bounds::new(x, y, w, h)));
@@ -69,12 +81,12 @@ fn run(board: &mut Board, act: &Act, next: &mut u64) {
         }
         Act::Front(k) => {
             if let Some(key) = nth(board, k) {
-                let _ = board.to_front(key);
+                let _ = board.to_front(&[key]);
             }
         }
         Act::Back(k) => {
             if let Some(key) = nth(board, k) {
-                let _ = board.to_back(key);
+                let _ = board.to_back(&[key]);
             }
         }
     }
@@ -113,8 +125,9 @@ proptest! {
         let mut board = Board::default();
         board.attach(ErasedPath::ROOT);
         let mut next = 0;
+        let mut chosen = Selection::new();
         for act in &acts {
-            run(&mut board, act, &mut next);
+            run(&mut board, &mut chosen, act, &mut next);
         }
         let reopened = Board::from_svg(&crate::svg(&board));
         prop_assert!(reopened.as_ref().is_some_and(|r| r.same(&board)), "the board didn't come back from its picture");
@@ -125,16 +138,17 @@ proptest! {
         let mut board = Board::default();
         board.attach(ErasedPath::ROOT);
         let mut next = 0;
+        let mut chosen = Selection::new();
         let mut steps = Vec::new();
         for act in &acts {
             let before = picture(&board);
             let tx = Transaction::begin();
-            run(&mut board, act, &mut next);
+            run(&mut board, &mut chosen, act, &mut next);
             steps.push((tx.end(), before));
             prop_assert_eq!(bound(&board), Ok(()), "after {:?}", act);
         }
         while let Some((ops, before)) = steps.pop() {
-            for op in ops.iter().rev() {
+            for op in ops.iter().rev().filter(|op| !matches!(op, Op::Select { .. })) {
                 prop_assert!(board.apply(op.path().steps(), &op.inverse()), "undoing {:?}", op);
             }
             prop_assert_eq!(picture(&board), before);

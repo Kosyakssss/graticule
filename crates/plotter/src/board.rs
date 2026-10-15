@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use graticule_macros::Facts;
 use ledger::{Key, List, Outcome};
 
@@ -12,7 +14,7 @@ pub struct Board {
 }
 
 /// One shape on the board. Its box is `x`, `y`, `w` and `h` in page units; an arrow runs from (`x`, `y`) to (`x + w`, `y + h`), so its width and height may be negative.
-#[derive(Facts, Debug)]
+#[derive(Facts, Debug, PartialEq)]
 pub struct Shape {
     #[key]
     pub id: Key<Shape>,
@@ -202,18 +204,38 @@ impl Board {
         outcome
     }
 
-    /// Moves a shape to the top of the stack.
-    pub fn to_front(&mut self, key: Key<Shape>) -> Outcome {
-        let top = self.shapes.iter().filter(|s| s.id != key).map(|s| s.index.as_str()).max().map(str::to_string);
-        let index = order::between(top.as_deref(), None);
-        self.shapes.change(key, |s| s.index = index)
+    /// Moves shapes to the top of the stack, keeping their order among themselves.
+    pub fn to_front(&mut self, keys: &[Key<Shape>]) -> Outcome {
+        self.restack(keys, true)
     }
 
-    /// Moves a shape to the bottom of the stack.
-    pub fn to_back(&mut self, key: Key<Shape>) -> Outcome {
-        let bottom = self.shapes.iter().filter(|s| s.id != key).map(|s| s.index.as_str()).min().map(str::to_string);
-        let index = order::between(None, bottom.as_deref());
-        self.shapes.change(key, |s| s.index = index)
+    /// Moves shapes to the bottom of the stack, keeping their order among themselves.
+    pub fn to_back(&mut self, keys: &[Key<Shape>]) -> Outcome {
+        self.restack(keys, false)
+    }
+
+    fn restack(&mut self, keys: &[Key<Shape>], front: bool) -> Outcome {
+        let moving: HashSet<Key<Shape>> = keys.iter().copied().filter(|k| self.shapes.has(*k)).collect();
+        let rest = self.shapes.iter().filter(|s| !moving.contains(&s.id)).map(|s| s.index.as_str());
+        let edge = if front { rest.max() } else { rest.min() }.map(str::to_string);
+        let stacked: Vec<&Shape> = self.stacked().into_iter().filter(|s| moving.contains(&s.id)).collect();
+        let there = match (&edge, front) {
+            (None, _) => true,
+            (Some(edge), true) => stacked.iter().all(|s| s.index > *edge),
+            (Some(edge), false) => stacked.iter().all(|s| s.index < *edge),
+        };
+        if there {
+            return Outcome::Nothing;
+        }
+        let stacked: Vec<Key<Shape>> = stacked.into_iter().map(|s| s.id).collect();
+        let indexes = if front { order::run(edge.as_deref(), None, stacked.len()) } else { order::run(None, edge.as_deref(), stacked.len()) };
+        let mut outcome = Outcome::Nothing;
+        for (key, index) in stacked.into_iter().zip(indexes) {
+            if self.shapes.change(key, |s| s.index = index).changed() {
+                outcome = Outcome::Changed;
+            }
+        }
+        outcome
     }
 
     /// The topmost shape at `p`, within `margin` of a line.

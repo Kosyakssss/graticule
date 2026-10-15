@@ -10,6 +10,20 @@ pub fn between(before: Option<&str>, after: Option<&str>) -> String {
     midpoint(&a, b.as_deref()).into_iter().map(|d| DIGITS[d as usize] as char).collect()
 }
 
+/// `count` keys in order, each sorting after `before` and before `after`, kept short by halving the gap: for putting many shapes in the stack at once.
+pub fn run(before: Option<&str>, after: Option<&str>, count: usize) -> Vec<String> {
+    if count == 0 {
+        return Vec::new();
+    }
+    let middle = between(before, after);
+    let low = count / 2;
+    let mut keys = run(before, Some(&middle), low);
+    let high = run(Some(&middle), after, count - low - 1);
+    keys.push(middle);
+    keys.extend(high);
+    keys
+}
+
 fn value(c: u8) -> Option<u8> {
     DIGITS.iter().position(|&d| d == c).map(|i| i as u8)
 }

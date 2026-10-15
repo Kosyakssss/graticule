@@ -1,0 +1,19 @@
+[package]
+name = "plotter-face"
+description = "Plotter's face: a whiteboard, and Graticule's canvas demo."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "plotter"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+graticule.workspace = true
+ledger.workspace = true
+plotter.workspace = true

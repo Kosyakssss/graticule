@@ -1448,7 +1448,7 @@ impl<A: App> Runner<A> {
                 focused: focus == Some(id) || editing.contains(&id),
                 caret: at.map_or(u32::MAX, |c| c.caret as u32),
                 anchor: at.map_or(u32::MAX, |c| c.anchor as u32),
-                composing: if focus == Some(id) { composed } else { Range32::default() },
+                composing: if focus == Some(id) || editing.contains(&id) { composed } else { Range32::default() },
                 chosen: chosen.get(&id).copied().unwrap_or_default(),
                 marked: marked.contains(&id),
                 landing: landing.filter(|(l, _)| *l == id).map_or(Landing::Not, |(_, l)| l),
@@ -4740,7 +4740,8 @@ impl<A: App> Face for Runner<A> {
             waker.wake();
         }
         let field = if self.palette.is_some() { self.tree.find(PALETTE) } else { self.focused_field() };
-        let want = field.is_some();
+        let editor = if field.is_none() { self.focused_editor() } else { None };
+        let want = field.is_some() || editor.is_some();
         if want != self.ime {
             frame.window.set_ime_allowed(want);
             self.ime = want;
@@ -4761,6 +4762,14 @@ impl<A: App> Face for Runner<A> {
                 (tx + before - (before + composed - (r.right() - tx - m.cell_w)).max(0.0), r.y)
             };
             frame.window.set_ime_cursor_area(winit::dpi::PhysicalPosition::new(x as f64, y as f64), winit::dpi::PhysicalSize::new(m.cell_w as f64, m.cell_h as f64));
+        } else if let Some(e) = editor
+            && let Some(&(line, byte, _)) = self.tree.carets.iter().find(|c| c.2 && self.tree.children(e).any(|l| l == c.0))
+        {
+            let (m, n) = (frame.metrics, self.tree.nodes[line as usize]);
+            let (r, text) = (m.rect(n.area), self.tree.str(n.text));
+            let (k, row) = field::row_of(text, n.area.cols.max(1) as usize, byte as usize);
+            let x = r.x + text[row.start..(byte as usize).clamp(row.start, row.end)].chars().map(crate::text::cells).sum::<usize>() as f32 * m.cell_w;
+            frame.window.set_ime_cursor_area(winit::dpi::PhysicalPosition::new(x as f64, (r.y + k as f32 * m.cell_h) as f64), winit::dpi::PhysicalSize::new(m.cell_w as f64, m.cell_h as f64));
         }
     }
 

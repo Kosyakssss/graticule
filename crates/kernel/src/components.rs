@@ -997,9 +997,26 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         (Layer::Over, Kind::EditLine { .. }) => {
             let (a, style, theme) = (n.area, p.m.mono(), p.theme);
             let r = p.rect(a);
-            let (width, cell_h) = (a.cols.max(1) as usize, p.m.cell_h);
+            let (width, cell_h, cw) = (a.cols.max(1) as usize, p.m.cell_h, p.m.cell_w);
+            let composing = tree.str(look.composing);
+            let composed = cells_in(composing);
+            let primary = tree.carets.iter().find(|c| c.0 == i && c.2).map(|c| c.1 as usize).filter(|_| look.focused && composed > 0);
+            let on = primary.and_then(|byte| crate::field::rows(text, width).enumerate().filter(|(_, row)| row.start <= byte).last().map(|(k, _)| (k, byte)));
             for (k, row) in crate::field::rows(text, width).enumerate().take(a.rows.max(0) as usize) {
-                p.cells((r.x, r.y + k as f32 * cell_h), a.cols, &text[row], style, theme.ink);
+                let y = r.y + k as f32 * cell_h;
+                match on {
+                    Some((on, byte)) if on == k => {
+                        let before = cells_in(&text[row.start..byte]);
+                        p.cells((r.x, y), before, &text[row.start..byte], style, theme.ink);
+                        p.cells((r.x + before as f32 * cw, y), (a.cols - before).max(0), composing, style, theme.ink);
+                        p.cells((r.x + (before + composed) as f32 * cw, y), (a.cols - before - composed).max(0), &text[byte..row.end], style, theme.ink);
+                        let t = p.style.line(p.m);
+                        p.fill(Rect::new((r.x + before as f32 * cw).floor(), (y + cell_h * 0.85).round(), (composed as f32 * cw).ceil(), t), theme.ink);
+                    }
+                    _ => {
+                        p.cells((r.x, y), a.cols, &text[row], style, theme.ink);
+                    }
+                }
             }
             if let Some((_, found)) = tree.found.iter().find(|m| m.0 == i) {
                 let t = p.style.line(p.m);
@@ -1025,7 +1042,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
                     if k as i32 >= a.rows {
                         continue;
                     }
-                    let x = r.x + cells_in(&text[row.start..byte]) as f32 * p.m.cell_w;
+                    let x = r.x + (cells_in(&text[row.start..byte]) + if primary { composed } else { 0 }) as f32 * p.m.cell_w;
                     let ink = if primary { theme.cursor } else { theme.muted };
                     p.fill(Rect::new(x.floor(), r.y + k as f32 * cell_h + cell_h * 0.1, bar, cell_h * 0.8), ink);
                 }

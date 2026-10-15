@@ -29,7 +29,7 @@ The editor is as tall as the room it is given, at least three rows, and builds o
 
 A click puts the cursor there and Shift with a click selects up to it; dragging selects. The wheel scrolls. Once it has the focus, the keys are the platform's own: the arrows move by a character or a line, with the word keys by a word, Home and End to the ends of a line, the line keys or Page Up and Page Down by a screenful, Shift with any of them selects, Backspace and Delete delete a character or a word, Return starts a new line with the line's indent, Escape keeps only the primary cursor and then lets go of the selection, and select all, copy, cut and paste work as everywhere else. Typing words is one undo step per word.
 
-Up and Down move by the rows a long line wraps into, keeping the column; Page Up and Page Down count whole lines. Showing what an input method is composing is not done.
+Up and Down move by the rows a long line wraps into, keeping the column; Page Up and Page Down count whole lines. What an input method is composing shows underlined at the primary cursor, and its candidate window opens there; what it commits goes in at every cursor.
 
 ## Narrow windows
 

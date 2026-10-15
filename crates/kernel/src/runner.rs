@@ -3206,7 +3206,7 @@ impl<A: App> Runner<A> {
                 let len = self.tree.str(n.text).len();
                 return self.splice(i, 0..len, String::new(), 0, field::Kind::Alone);
             }
-            if holds == Holds::Line
+            if matches!(holds, Holds::Line | Holds::Search)
                 && chord.key == Key::Down
                 && chord.mods == Mods::default()
                 && let Some(p) = self.completions(i)

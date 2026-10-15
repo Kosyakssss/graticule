@@ -1033,16 +1033,49 @@ impl<'a, C, S> Ui<'a, C, S> {
         }
         let wanted = typed.to_lowercase();
         let shown: Vec<&str> = completions.iter().map(AsRef::as_ref).filter(|c| *c != typed && c.to_lowercase().contains(&wanted)).take(COMPLETIONS).collect();
+        self.completions(i, erased, &name, &shown, at);
+    }
+
+    fn completions(&mut self, i: u32, erased: ledger::ErasedPath, name: &str, shown: &[&str], at: &'static Location<'static>) {
         if shown.is_empty() {
             return;
         }
+        let id = self.tree.nodes[i as usize].id;
         let o = self.tree.add(i, Kind::Overlay { anchor: crate::tree::Anchor::Node(i) }, Some(id.mix(1)), at);
-        for (k, c) in shown.into_iter().enumerate() {
-            let p = self.tree.add(o, Kind::Pick { on: false }, Some(pick(k)), at);
+        for (k, c) in shown.iter().enumerate() {
+            let p = self.tree.add(o, Kind::Pick { on: false }, Some(id.mix(k as u64 + 2)), at);
             let r = self.tree.put(c);
             self.tree.nodes[p as usize].text = r;
             self.set(p, erased, ledger::Value::Str(c.to_string()), format!("{name}: {c}"));
         }
+    }
+
+    /// A field for a typed filter over the records of `items`, such as `people>100000 country:spain`, at the `Text` at `path`. While a word is being typed, the record's fields that start with it are offered; a query that can't be read says why under the field. Filter the rows by it with [`Order::matching`](crate::table::Order::matching) in a derived order.
+    #[track_caller]
+    pub fn filter<T: Record, F: Field>(&mut self, _items: &ledger::List<T>, path: FactPath<F, Text>) {
+        let (at, erased) = (Location::caller(), path.erased());
+        let id = Id::ROOT.mix(erased.hash64());
+        let typed = self.facts::<F>().and_then(|f| path.get(f)).map_or(String::new(), |t| t.as_str().to_string());
+        let names = crate::filter::names::<T>();
+        let placeholder = format!("Filter by {}", names.join(", "));
+        let i = self.field_as(path, Message::plain(placeholder), Holds::Search, at).node;
+        if let Err(why) = crate::filter::Filter::parse::<T>(&typed) {
+            let w = self.tree.add(self.parent, Kind::Text { mono: false, tone: Tone::Danger, strong: false }, Some(id.mix(0xe7)), at);
+            let r = self.tree.put(why.as_str());
+            self.tree.nodes[w as usize].text = r;
+        }
+        let pick = |k: usize| id.mix(k as u64 + 2);
+        if !self.tree.focus.is_some_and(|f| f == id || (0..COMPLETIONS).any(|k| pick(k) == f)) || typed.ends_with(char::is_whitespace) {
+            return;
+        }
+        let start = typed.rfind(char::is_whitespace).map_or(0, |s| s + 1);
+        let word = typed[start..].trim_start_matches('-');
+        if word.is_empty() || word.contains([':', '=', '<', '>', '"']) {
+            return;
+        }
+        let shown: Vec<String> = names.iter().filter(|n| n.starts_with(&word.to_lowercase())).map(|n| format!("{}{n}:", &typed[..typed.len() - word.len()])).take(COMPLETIONS).collect();
+        let shown: Vec<&str> = shown.iter().map(String::as_str).collect();
+        self.completions(i, erased, "Filter", &shown, at);
     }
 
     /// A field for the name of a time zone at `path`, such as `Europe/Lisbon`, with the zones whose names contain what is typed listed under it.

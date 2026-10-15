@@ -199,6 +199,14 @@ impl<T: Record> Order<T> {
         Order::from_keys(found.into_iter().map(|(_, _, k)| k).collect())
     }
 
+    /// Only the items that pass the typed filter `query`, such as `people>100000 country:spain`, in this order; all of them while the query can't be read, since the filter field says what is wrong with it.
+    pub fn matching(self, list: &List<T>, query: &str) -> Order<T> {
+        match crate::filter::Filter::parse::<T>(query) {
+            Ok(filter) if !filter.is_empty() => self.only(list, |t| filter.keeps(t)),
+            _ => self,
+        }
+    }
+
     /// Only the items `keep` says yes to, in this order.
     pub fn only(self, list: &List<T>, keep: impl Fn(&T) -> bool) -> Order<T> {
         let keys = self.ranks.keys.iter().copied().filter(|&k| list.find(Key::from_raw(k)).is_some_and(&keep)).collect();

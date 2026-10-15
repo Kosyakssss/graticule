@@ -10,6 +10,7 @@ pub mod command;
 pub mod components;
 pub mod days;
 pub mod field;
+pub mod filter;
 pub mod fonts;
 pub mod form;
 pub mod gpu;

@@ -151,6 +151,8 @@ A tree is the same list again. Its items are one flat list, each naming the item
 
 A picker is a search field and the rows `Order::found` keeps, eight at a time. It is not a list: nothing is selected in the facts, and the highlight, the row at the top and the query they were set under are the window's, kept by the picker's id like a list's scroll, so a new query starts again from the top. The keys stay in the field, which keeps the typing; Up, Down, Page Up, Page Down and Return are the picker's while its field has the focus. The letters a query matched are found again for the rows that show, on the main thread, which is bounded by the eight rows; they are marked in the first text of each row, and only when that text sits on one line.
 
+A typed filter reads a record through `Field::value`, the same map of named values Ledger saves, so it knows every record's fields without an app describing them twice. That costs building the map for each record, which is why it runs only in a derived order, off the main thread. Reading the query itself is bounded by its length and is done on the main thread too, to say under the field what is wrong.
+
 ## 6. Layout in cells
 
 ### 6.1 Units

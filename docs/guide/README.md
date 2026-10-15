@@ -136,6 +136,8 @@ Then split panes: a list on the left and the thing chosen in it on the right, wi
 
 The picker is the palette's search for an app's own things: type a few letters of a file's or a place's name and the ones that have those letters, in that order, come up, the best first, with the letters you typed underlined. Matches at the start of words, or letters that sit together, count for more, so "lo" puts London before Lisbon. The arrow keys move between them and Return opens one. The searching happens away from the thread that answers the keyboard, so a picker over millions of things keeps up with the typing.
 
+A typed filter narrows a table by what its records hold: `people>1000000 country:spain` keeps the cities of more than a million people in Spain. It knows the fields from the app's own description of a record, so an app gets one without saying anything more, and it offers the field names as they are typed. When a query can't be read, it says why under the field, such as a field the records don't have, and keeps showing every row until it can.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

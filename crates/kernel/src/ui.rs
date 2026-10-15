@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use std::panic::Location;
 use std::sync::Arc;
 
-use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
+use ledger::{FactPath, Field, Key, Record, Selection, Text};
 
 use crate::app::{Moment, Path};
 use crate::canvas::Drawing;
@@ -15,12 +15,13 @@ use crate::form::{Control, Item, Setting, Settings};
 use crate::ink::Ink;
 use crate::message::Message;
 use crate::picture::Picture;
+use crate::table::{Cell, Rows, Sort};
 use crate::tree::{Board, Holds, Id, Kind, ListInfo, NONE, Span, Tone, Tree};
 use crate::value::{Integer, Value, grouped};
 
 const CHECK_MIN: i32 = 12;
 
-/// Where a list is scrolled to: the row at its top, by key so rows arriving above don’t move it, and how many rows it showed last frame.
+/// Where a list is scrolled to: the row at its top, by key so rows arriving above don’t move it, and how many rows it showed last frame. A list shown in an order of its own is scrolled by place, so sorting it again starts from the same place.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Scroll {
     pub anchor: Option<u128>,
@@ -1179,19 +1180,42 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.tree.files.push((self.parent, cmd));
     }
 
-    /// A list of `items`, scrolled by whole rows, whose selection lives at `selection`. `row` describes one item; it is called only for the rows that show, so a list of fifty million costs what a screenful does.
+    /// A list of `items`, scrolled by whole rows, whose selection lives at `selection`. `row` describes one item; it is called only for the rows that show, so a list of fifty million costs what a screenful does. `items` is a list, or a list in an order worked out in the background: `self.order.of(&self.files)`.
     #[track_caller]
-    pub fn list<T: Record, F: Field>(&mut self, items: &List<T>, selection: FactPath<F, Selection<T>>, mut row: impl FnMut(&mut Ui<'_, C, Key<T>>, &T)) -> Listed<'_, 'a, C, S, T> {
-        let at = Location::caller();
-        let i = self.add(Kind::List { count: items.len() as u32, first: 0, shown: 0 }, at);
+    pub fn list<'r, T: Record, F: Field>(&mut self, items: impl Into<Rows<'r, T>>, selection: FactPath<F, Selection<T>>, mut row: impl FnMut(&mut Ui<'_, C, Key<T>>, &T)) -> Listed<'_, 'a, C, S, T> {
+        let i = self.rows(&items.into(), selection, Location::caller(), false, |ui, item, _| row(ui, item));
+        Listed { ui: self, node: i, items: PhantomData }
+    }
+
+    /// A table of `items`: a list whose rows are cells in named columns under a row of heads. `row` gives an item's cells, `row.cell(t!("Size"), file.size)`, the same columns in the same order for every item; it is called only for the rows that show. Columns share the width, and the user can drag the gap after a head to make its column wider or narrower; in a narrow window the columns that don't fit are left out from the right. With `.sort(Files::sort)` pressing a head sorts by its column.
+    #[track_caller]
+    pub fn table<'r, T: Record, F: Field>(&mut self, items: impl Into<Rows<'r, T>>, selection: FactPath<F, Selection<T>>, mut row: impl FnMut(&mut Row<'_, '_, C, T>, &T)) -> Tabled<'_, 'a, C, S, T> {
+        let i = self.rows(&items.into(), selection, Location::caller(), true, |ui, item, heads| row(&mut Row { ui, heads, column: 0 }, item));
+        Tabled { ui: self, node: i, items: PhantomData }
+    }
+
+    fn rows<T: Record, F: Field>(
+        &mut self,
+        items: &Rows<'_, T>,
+        selection: FactPath<F, Selection<T>>,
+        at: &'static Location<'static>,
+        table: bool,
+        mut row: impl FnMut(&mut Ui<'_, C, Key<T>>, &T, bool),
+    ) -> u32 {
+        let i = self.add(Kind::List { count: items.len() as u32, first: 0, shown: 0, rows: 0 }, at);
         let erased = selection.erased();
         self.tree.nodes[i as usize].path = Some(erased);
         let id = self.tree.nodes[i as usize].id;
         let scroll = self.scrolls.get(&id).copied().unwrap_or_default();
         let len = items.len();
-        let first = scroll.anchor.and_then(|k| items.position(Key::from_raw(k))).unwrap_or_else(|| (scroll.index as usize).min(len.saturating_sub(1)));
+        let anchor = scroll.anchor.filter(|_| items.ranks().is_none());
+        let first = anchor.and_then(|k| items.position(Key::from_raw(k))).unwrap_or_else(|| (scroll.index as usize).min(len.saturating_sub(1)));
         let want = (scroll.rows.max(1) + 1) as usize;
         let chosen = self.facts::<F>().and_then(|f| selection.get(f));
+        if table && let Some(item) = items.get(first) {
+            let header = self.tree.add(i, Kind::Header, Some(id.mix(0x4ead)), at);
+            row(&mut self.child(header, None), item, true);
+        }
         let mut shown = 0u32;
         for (n, index) in (first..len).take(want).enumerate() {
             let Some(item) = items.get(index) else { break };
@@ -1202,10 +1226,10 @@ impl<'a, C, S> Ui<'a, C, S> {
             let r = self.tree.add(i, Kind::ListRow { key: raw, index: index as u32, selected, focused }, Some(row_id), at);
             self.tree.nodes[r as usize].subject = Some(raw);
             self.tree.nodes[r as usize].path = Some(erased);
-            row(&mut self.child(r, Some(raw)), item);
+            row(&mut self.child(r, Some(raw)), item, false);
             shown = n as u32 + 1;
         }
-        self.tree.nodes[i as usize].kind = Kind::List { count: len as u32, first: first as u32, shown };
+        self.tree.nodes[i as usize].kind = Kind::List { count: len as u32, first: first as u32, shown, rows: 0 };
         let focused = chosen.and_then(|s| s.focused());
         let focus_index = focused.and_then(|k| items.position(k));
         let near = |d: isize| focus_index.and_then(|p| p.checked_add_signed(d)).and_then(|p| items.get(p)).map(|t| t.key().raw());
@@ -1213,7 +1237,7 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.tree.lists.push(ListInfo {
             node: i,
             item: std::any::TypeId::of::<T>(),
-            items: items.path(),
+            items: items.list().path(),
             selection: erased,
             count: len as u32,
             chosen: chosen.map_or(0, |s| s.len() as u32),
@@ -1226,8 +1250,15 @@ impl<'a, C, S> Ui<'a, C, S> {
             last: items.last().map(|t| t.key().raw()),
             keys: keys::<F, T>,
             nth: nth::<F, T>,
+            order: match items.ranks() {
+                Some(r) => {
+                    self.tree.orders.push(r.clone());
+                    self.tree.orders.len() as u32 - 1
+                }
+                None => NONE,
+            },
         });
-        Listed { ui: self, node: i, items: PhantomData }
+        i
     }
 
     /// What the page shows when there is nothing yet: a sentence, and the command that makes something.
@@ -1301,9 +1332,23 @@ pub(crate) fn day_id(calendar: Id, day: Day) -> Id {
     calendar.mix(9).mix(day.0 as u32 as u64)
 }
 
-fn keys<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, selection: ledger::ErasedPath, span: Option<(u128, u128)>) -> Vec<u128> {
+fn keys<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, selection: ledger::ErasedPath, ranks: Option<&crate::table::Ranks>, span: Option<(u128, u128)>) -> Vec<u128> {
     let Some(facts) = facts.downcast_ref::<F>() else { return Vec::new() };
-    let Some(list) = facts.reach(items.steps()).and_then(|l| l.downcast_ref::<List<T>>()) else { return Vec::new() };
+    let Some(list) = facts.reach(items.steps()).and_then(|l| l.downcast_ref::<ledger::List<T>>()) else { return Vec::new() };
+    if let Some(r) = ranks {
+        return match span {
+            Some((from, to)) => {
+                let (Some(a), Some(b)) = (r.position(from), r.position(to)) else { return Vec::new() };
+                (a.min(b)..=a.max(b)).filter_map(|i| r.key(i)).filter(|&k| list.has(Key::from_raw(k))).collect()
+            }
+            None => {
+                let Some(chosen) = facts.reach(selection.steps()).and_then(|s| s.downcast_ref::<Selection<T>>()) else { return Vec::new() };
+                let mut keys: Vec<(usize, u128)> = chosen.iter().filter_map(|k| r.position(k.raw()).map(|p| (p, k.raw()))).collect();
+                keys.sort_unstable();
+                keys.into_iter().map(|(_, k)| k).collect()
+            }
+        };
+    }
     match span {
         Some((from, to)) => {
             let (Some(a), Some(b)) = (list.position(Key::from_raw(from)), list.position(Key::from_raw(to))) else { return Vec::new() };
@@ -1318,7 +1363,117 @@ fn keys<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, selecti
     }
 }
 
-fn nth<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, index: u32) -> Option<u128> {
-    let list = facts.downcast_ref::<F>()?.reach(items.steps())?.downcast_ref::<List<T>>()?;
-    list.get(index as usize).map(|t| t.key().raw())
+fn nth<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, ranks: Option<&crate::table::Ranks>, index: u32) -> Option<u128> {
+    let list = facts.downcast_ref::<F>()?.reach(items.steps())?.downcast_ref::<ledger::List<T>>()?;
+    match ranks {
+        Some(r) => r.key(index as usize).filter(|&k| list.has(Key::from_raw(k))),
+        None => list.get(index as usize).map(|t| t.key().raw()),
+    }
+}
+
+/// One row of a table being described: its cells, left to right.
+pub struct Row<'u, 'a, C, T> {
+    ui: &'u mut Ui<'a, C, Key<T>>,
+    heads: bool,
+    column: u16,
+}
+
+impl<C, T> Row<'_, '_, C, T> {
+    /// A cell in the column named `label`, showing `value`: words from the left, numbers lined up on the right.
+    #[track_caller]
+    pub fn cell(&mut self, label: impl Into<Message>, value: impl Cell) -> Celled<'_, C> {
+        let label = label.into();
+        let at = Location::caller();
+        let column = self.column;
+        self.column += 1;
+        let tree = &mut *self.ui.tree;
+        let parent = self.ui.parent;
+        if self.heads {
+            let id = tree.nodes[parent as usize].id.named(label.as_str());
+            let i = tree.add(parent, Kind::Head { sorted: 0, sortable: false, numeric: value.numeric() }, Some(id), at);
+            let r = tree.put(label.as_str());
+            tree.nodes[i as usize].text = r;
+            let wide = label.as_str().chars().count() as i32 + 2;
+            tree.nodes[i as usize].span = match tree.resized.get(&id) {
+                Some(&w) => crate::tree::cols(w),
+                None if value.numeric() => crate::tree::cols(wide.max(10)).min(wide.min(6)),
+                None => crate::tree::Fill.min(wide.min(10)),
+            };
+            return Celled { tree, node: i, sign: 0, heads: true };
+        }
+        let i = tree.add(parent, Kind::Cell { numeric: value.numeric(), tone: Tone::Ink }, Some(tree.nodes[parent as usize].id.mix(u64::from(column))), at);
+        let r = tree.put(&value.shown());
+        tree.nodes[i as usize].text = r;
+        let r = tree.put(label.as_str());
+        tree.nodes[i as usize].name = r;
+        Celled { tree, node: i, sign: value.sign(), heads: false }
+    }
+}
+
+/// A cell just placed, to finish describing: `row.cell(t!("Change"), quote.change).tone_by_sign()`.
+pub struct Celled<'t, C> {
+    tree: &'t mut Tree<C>,
+    node: u32,
+    sign: i8,
+    heads: bool,
+}
+
+impl<C> Celled<'_, C> {
+    /// Its number in the ok ink above zero and the danger ink below.
+    pub fn tone_by_sign(self) -> Self {
+        if !self.heads
+            && let Kind::Cell { tone, .. } = &mut self.tree.nodes[self.node as usize].kind
+        {
+            *tone = crate::table::toned(self.sign, true);
+        }
+        self
+    }
+
+    /// How wide its column starts, in columns: `.width(12)`, `.width(Fill.min(20))`. The user can still drag it wider or narrower.
+    pub fn width(self, span: impl Into<Span>) -> Self {
+        if self.heads && !self.tree.resized.contains_key(&self.tree.nodes[self.node as usize].id) {
+            self.tree.nodes[self.node as usize].span = span.into();
+        }
+        self
+    }
+}
+
+/// A table just placed, to finish describing: `ui.table(…).sort(Files::sort)`.
+pub struct Tabled<'u, 'a, C, S, T> {
+    ui: &'u mut Ui<'a, C, S>,
+    node: u32,
+    items: PhantomData<fn() -> T>,
+}
+
+impl<C, S, T> Tabled<'_, '_, C, S, T> {
+    /// Pressing a column's head sorts by it, then the other way, then not at all, by setting the [`Sort`] at `path`. Give the table the rows in the order worked out from it.
+    pub fn sort<F: Field>(self, path: FactPath<F, Sort>) -> Self {
+        let Some(now) = self.ui.facts::<F>().and_then(|f| path.get(f)).cloned() else { return self };
+        let erased = path.erased();
+        let Some(header) = self.ui.tree.children(self.node).find(|&c| self.ui.tree.nodes[c as usize].kind == Kind::Header) else { return self };
+        let heads: Vec<u32> = self.ui.tree.children(header).collect();
+        for h in heads {
+            let label = self.ui.tree.str(self.ui.tree.nodes[h as usize].text).to_string();
+            let next = now.pressed(&label);
+            let sorted = match (now.column() == label, now.descending()) {
+                (false, _) => 0,
+                (true, false) => 1,
+                (true, true) => -1,
+            };
+            if let Kind::Head { numeric, .. } = self.ui.tree.nodes[h as usize].kind {
+                self.ui.tree.nodes[h as usize].kind = Kind::Head { sorted, sortable: true, numeric };
+            }
+            let said = next.said();
+            self.ui.set(h, erased, next.value(), said);
+        }
+        self
+    }
+
+    /// How many rows tall it is, its heads included, when it sits among other things rather than filling the page.
+    pub fn height(self, rows: i32) -> Self {
+        if let Kind::List { rows: r, .. } = &mut self.ui.tree.nodes[self.node as usize].kind {
+            *r = rows.max(3);
+        }
+        self
+    }
 }

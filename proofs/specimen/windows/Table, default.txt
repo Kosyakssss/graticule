@@ -1,0 +1,80 @@
+window		0 0 120 30	
+  page	Table	0 0 120 24	
+    list		2 3 116 20	25 items
+      list item		2 3 114 2	
+        text	A list whose rows are cells in named columns, under a row of heads. Like a list, it is scrolled by whole rows and builds only the rows that show, so a table of millions of rows costs what a screenful does. Pressing a head sorts by its column; the order is worked out in the background, never while drawing.	2 3 114 2	
+      list item		2 5 114 1	
+      list item		2 6 114 8	
+        group		2 6 114 8	
+          column		2 6 14 1	
+            text	Live	2 6 14 1	muted
+          column		18 6 98 8	
+            list		18 6 98 8	12 items
+              column heads		18 6 96 1	
+                column head	City	18 6 35 1	
+                column head	Country	55 6 35 1	
+                column head	People	92 6 10 1	
+                column head	Change	104 6 10 1	
+              list item		18 7 96 1	
+                cell	Amsterdam	18 7 35 1	
+                cell	Netherlands	55 7 35 1	
+                cell	931,000	92 7 10 1	
+                cell	8,200	104 7 10 1	ok
+              list item		18 8 96 1	
+                cell	Athens	18 8 35 1	
+                cell	Greece	55 8 35 1	
+                cell	643,000	92 8 10 1	
+                cell	−2,100	104 8 10 1	danger
+              list item		18 9 96 1	
+                cell	Berlin	18 9 35 1	
+                cell	Germany	55 9 35 1	
+                cell	3,880,000	92 9 10 1	
+                cell	21,500	104 9 10 1	ok
+              list item		18 10 96 1	
+                cell	Lisbon	18 10 35 1	
+                cell	Portugal	55 10 35 1	
+                cell	545,000	92 10 10 1	
+                cell	3,900	104 10 10 1	ok
+              list item		18 11 96 1	
+                cell	London	18 11 35 1	
+                cell	United Kingdom	55 11 35 1	
+                cell	8,870,000	92 11 10 1	
+                cell	61,000	104 11 10 1	ok
+              list item		18 12 96 1	
+                cell	Madrid	18 12 35 1	
+                cell	Spain	55 12 35 1	
+                cell	3,330,000	92 12 10 1	
+                cell	37,400	104 12 10 1	ok
+              list item		18 13 96 1	
+                cell	Oslo	18 13 35 1	
+                cell	Norway	55 13 35 1	
+                cell	717,000	92 13 10 1	
+                cell	6,800	104 13 10 1	ok
+      list item		2 14 114 1	
+      list item		2 15 114 1	
+        heading	Use it for	2 15 7 1	strong
+      list item		2 16 114 1	
+        text	Records with several values each that the user compares down a column: files and their sizes, cities and their populations, quotes and their prices.	2 16 109 1	
+      list item		2 17 114 1	
+      list item		2 18 114 1	
+        heading	Code	2 18 4 1	strong
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Bold	46 26 6 1	
+    button	Go one level in	54 26 13 1	
+    button	Say it	69 26 7 1	unavailable (Type something first)
+    button	Back to all components	78 26 20 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

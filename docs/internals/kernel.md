@@ -145,6 +145,8 @@ A command shown on screen is asked `available` once per build of the tree, which
 
 This is what keeps a 10,000-item to-do list at the same frame cost as five items.
 
+A table is a list whose first child is a row of heads. The heads come from calling the row closure once more, for the top row shown, with the row builder making heads instead of cells, so the app names its columns in one place; an empty table has no heads. The order a table shows its rows in is not the kernel's: it is a derived value (§14) the app works out from the list and a `Sort` fact, which a head's press sets by an edit. The kernel only reads it, by key and by place, both for drawing and for the keys that move and choose, so sorting a million rows never runs on the main thread. A list shown in an order scrolls by place rather than by the key at its top, since after sorting again the key at the top is somewhere else. Column widths the user dragged are the window's, by the id of each head, which follows the head's name.
+
 ## 6. Layout in cells
 
 ### 6.1 Units

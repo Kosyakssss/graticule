@@ -66,6 +66,10 @@ fn state<C>(tree: &Tree<C>, n: &Node) -> String {
         Kind::Choice { chosen: true } => parts.push("highlighted".to_string()),
         Kind::List { count, .. } => parts.push(format!("{count} items")),
         Kind::Gauge { filled, .. } => parts.push(format!("{} %", f32::from(filled) / 10.0)),
+        Kind::Head { sorted: 1, .. } => parts.push("sorted".to_string()),
+        Kind::Head { sorted: -1, .. } => parts.push("sorted, largest first".to_string()),
+        Kind::Cell { tone: Tone::Ok, .. } => parts.push("ok".to_string()),
+        Kind::Cell { tone: Tone::Danger, .. } => parts.push("danger".to_string()),
         Kind::Callout { ink } => parts.push(ink.name().to_string()),
         _ => {}
     }

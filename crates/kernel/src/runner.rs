@@ -231,6 +231,8 @@ pub struct Runner<A: App> {
     months: HashMap<Id, i32>,
     sliding: Option<(Id, i128)>,
     mixing: Option<(Id, (u16, u16))>,
+    resizing: Option<(Id, i32, i32)>,
+    resized: HashMap<Id, i32>,
     aim: Option<(Id, u64)>,
     opened: Option<Id>,
     browse: Option<Id>,
@@ -318,6 +320,8 @@ impl<A: App> Runner<A> {
             months: HashMap::new(),
             sliding: None,
             mixing: None,
+            resizing: None,
+            resized: HashMap::new(),
             aim: None,
             opened: None,
             browse: None,
@@ -409,6 +413,7 @@ impl<A: App> Runner<A> {
         (self.tree.opened, self.tree.focus) = (self.opened, self.focus);
         self.tree.months.clone_from(&self.months);
         self.tree.aim = self.aim;
+        self.tree.resized.clone_from(&self.resized);
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
@@ -1169,7 +1174,7 @@ impl<A: App> Runner<A> {
             });
             let visible = self.tree.children(info.node).filter(|&c| {
                 let a = self.tree.nodes[c as usize].area;
-                a.rows > 0 && a.row + a.rows <= n.area.row + n.area.rows
+                matches!(self.tree.nodes[c as usize].kind, Kind::ListRow { .. }) && a.rows > 0 && a.row + a.rows <= n.area.row + n.area.rows
             });
             let visible = visible.count().max(1) as u32;
             let s = self.scrolls.entry(n.id).or_default();
@@ -1229,7 +1234,7 @@ impl<A: App> Runner<A> {
 
     fn here(&self) -> Here {
         let list = self.current_list()?;
-        let keys = if list.chosen > 1 { (list.keys)(&self.facts as &dyn Any, list.items, list.selection, None) } else { list.focused.into_iter().collect() };
+        let keys = if list.chosen > 1 { (list.keys)(&self.facts as &dyn Any, list.items, list.selection, self.tree.ranks(&list), None) } else { list.focused.into_iter().collect() };
         Some((list, keys))
     }
 
@@ -1277,7 +1282,8 @@ impl<A: App> Runner<A> {
             _ if self.count > 1 && list.chosen > 1 => Target::Refused(focused(), Message::from("Several items are chosen already, so a count has nothing to add")),
             _ if self.count > 1 => {
                 let Some(from) = list.focus_index else { return Target::Refused(None, Message::from("Nothing is chosen")) };
-                let cmds: Vec<_> = (from..from.saturating_add(self.count)).map_while(|i| (list.nth)(&self.facts as &dyn Any, list.items, i)).filter_map(|k| make(Some(k))).collect();
+                let cmds: Vec<_> =
+                    (from..from.saturating_add(self.count)).map_while(|i| (list.nth)(&self.facts as &dyn Any, list.items, self.tree.ranks(list), i)).filter_map(|k| make(Some(k))).collect();
                 let n = cmds.len();
                 Target::Many(cmds, n)
             }
@@ -2245,10 +2251,10 @@ impl<A: App> Runner<A> {
         for (id, focused, index) in marks {
             let Some(list) = self.tree.find(id).and_then(|i| self.tree.lists.get(self.tree.nodes[i as usize].list as usize).copied()) else { continue };
             let facts = &self.facts as &dyn Any;
-            if list.count == 0 || !(list.keys)(facts, list.items, list.selection, Some((focused, focused))).is_empty() || list.focused.is_some_and(|f| f != focused) {
+            if list.count == 0 || !(list.keys)(facts, list.items, list.selection, self.tree.ranks(&list), Some((focused, focused))).is_empty() || list.focused.is_some_and(|f| f != focused) {
                 continue;
             }
-            let Some(key) = (list.nth)(facts, list.items, index.min(list.count - 1)) else { continue };
+            let Some(key) = (list.nth)(facts, list.items, self.tree.ranks(&list), index.min(list.count - 1)) else { continue };
             self.gesture += 1;
             if let Some(cmd) = <A::Cmd as Commands<A>>::edit(Edit::new(list.selection, Change::Select(Choose::Only(key)), self.gesture)) {
                 let said = self.said.take();
@@ -2853,7 +2859,7 @@ impl<A: App> Runner<A> {
             }
             _ => {
                 let Some(list) = self.current_list() else { return false };
-                let keys = |span| (list.keys)(&self.facts as &dyn Any, list.items, list.selection, Some(span));
+                let keys = |span| (list.keys)(&self.facts as &dyn Any, list.items, list.selection, self.tree.ranks(&list), Some(span));
                 let start = if list.focused.is_none() { None } else { Some(()) };
                 let choose = match b {
                     Builtin::Up => start.map_or(list.last, |_| list.before).map(Choose::Only),
@@ -3305,7 +3311,7 @@ impl<A: App> Runner<A> {
             Builtin::First => 0,
             _ => last,
         };
-        let cmds = (from.min(to)..=from.max(to)).filter_map(|i| (list.nth)(&self.facts as &dyn Any, list.items, i)).filter_map(|k| A::Cmd::make(e, Some(k), &[])).collect();
+        let cmds = (from.min(to)..=from.max(to)).filter_map(|i| (list.nth)(&self.facts as &dyn Any, list.items, self.tree.ranks(&list), i)).filter_map(|k| A::Cmd::make(e, Some(k), &[])).collect();
         self.run_many(cmds)
     }
 
@@ -3557,7 +3563,7 @@ impl<A: App> Runner<A> {
                 } else if mods.shift
                     && let Some(from) = list.anchor.or(list.focused)
                 {
-                    Choose::Extend { to: key, between: (list.keys)(&self.facts as &dyn Any, list.items, list.selection, Some((from, key))) }
+                    Choose::Extend { to: key, between: (list.keys)(&self.facts as &dyn Any, list.items, list.selection, self.tree.ranks(&list), Some((from, key))) }
                 } else {
                     Choose::Only(key)
                 };
@@ -3706,6 +3712,14 @@ impl<A: App> Runner<A> {
             row = Some(n.area.row);
         }
         out
+    }
+
+    /// The column head whose right edge is the gap at `col`, which is dragged to make its column wider or narrower.
+    fn column_edge(&self, col: i32, row: i32) -> Option<u32> {
+        if self.stale || !self.laid {
+            return None;
+        }
+        self.tree.nodes.iter().position(|n| matches!(n.kind, Kind::Head { .. }) && n.area.row == row && n.area.rows > 0 && n.area.right() == col).map(|i| i as u32)
     }
 
     fn hovered(&self, frame: &Frame) -> Option<Id> {
@@ -3976,6 +3990,14 @@ impl<A: App> Runner<A> {
                     reading.head = head;
                     return moved;
                 }
+                if let Some((id, from, width)) = self.resizing {
+                    let Some((x, y)) = frame.pointer else { return false };
+                    let col = frame.metrics.cell_at(x, y).0;
+                    let now = (width + col - from).max(4);
+                    let was = self.resized.insert(id, now);
+                    self.stale |= was != Some(now);
+                    return was != Some(now);
+                }
                 if let Some((id, was)) = self.mixing
                     && let Some(i) = self.tree.find(id)
                 {
@@ -4031,6 +4053,14 @@ impl<A: App> Runner<A> {
                 {
                     let (col, row) = frame.metrics.cell_at(x, y);
                     return self.inspect_at(col, row);
+                }
+                if let Some((x, y)) = frame.pointer {
+                    let (col, row) = frame.metrics.cell_at(x, y);
+                    if let Some(head) = self.column_edge(col, row) {
+                        let n = self.tree.nodes[head as usize];
+                        self.resizing = Some((n.id, col, n.area.cols));
+                        return true;
+                    }
                 }
                 self.pressed = self.hovered(frame);
                 if self.keep_opened(self.pressed) {
@@ -4095,6 +4125,9 @@ impl<A: App> Runner<A> {
             }
             Input::Release { button: Button::Left } => {
                 self.drag = None;
+                if self.resizing.take().is_some() {
+                    return true;
+                }
                 if let Some((id, now)) = self.mixing.take() {
                     self.stale = true;
                     if let Some(i) = self.tree.find(id) {

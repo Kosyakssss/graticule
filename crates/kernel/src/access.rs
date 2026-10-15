@@ -9,6 +9,9 @@ fn role(kind: Kind) -> Role {
         Kind::Page => Role::Document,
         Kind::Row | Kind::Columns | Kind::Column | Kind::Empty => Role::Group,
         Kind::List { .. } => Role::List,
+        Kind::Header => Role::Row,
+        Kind::Head { .. } => Role::ColumnHeader,
+        Kind::Cell { .. } => Role::Cell,
         Kind::ListRow { .. } => Role::ListItem,
         Kind::Field { holds: Holds::Lines { .. } } => Role::MultilineTextInput,
         Kind::Field { holds: Holds::Search } => Role::SearchInput,
@@ -66,6 +69,17 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
     let mut nodes = Vec::with_capacity(tree.nodes.len());
     for (i, n) in tree.nodes.iter().enumerate() {
         let mut node = Node::new(role(n.kind));
+        let table = |list: u32| {
+            list != NONE
+                && matches!(tree.nodes[list as usize].kind, Kind::List { .. })
+                && tree.nodes[list as usize].first != NONE
+                && tree.nodes[tree.nodes[list as usize].first as usize].kind == Kind::Header
+        };
+        match n.kind {
+            Kind::List { .. } if table(i as u32) => node.set_role(Role::Table),
+            Kind::ListRow { .. } if table(n.parent) => node.set_role(Role::Row),
+            _ => {}
+        }
         let r = m.rect(n.area);
         node.set_bounds(Bounds { x0: r.x as f64, y0: r.y as f64, x1: r.right() as f64, y1: r.bottom() as f64 });
         let text = tree.str(n.text);
@@ -142,6 +156,18 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 }
             }
             Kind::ListRow { selected, .. } => node.set_selected(selected),
+            Kind::Head { sorted, .. } => {
+                node.set_label(text);
+                match sorted {
+                    1 => node.set_sort_direction(accesskit::SortDirection::Ascending),
+                    -1 => node.set_sort_direction(accesskit::SortDirection::Descending),
+                    _ => {}
+                }
+            }
+            Kind::Cell { .. } => {
+                node.set_label(text);
+                node.set_description(name);
+            }
             Kind::Gauge { filled, .. } => {
                 node.set_label(text);
                 node.set_numeric_value(f64::from(filled) / 10.0);

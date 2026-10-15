@@ -148,10 +148,12 @@ pub fn run<A: App>(starts: &[(String, A)], plan: Plan) -> Universal {
 
 fn internal_reached<A: App>(facts: &A) -> Option<String> {
     let mut runner = Runner::new(facts.clone());
+    runner.build();
+    let settled = runner.facts.clone();
     for entry in A::Cmd::entries().iter().filter(|e| e.internal) {
         let before = runner.history.len();
         runner.run_named(entry.name);
-        if runner.history.len() != before || !runner.facts.same(facts) {
+        if runner.history.len() != before || !runner.facts.same(&settled) {
             return Some(format!("running “{}” by name changed the facts, though it is internal", entry.name));
         }
     }

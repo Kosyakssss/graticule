@@ -27,6 +27,11 @@ impl Id {
         Id(h ^ (h >> 29))
     }
 
+    /// Mixed with words, for ids that follow a name rather than a place in the code.
+    pub fn named(self, name: &str) -> Id {
+        Id(name.bytes().fold(self.0, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3)))
+    }
+
     pub fn at(self, location: &Location<'_>, count: u32) -> Id {
         let file = location.file().bytes().fold(0u64, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
         self.mix(file).mix((location.line() as u64) << 32 | location.column() as u64).mix(count as u64)
@@ -117,7 +122,7 @@ pub enum Kind {
     Row,
     Column,
     Columns,
-    List { count: u32, first: u32, shown: u32 },
+    List { count: u32, first: u32, shown: u32, rows: i32 },
     ListRow { key: u128, index: u32, selected: bool, focused: bool },
     Field { holds: Holds },
     Check { on: bool },
@@ -179,6 +184,9 @@ pub enum Kind {
     ColorArea { l: u16, c: u16, h: u16 },
     Canvas { rows: i32, pressable: bool },
     Image { rows: i32, width: u32, height: u32 },
+    Header,
+    Head { sorted: i8, sortable: bool, numeric: bool },
+    Cell { numeric: bool, tone: Tone },
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -223,6 +231,7 @@ impl Kind {
                 | Kind::Turn { .. }
                 | Kind::ColorArea { .. }
                 | Kind::Canvas { pressable: true, .. }
+                | Kind::Head { sortable: true, .. }
         )
     }
 
@@ -250,6 +259,7 @@ impl Kind {
                 | Kind::Crumbs
                 | Kind::Overflow
                 | Kind::Places
+                | Kind::Header
         )
     }
 
@@ -260,6 +270,9 @@ impl Kind {
             Kind::Row | Kind::Columns => "group",
             Kind::Column => "column",
             Kind::List { .. } => "list",
+            Kind::Header => "column heads",
+            Kind::Head { .. } => "column head",
+            Kind::Cell { .. } => "cell",
             Kind::ListRow { .. } => "list item",
             Kind::Field { holds: Holds::Lines { .. } } => "text area",
             Kind::Field { holds: Holds::Search } => "search field",
@@ -415,10 +428,10 @@ impl Node {
 }
 
 /// Reads keys out of the facts a list was built from: the chosen keys in list order, or the keys from one to another.
-pub type Keys = fn(&dyn std::any::Any, ErasedPath, ErasedPath, Option<(u128, u128)>) -> Vec<u128>;
+pub type Keys = fn(&dyn std::any::Any, ErasedPath, ErasedPath, Option<&crate::table::Ranks>, Option<(u128, u128)>) -> Vec<u128>;
 
 /// Reads the key of the row at a place in a list, counting from the top.
-pub type Nth = fn(&dyn std::any::Any, ErasedPath, u32) -> Option<u128>;
+pub type Nth = fn(&dyn std::any::Any, ErasedPath, Option<&crate::table::Ranks>, u32) -> Option<u128>;
 
 /// What the kernel knows about a list it can move around in and choose from, without knowing the type of its items.
 #[derive(Clone, Copy, Debug)]
@@ -438,6 +451,8 @@ pub struct ListInfo {
     pub last: Option<u128>,
     pub keys: Keys,
     pub nth: Nth,
+    /// The order its rows are shown in, by its place in `Tree::orders`, or `NONE` for the list's own.
+    pub order: u32,
 }
 
 /// The command a file dropped from the system makes.
@@ -482,6 +497,10 @@ pub struct Tree<C> {
     pub aim: Option<(Id, u64)>,
     /// The raster images, each with the node that shows it.
     pub images: Vec<(u32, crate::image::Image)>,
+    /// The orders tables show their rows in, by `ListInfo::order`.
+    pub orders: Vec<std::sync::Arc<crate::table::Ranks>>,
+    /// The widths of the columns the user has resized, by the id of each column's head.
+    pub resized: HashMap<Id, i32>,
 }
 
 /// What a canvas node draws: what it paints with its own GPU commands, its drawings in order over that, and the keys of its shapes that run a command when pressed, each with the command.
@@ -516,6 +535,8 @@ impl<C> Default for Tree<C> {
             canvases: Vec::new(),
             aim: None,
             images: Vec::new(),
+            orders: Vec::new(),
+            resized: HashMap::new(),
         }
     }
 }
@@ -533,6 +554,7 @@ impl<C> Tree<C> {
         self.shades.clear();
         self.canvases.clear();
         self.images.clear();
+        self.orders.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;
@@ -547,6 +569,11 @@ impl<C> Tree<C> {
     /// The least and most the number of a number field or slider can be.
     pub fn bounds(&self, node: u32) -> Option<(i128, i128)> {
         self.numbers.iter().find(|(n, ..)| *n == node).map(|&(_, least, most)| (least, most))
+    }
+
+    /// The order a list shows its rows in, if it isn't the list's own.
+    pub fn ranks(&self, list: &ListInfo) -> Option<&crate::table::Ranks> {
+        self.orders.get(list.order as usize).map(|r| &**r)
     }
 
     pub fn str(&self, r: Range32) -> &str {

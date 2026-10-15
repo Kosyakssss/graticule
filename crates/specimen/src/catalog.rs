@@ -2,7 +2,7 @@ use graticule_macros::{Choice, Commands, Facts, Form};
 use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
-use kernel::{App, Available, Channel, Cx, Day, Failure, Image, Ink, Message, Oklch, PaintHook, Path, States, Time, Ui};
+use kernel::{App, Available, Channel, Cx, Day, Derived, Failure, Image, Ink, Message, Oklch, Order, PaintHook, Path, Sort, States, Time, Ui};
 use ledger::{Edit, Key, List, Outcome, Selection, Text};
 
 use crate::style::{self, Mark, Mix, Nudge, Reach, Reaches, Side, Weight};
@@ -194,7 +194,53 @@ pub struct Catalog {
     hills: Image,
     #[resource]
     rings: PaintHook,
+    #[session]
+    cities: List<City>,
+    #[session]
+    picked: Selection<City>,
+    #[session]
+    sort: Sort,
+    #[derived(City::order, from = [cities, sort])]
+    order: Derived<Order<City>>,
 }
+
+/// A row of the live example of a table.
+#[derive(Facts)]
+pub struct City {
+    #[key]
+    id: Key<City>,
+    name: String,
+    country: String,
+    people: u32,
+    change: i32,
+}
+
+impl City {
+    fn order(cities: &List<City>, sort: &Sort) -> Order<City> {
+        match sort.column() {
+            "City" => Order::by(cities, sort, |c| c.name.clone()),
+            "Country" => Order::by(cities, sort, |c| c.country.clone()),
+            "People" => Order::by(cities, sort, |c| c.people),
+            "Change" => Order::by(cities, sort, |c| c.change),
+            _ => Order::of(cities),
+        }
+    }
+}
+
+const PEOPLE: [(&str, u32, i32); 12] = [
+    ("Netherlands", 931_000, 8_200),
+    ("Greece", 643_000, -2_100),
+    ("Germany", 3_880_000, 21_500),
+    ("Portugal", 545_000, 3_900),
+    ("United Kingdom", 8_870_000, 61_000),
+    ("Spain", 3_330_000, 37_400),
+    ("Norway", 717_000, 6_800),
+    ("France", 2_100_000, -11_600),
+    ("Czechia", 1_380_000, 9_100),
+    ("Italy", 2_750_000, -4_300),
+    ("Austria", 2_000_000, 19_700),
+    ("Poland", 1_860_000, 2_400),
+];
 
 const CITIES: [&str; 12] = ["Amsterdam", "Athens", "Berlin", "Lisbon", "London", "Madrid", "Oslo", "Paris", "Prague", "Rome", "Vienna", "Warsaw"];
 
@@ -341,10 +387,11 @@ pub enum Component {
     Canvas,
     Image,
     PaintHook,
+    Table,
 }
 
 impl Component {
-    const ALL: [Component; 71] = [
+    const ALL: [Component; 72] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -416,6 +463,7 @@ impl Component {
         Component::Canvas,
         Component::Image,
         Component::PaintHook,
+        Component::Table,
     ];
 
     fn name(self) -> &'static str {
@@ -491,6 +539,7 @@ impl Component {
             Component::Canvas => "Canvas",
             Component::Image => "Image",
             Component::PaintHook => "Paint hook",
+            Component::Table => "Table",
         }
     }
 
@@ -567,6 +616,7 @@ impl Component {
             Component::Canvas => include_str!("../../../docs/components/canvas.md"),
             Component::Image => include_str!("../../../docs/components/image.md"),
             Component::PaintHook => include_str!("../../../docs/components/paint-hook.md"),
+            Component::Table => include_str!("../../../docs/components/table.md"),
         }
     }
 
@@ -693,6 +743,15 @@ impl Default for Catalog {
             accent: Oklch::new(0.63, 0.19, 290.0),
             hills: hills(),
             rings: PaintHook::new(crate::rings::Rings::default()),
+            cities: CITIES
+                .iter()
+                .zip(PEOPLE)
+                .zip(1..)
+                .map(|((name, (country, people, change)), n)| City { id: Key::fixed(n), name: name.to_string(), country: country.to_string(), people, change })
+                .collect(),
+            picked: Selection::default(),
+            sort: Sort::default(),
+            order: Derived::default(),
         }
     }
 }
@@ -1137,6 +1196,16 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::Table => {
+                ui.table(self.order.of(&self.cities), Catalog::picked, |row, city| {
+                    row.cell("City", &city.name);
+                    row.cell("Country", &city.country);
+                    row.cell("People", city.people);
+                    row.cell("Change", city.change).tone_by_sign();
+                })
+                .sort(Catalog::sort)
+                .height(8);
+            }
             Component::PaintHook => ui.canvas("Rings painted by a shader", 8, |c| {
                 c.paint(&self.rings);
                 c.text((0.02, 0.15), "painted on the GPU");

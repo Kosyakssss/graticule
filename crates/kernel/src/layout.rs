@@ -184,6 +184,28 @@ impl<'t> Layout<'t> {
                 let min = if n.kind == Kind::Strip { widest } else { last };
                 (min, pref + GAP * (count - 1).max(0))
             }
+            Kind::Head { .. } => {
+                let c = self.cols(tree.str(n.text), false) + 2;
+                (c, c)
+            }
+            Kind::Cell { numeric, .. } => {
+                let c = self.cols(tree.str(n.text), numeric).max(1);
+                (c.min(4), c)
+            }
+            Kind::Header => {
+                let (start, end) = self.children(tree, i);
+                let (mut min, mut pref, mut count) = (0, 0, 0);
+                for k in start..end {
+                    let (a, b) = self.size(tree, self.stack[k]);
+                    if count == 0 {
+                        min = a;
+                    }
+                    pref += b;
+                    count += 1;
+                }
+                self.release(start);
+                (min, pref + GAP * (count - 1).max(0))
+            }
             Kind::Crumbs => {
                 let (start, end) = self.children(tree, i);
                 let (mut pref, mut count, mut first, mut last) = (0, 0, 0, 0);
@@ -295,6 +317,8 @@ impl<'t> Layout<'t> {
             Kind::Root | Kind::Page | Kind::Column | Kind::Empty | Kind::Bar | Kind::Palette | Kind::List { .. } | Kind::Overlay { .. } => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref) = (0, 0);
+                let table = matches!(n.kind, Kind::List { .. }) && start < end && tree.nodes[self.stack[start] as usize].kind == Kind::Header;
+                let end = if table { start + 1 } else { end };
                 for k in start..end {
                     let (a, b) = self.size(tree, self.stack[k]);
                     min = min.max(a);
@@ -453,6 +477,7 @@ impl<'t> Layout<'t> {
             }
             Kind::Value { value: Value::Error } => self.wrapped(tree.str(n.text), false, cols),
             Kind::Value { .. } => 1,
+            Kind::Header | Kind::Head { .. } | Kind::Cell { .. } => 1,
             Kind::Button
             | Kind::Action
             | Kind::Choice { .. }
@@ -490,7 +515,13 @@ impl<'t> Layout<'t> {
                 self.release(start);
                 if n.kind == Kind::Card { rows + 3 } else { rows.max(1) }
             }
-            Kind::List { .. } => 3,
+            Kind::List { rows, .. } => {
+                if rows > 0 {
+                    rows
+                } else {
+                    3
+                }
+            }
             Kind::Bar => {
                 let (start, end) = self.children(tree, i);
                 let (mut rows, mut col) = (1, 0);
@@ -807,7 +838,7 @@ impl<'t> Layout<'t> {
         let mut fills = 0;
         for k in start..end {
             let c = self.stack[k];
-            if matches!(tree.nodes[c as usize].kind, Kind::List { .. }) {
+            if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. }) {
                 fills += 1;
             } else {
                 fixed += self.rows(tree, c, area.cols);
@@ -820,7 +851,7 @@ impl<'t> Layout<'t> {
         let mut seen = 0;
         for k in start..end {
             let c = self.stack[k];
-            let rows = if matches!(tree.nodes[c as usize].kind, Kind::List { .. }) {
+            let rows = if matches!(tree.nodes[c as usize].kind, Kind::List { rows: 0, .. }) {
                 seen += 1;
                 let share = spare * seen / fills.max(1) - given;
                 given += share;
@@ -901,6 +932,10 @@ impl<'t> Layout<'t> {
     fn list<C>(&mut self, tree: &mut Tree<C>, i: u32, area: Area) {
         let (start, end) = self.children(tree, i);
         let cols = area.cols - 2;
+        if start < end && tree.nodes[self.stack[start] as usize].kind == Kind::Header {
+            self.table(tree, (start, end), area);
+            return;
+        }
         let mut row = area.row;
         for k in start..end {
             let c = self.stack[k];
@@ -920,6 +955,51 @@ impl<'t> Layout<'t> {
 }
 
 impl Layout<'_> {
+    /// A table's heads on its first row and a row to each item under them, each cell in its head's column. The columns that don't fit are left out from the right, keeping the first.
+    fn table<C>(&mut self, tree: &mut Tree<C>, (start, end): (usize, usize), area: Area) {
+        let cols = area.cols - 2;
+        let header = self.stack[start];
+        tree.nodes[header as usize].area = Area::new(area.col, area.row, cols, area.rows.min(1));
+        let (hs, he) = self.children(tree, header);
+        let mut fit = hs;
+        let mut used = -GAP;
+        while fit < he {
+            let min = self.size(tree, self.stack[fit]).0;
+            if fit > hs && used + GAP + min > cols {
+                break;
+            }
+            used += GAP + min;
+            fit += 1;
+        }
+        let at = self.share(tree, hs, fit, cols);
+        let shown = fit - hs;
+        let mut col = area.col;
+        for k in hs..he {
+            let c = self.stack[k];
+            let a = if k < fit && area.rows > 0 { Area::new(col, area.row, self.widths[at + k - hs], 1) } else { Area::default() };
+            col += a.cols + GAP;
+            tree.nodes[c as usize].area = a;
+        }
+        self.release(hs);
+        for (row, k) in (area.row + 1..).zip(start + 1..end) {
+            let c = self.stack[k];
+            let a = if row < area.bottom() { Area::new(area.col, row, cols, 1) } else { Area::default() };
+            tree.nodes[c as usize].area = a;
+            let (cs, ce) = self.children(tree, c);
+            let mut col = area.col;
+            for j in cs..ce {
+                let cell = self.stack[j];
+                let n = j - cs;
+                let b = if n < shown && !a.is_empty() { Area::new(col, a.row, self.widths[at + n], 1) } else { Area::default() };
+                col += b.cols + GAP;
+                self.place(tree, cell, b);
+            }
+            self.release(cs);
+        }
+        self.widths.truncate(at);
+        self.release(start);
+    }
+
     /// The smallest window, in cells, that shows everything in its narrow form: the page's minimum width, and its height at that width with every list three rows tall.
     pub fn minimum<C>(&mut self, tree: &Tree<C>) -> (i32, i32) {
         let (start, end) = self.children(tree, 0);

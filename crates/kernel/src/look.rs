@@ -455,7 +455,8 @@ impl Looks {
 
 /// Where the user's own themes and styles live, and the choice of look, shared by every Graticule app.
 pub fn folder() -> std::path::PathBuf {
-    dirs::data_dir().unwrap_or_else(std::env::temp_dir).join("Graticule").join("looks")
+    static FOLDER: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    FOLDER.get_or_init(|| dirs::data_dir().unwrap_or_else(std::env::temp_dir).join("Graticule").join("looks")).clone()
 }
 
 /// Watches the looks folder and calls `changed` with the looks read afresh whenever a file in it changes, on the watcher's own thread. The system tells it of changes, so it costs nothing while nothing changes. `None` when the folder can't be watched.

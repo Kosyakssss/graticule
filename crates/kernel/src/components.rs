@@ -847,7 +847,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
                 p.fill(Rect::new(r.x, y, r.w, t), theme.ink);
             }
         }
-        (Layer::Over, Kind::List { count, first, shown }) => {
+        (Layer::Over, Kind::List { count, first, shown, .. }) => {
             let a = n.area;
             let track = p.rect(Area::new(a.right() - 1, a.row, 1, a.rows));
             scrollbar(p, track, first, shown, count);
@@ -859,6 +859,17 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
                 p.fill(Rect::new(r.x, r.bottom() - t, r.w, t), rule);
             }
         }
+        (Layer::Over, Kind::Header) => {
+            let r = p.rect(n.area);
+            let (t, rule) = (p.style.line(p.m), p.theme.rule);
+            p.fill(Rect::new(r.x, r.bottom() - t, r.w, t), rule);
+        }
+        (Layer::Under, Kind::Head { sortable: true, .. }) if look.hovered => {
+            let hover = p.theme.hover;
+            p.fill_area(n.area, hover);
+        }
+        (Layer::Over, Kind::Head { sorted, numeric, .. }) => head(p, &n, text, sorted, numeric, look),
+        (Layer::Over, Kind::Cell { numeric, tone: t }) => cell(p, &n, text, numeric, tone(p, t)),
         (Layer::Over, Kind::Empty) => {}
         (Layer::Under, Kind::Text { .. } | Kind::Value { .. }) if look.chosen.0 < look.chosen.1 => chosen(p, &n, text, look.chosen.0 as usize..look.chosen.1 as usize),
         (Layer::Under, Kind::Swatch { ink }) => {
@@ -1066,6 +1077,45 @@ fn pick(p: &mut Painter, n: &Node, label: &str, indent: i32, style: crate::text:
         let (r, t, cursor) = (p.rect(n.area), p.style.line(p.m), p.theme.cursor);
         border(p, r, t, cursor);
     }
+}
+
+fn head(p: &mut Painter, n: &Node, label: &str, sorted: i8, numeric: bool, look: Look) {
+    let (style, ink) = (p.m.sans(600.0), p.theme.ink);
+    let arrow = match sorted {
+        1 => "↑",
+        -1 => "↓",
+        _ => "",
+    };
+    let whole = p.rect(n.area);
+    let r = Rect::new(if numeric { whole.x + p.m.cell_w * 2.0 } else { whole.x }, whole.y, whole.w - p.m.cell_w * 2.0, whole.h);
+    let w = p.measure(label, style).min(r.w);
+    let x = if numeric { (r.right() - w).round() } else { r.x };
+    p.text(label, style, (x, r.y), Some(r.w), ink);
+    if !arrow.is_empty() {
+        let (mono, muted) = (p.m.mono(), p.theme.muted);
+        let at = if numeric { x - p.m.cell_w * 1.5 } else { x + w + p.m.cell_w * 0.5 };
+        p.text(arrow, mono, (at, r.y), None, muted);
+    }
+    if look.focused {
+        let (r, t, cursor) = (p.rect(n.area), p.style.line(p.m), p.theme.cursor);
+        border(p, r, t, cursor);
+    }
+}
+
+fn cell(p: &mut Painter, n: &Node, text: &str, numeric: bool, ink: Color) {
+    if n.area.is_empty() {
+        return;
+    }
+    let r = p.rect(n.area);
+    if !numeric {
+        let style = p.m.sans(400.0);
+        p.text(text, style, (r.x, r.y), Some(r.w), ink);
+        return;
+    }
+    let style = p.m.mono();
+    let w = p.advance(text, style);
+    let x = if w > r.w { r.x } else { r.right() - w };
+    p.text(text, style, (x, r.y), Some(r.w), ink);
 }
 
 fn crumbs<C>(p: &mut Painter, tree: &Tree<C>, n: &Node) {

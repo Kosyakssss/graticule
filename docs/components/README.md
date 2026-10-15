@@ -93,6 +93,7 @@ Several names on either side are the same component. They are merged into one ro
 | Color field | ColorField, ColorInputGroup | | a swatch and the color typed as hex or OKLCH, shown as hex |
 | Color area and slider | ColorArea, ColorSlider | | lightness and chroma as an area at the color's hue, each part as a slider over its colors |
 | Color picker | ColorPicker | | anchored: a color field and an area and hue slider in a popover; swatch sets are not done |
+| Table | Table | Table, HTMLTable | wave 6: a list of cells in named columns, sorted or filtered by an order worked out in the background, columns resized by dragging; grouping, the glow on change and resizing from the keyboard are not done |
 
 ## Wave 6: beyond both kits
 
@@ -100,7 +101,6 @@ These are the components of spec §6.1 that professional apps need and that neit
 
 | Graticule | HeroUI | Blueprint | Notes |
 |---|---|---|---|
-| Virtual table | Table | Table, HTMLTable | millions of rows; sort, group, resize, filter in the background |
 | Tree | | Tree | |
 | Split panes and docking | | | layouts saved as files |
 | Picker and find | | Omnibar, QueryList | one picker behind the palette; find and replace (§7.4) |

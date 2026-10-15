@@ -191,6 +191,9 @@ pub enum Kind {
     Split,
     Pane,
     Divider,
+    Picker,
+    Matches { count: u32, first: u32, shown: u32, at: u32 },
+    Match { chosen: bool },
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -202,7 +205,7 @@ pub enum Anchor {
 
 impl Kind {
     pub fn acts(&self) -> bool {
-        matches!(self, Kind::Field { .. } | Kind::Choice { .. } | Kind::Action | Kind::ListRow { .. } | Kind::Entry) || self.control()
+        matches!(self, Kind::Field { .. } | Kind::Choice { .. } | Kind::Action | Kind::ListRow { .. } | Kind::Match { .. } | Kind::Entry) || self.control()
     }
 
     /// Whether it is a control the user presses: a button, a link, a box to tick or a switch to flip.
@@ -268,6 +271,9 @@ impl Kind {
                 | Kind::Header
                 | Kind::Split
                 | Kind::Pane
+                | Kind::Picker
+                | Kind::Matches { .. }
+                | Kind::Match { .. }
         )
     }
 
@@ -285,6 +291,9 @@ impl Kind {
             Kind::Split => "split",
             Kind::Pane => "pane",
             Kind::Divider => "divider",
+            Kind::Picker => "picker",
+            Kind::Matches { .. } => "matches",
+            Kind::Match { .. } => "match",
             Kind::ListRow { .. } => "list item",
             Kind::Field { holds: Holds::Lines { .. } } => "text area",
             Kind::Field { holds: Holds::Search } => "search field",
@@ -513,6 +522,18 @@ pub struct Tree<C> {
     pub orders: Vec<std::sync::Arc<crate::table::Ranks>>,
     /// The widths of the columns the user has resized, by the id of each column's head.
     pub resized: HashMap<Id, i32>,
+    /// Where each picker's highlight is, by the picker's id.
+    pub picks: HashMap<Id, Picking>,
+    /// The letters a picker's query matched in its rows' text, as byte ranges, by the text's node.
+    pub marks: Vec<(u32, Vec<(u32, u32)>)>,
+}
+
+/// Which row a picker highlights and which it shows at the top, for the query it was moved under. A new query starts from the top.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Picking {
+    pub query: u64,
+    pub at: u32,
+    pub first: u32,
 }
 
 /// What a canvas node draws: what it paints with its own GPU commands, its drawings in order over that, and the keys of its shapes that run a command when pressed, each with the command.
@@ -549,6 +570,8 @@ impl<C> Default for Tree<C> {
             images: Vec::new(),
             orders: Vec::new(),
             resized: HashMap::new(),
+            picks: HashMap::new(),
+            marks: Vec::new(),
         }
     }
 }
@@ -567,6 +590,7 @@ impl<C> Tree<C> {
         self.canvases.clear();
         self.images.clear();
         self.orders.clear();
+        self.marks.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;
@@ -700,6 +724,9 @@ impl<C> Tree<C> {
             b.presses.hash(&mut h);
             b.paint.as_ref().map(|p| p.stamp()).hash(&mut h);
             self.aim.filter(|a| a.0 == n.id).hash(&mut h);
+        }
+        if let Some((_, marks)) = self.marks.iter().find(|m| m.0 == i as u32) {
+            marks.hash(&mut h);
         }
         if let Some((_, image)) = self.images.iter().find(|m| m.0 == i as u32) {
             image.hash(&mut h);

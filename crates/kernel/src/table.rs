@@ -189,6 +189,16 @@ impl<T: Record> Order<T> {
         Order { ranks: Arc::new(ranks), of: PhantomData }
     }
 
+    /// The items whose words match `query`, best first, as a picker shows them: the letters typed appear in order in what `words` gives, and matches where they start words or sit together come first. Everything, in the list's order, while the query is empty.
+    pub fn found<'t>(list: &'t List<T>, query: &str, words: impl Fn(&'t T) -> &'t str) -> Order<T> {
+        if query.trim().is_empty() {
+            return Order::of(list);
+        }
+        let mut found: Vec<(i32, usize, u128)> = list.iter().filter_map(|t| crate::search::fuzzy(query, words(t)).map(|f| (f.score, words(t).len(), t.key().raw()))).collect();
+        found.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        Order::from_keys(found.into_iter().map(|(_, _, k)| k).collect())
+    }
+
     /// Only the items `keep` says yes to, in this order.
     pub fn only(self, list: &List<T>, keep: impl Fn(&T) -> bool) -> Order<T> {
         let keys = self.ranks.keys.iter().copied().filter(|&k| list.find(Key::from_raw(k)).is_some_and(&keep)).collect();
@@ -217,7 +227,7 @@ impl<T> Clone for Order<T> {
 impl<T: Record> Derived<Order<T>> {
     /// The rows of `list` in this order, once it has been worked out, and in the list's own order until then.
     pub fn of<'a>(&'a self, list: &'a List<T>) -> Rows<'a, T> {
-        Rows { list, ranks: self.get().map(|o| &o.ranks) }
+        Rows { list, ranks: self.get().map(|o| &o.ranks), coming: self.coming() }
     }
 }
 
@@ -225,11 +235,12 @@ impl<T: Record> Derived<Order<T>> {
 pub struct Rows<'a, T: Record> {
     list: &'a List<T>,
     ranks: Option<&'a Arc<Ranks>>,
+    coming: bool,
 }
 
 impl<'a, T: Record> From<&'a List<T>> for Rows<'a, T> {
     fn from(list: &'a List<T>) -> Self {
-        Rows { list, ranks: None }
+        Rows { list, ranks: None, coming: false }
     }
 }
 
@@ -240,6 +251,11 @@ impl<'a, T: Record> Rows<'a, T> {
 
     pub(crate) fn ranks(&self) -> Option<&'a Arc<Ranks>> {
         self.ranks
+    }
+
+    /// Whether a new order is being worked out, so what shows may change.
+    pub fn coming(&self) -> bool {
+        self.coming
     }
 
     pub fn len(&self) -> usize {

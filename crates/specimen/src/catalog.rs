@@ -203,6 +203,10 @@ pub struct Catalog {
     #[derived(City::order, from = [cities, sort])]
     order: Derived<Order<City>>,
     #[session]
+    looking_for: Text,
+    #[derived(City::found, from = [cities, looking_for])]
+    found: Derived<Order<City>>,
+    #[session]
     outline: List<Part>,
     #[session]
     reached: Selection<Part>,
@@ -256,6 +260,10 @@ pub struct City {
 }
 
 impl City {
+    fn found(cities: &List<City>, looking_for: &Text) -> Order<City> {
+        Order::found(cities, looking_for.as_str(), |c| &c.name)
+    }
+
     fn order(cities: &List<City>, sort: &Sort) -> Order<City> {
         match sort.column() {
             "City" => Order::by(cities, sort, |c| c.name.clone()),
@@ -430,10 +438,11 @@ pub enum Component {
     Table,
     Tree,
     SplitPanes,
+    Picker,
 }
 
 impl Component {
-    const ALL: [Component; 74] = [
+    const ALL: [Component; 75] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -508,6 +517,7 @@ impl Component {
         Component::Table,
         Component::Tree,
         Component::SplitPanes,
+        Component::Picker,
     ];
 
     fn name(self) -> &'static str {
@@ -586,6 +596,7 @@ impl Component {
             Component::Table => "Table",
             Component::Tree => "Tree",
             Component::SplitPanes => "Split panes",
+            Component::Picker => "Picker",
         }
     }
 
@@ -665,6 +676,7 @@ impl Component {
             Component::Table => include_str!("../../../docs/components/table.md"),
             Component::Tree => include_str!("../../../docs/components/tree.md"),
             Component::SplitPanes => include_str!("../../../docs/components/split-panes.md"),
+            Component::Picker => include_str!("../../../docs/components/picker.md"),
         }
     }
 
@@ -689,6 +701,8 @@ pub enum Cmd {
     Say,
     #[label("Open the page for “{name}”", short: "Open")]
     Open(#[subject] Key<Section>),
+    #[label("Go to “{name}”", short: "Go")]
+    Visit(#[subject] Key<City>),
     #[label("Back to all components")]
     Back,
     #[label("{text}")]
@@ -800,6 +814,8 @@ impl Default for Catalog {
             picked: Selection::default(),
             sort: Sort::default(),
             order: Derived::default(),
+            looking_for: Text::default(),
+            found: Derived::default(),
             outline: OUTLINE.iter().zip(1..).map(|(&(name, inside), n)| Part { id: Key::fixed(n), name: name.to_string(), inside: (inside > 0).then(|| Key::fixed(inside)) }).collect(),
             reached: Selection::default(),
             unfolded: vec![Key::fixed(1), Key::fixed(4)],
@@ -817,6 +833,7 @@ impl App for Catalog {
             Cmd::Open(section) => kernel::no_if(!self.sections.has(*section), Message::from("There is no such component")),
             Cmd::Deeper => kernel::no_if(self.depth as usize + 1 >= LEVELS.len(), Message::from("This is as deep as it goes")),
             Cmd::Back => kernel::no_if(self.page.is_none(), Message::from("All components are showing")),
+            Cmd::Visit(city) => kernel::no_if(!self.cities.has(*city), Message::from("There is no such city")),
             Cmd::Echo(sample) => kernel::no_if(!self.samples.has(*sample), Message::from("There is no such sample")),
             Cmd::Lighter(s) | Cmd::Darker(s) | Cmd::MoreColor(s) | Cmd::LessColor(s) | Cmd::HueForward(s) | Cmd::HueBack(s) => match self.nudge(*s, nudge(cmd)) {
                 Ok(_) => Available::Yes,
@@ -866,6 +883,10 @@ impl App for Catalog {
                 self.page = None;
                 let _ = self.blocks.replace([]);
                 Outcome::Changed
+            }
+            Cmd::Visit(city) => {
+                let name = self.cities.find(city).map(|c| c.name.clone()).unwrap_or_default();
+                cx.say(Message::plain(format!("Went to {name}")))
             }
             Cmd::Echo(sample) => {
                 let what = self.samples.find(sample).map(|s| s.what.clone()).unwrap_or_default();
@@ -1248,6 +1269,13 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::Picker => {
+                ui.picker(self.found.of(&self.cities), Catalog::looking_for, |ui, city| {
+                    ui.text(&city.name);
+                    ui.muted(&city.country);
+                })
+                .on_choose(Cmd::Visit);
+            }
             Component::SplitPanes => ui.split(|ui| {
                 ui.pane("Cities", kernel::cols(22).min(14), |ui| {
                     ui.list(&self.cities, Catalog::picked, |ui, city| ui.text(&city.name)).height(8);

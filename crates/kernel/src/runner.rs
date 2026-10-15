@@ -244,6 +244,7 @@ pub struct Runner<A: App> {
     resizing: Option<Resizing>,
     resized: HashMap<Id, i32>,
     panes: HashMap<Id, i32>,
+    picks: HashMap<Id, crate::tree::Picking>,
     aim: Option<(Id, u64)>,
     opened: Option<Id>,
     browse: Option<Id>,
@@ -334,6 +335,7 @@ impl<A: App> Runner<A> {
             resizing: None,
             resized: HashMap::new(),
             panes: HashMap::new(),
+            picks: HashMap::new(),
             aim: None,
             opened: None,
             browse: None,
@@ -426,6 +428,7 @@ impl<A: App> Runner<A> {
         self.tree.months.clone_from(&self.months);
         self.tree.aim = self.aim;
         self.tree.resized.clone_from(&self.resized);
+        self.tree.picks.clone_from(&self.picks);
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
@@ -3192,6 +3195,13 @@ impl<A: App> Runner<A> {
                     _ => {}
                 }
             }
+            if holds == Holds::Search
+                && chord.mods == Mods::default()
+                && self.tree.nodes[n.parent as usize].kind == Kind::Picker
+                && matches!(chord.key, Key::Up | Key::Down | Key::PageUp | Key::PageDown | Key::Enter)
+            {
+                return self.picker_key(i, chord.key);
+            }
             if holds == Holds::Search && chord.key == Key::Escape && chord.mods == Mods::default() && !n.text.is_empty() {
                 let len = self.tree.str(n.text).len();
                 return self.splice(i, 0..len, String::new(), 0, field::Kind::Alone);
@@ -3611,6 +3621,7 @@ impl<A: App> Runner<A> {
         let n = self.tree.nodes[i as usize];
         match n.kind {
             kind if kind == Kind::Action || kind.control() => self.fire(i),
+            Kind::Match { .. } => self.fire(i),
             Kind::Choice { .. } => {
                 self.palette = None;
                 self.stale = true;
@@ -3787,6 +3798,40 @@ impl<A: App> Runner<A> {
         out
     }
 
+    fn matches_of(&self, picker: u32) -> Option<u32> {
+        self.tree.children(picker).find(|&c| matches!(self.tree.nodes[c as usize].kind, Kind::Matches { .. }))
+    }
+
+    fn picker_key(&mut self, field: u32, key: Key) -> bool {
+        let picker = self.tree.nodes[field as usize].parent;
+        let Some(m) = self.matches_of(picker) else { return false };
+        let Kind::Matches { count, first, at, .. } = self.tree.nodes[m as usize].kind else { return false };
+        if key == Key::Enter {
+            return match self.tree.children(m).find(|&c| self.tree.nodes[c as usize].kind == Kind::Match { chosen: true }) {
+                Some(r) => self.fire(r),
+                None => self.say(Message::from("Nothing is found to choose")),
+            };
+        }
+        let to = match key {
+            Key::Up => at.saturating_sub(1),
+            Key::Down => at + 1,
+            Key::PageUp => at.saturating_sub(crate::ui::PICKED),
+            _ => at + crate::ui::PICKED,
+        }
+        .min(count.saturating_sub(1));
+        let first = first.min(to).max((to + 1).saturating_sub(crate::ui::PICKED));
+        self.pick(picker, to, first)
+    }
+
+    fn pick(&mut self, picker: u32, at: u32, first: u32) -> bool {
+        let field = self.tree.nodes[picker as usize].first;
+        let query = crate::search::hashed(self.tree.str(self.tree.nodes[field as usize].text));
+        let now = crate::tree::Picking { query, at, first };
+        let was = self.picks.insert(self.tree.nodes[picker as usize].id, now);
+        self.stale |= was != Some(now);
+        was != Some(now)
+    }
+
     fn divided(&self, i: u32) -> Option<Resizing> {
         let n = self.tree.nodes[i as usize];
         let mut c = self.tree.nodes[n.parent as usize].first;
@@ -3871,6 +3916,12 @@ impl<A: App> Runner<A> {
     }
 
     fn scroll(&mut self, col: i32, row: i32, by: i32) -> bool {
+        if let Some(m) = self.tree.nodes.iter().rposition(|n| matches!(n.kind, Kind::Matches { .. }) && n.area.contains(col, row)) {
+            let n = self.tree.nodes[m];
+            let Kind::Matches { count, first, at, .. } = n.kind else { return false };
+            let top = (first as i32 + by).clamp(0, (count as i32 - crate::ui::PICKED as i32).max(0)) as u32;
+            return top != first && self.pick(n.parent, at.clamp(top, top + crate::ui::PICKED - 1), top);
+        }
         let Some(i) = self.tree.nodes.iter().rposition(|n| matches!(n.kind, Kind::List { .. }) && n.area.contains(col, row)) else { return false };
         let n = self.tree.nodes[i];
         let Kind::List { count, first, .. } = n.kind else { return false };

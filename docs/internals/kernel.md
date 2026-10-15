@@ -149,6 +149,8 @@ A table is a list whose first child is a row of heads. The heads come from calli
 
 A tree is the same list again. Its items are one flat list, each naming the item it is inside, and which branches are open is a fact the app keeps; `Order::tree` walks them into rows on another thread and gives each row its depth, whether it is an open or closed branch, and the place of the row it is inside. Each row's first child is a twig, indented by its depth, whose press sets the open branches by an edit with its key added or taken out. Right and Left are kernel commands with the platform's keys for trees: they press the focused row's twig, or move the selection into an open branch or up to the row it is inside, both read from the order rather than from what is built.
 
+A picker is a search field and the rows `Order::found` keeps, eight at a time. It is not a list: nothing is selected in the facts, and the highlight, the row at the top and the query they were set under are the window's, kept by the picker's id like a list's scroll, so a new query starts again from the top. The keys stay in the field, which keeps the typing; Up, Down, Page Up, Page Down and Return are the picker's while its field has the focus. The letters a query matched are found again for the rows that show, on the main thread, which is bounded by the eight rows; they are marked in the first text of each row, and only when that text sits on one line.
+
 ## 6. Layout in cells
 
 ### 6.1 Units

@@ -128,6 +128,30 @@ impl<C: 'static, S, T: 'static> Listed<'_, '_, C, S, T> {
     }
 }
 
+/// A picker being described, to say what choosing one of its items does.
+pub struct Picked<'u, 'a, C, S, T> {
+    ui: &'u mut Ui<'a, C, S>,
+    node: u32,
+    items: PhantomData<fn() -> T>,
+}
+
+impl<C, S, T> Picked<'_, '_, C, S, T> {
+    /// Runs `cmd` with the key of the item chosen, by Return on the highlighted one or by a click: `.on_choose(Cmd::Open)`.
+    pub fn on_choose<M>(self, cmd: impl Bind<C, Key<T>, M> + Clone) -> Self {
+        let rows: Vec<u32> = self.ui.tree.children(self.node).collect();
+        for r in rows {
+            if let Some(c) = cmd.clone().bind(self.ui.tree.nodes[r as usize].subject) {
+                self.ui.tree.nodes[r as usize].cmd = self.ui.tree.commands.len() as u32;
+                self.ui.tree.commands.push(c);
+            }
+        }
+        self
+    }
+}
+
+/// How many items a picker shows at a time.
+pub(crate) const PICKED: u32 = 8;
+
 impl<'a, C, S> Ui<'a, C, S> {
     fn child<S2>(&mut self, parent: u32, subject: Option<u128>) -> Ui<'_, C, S2> {
         Ui { tree: &mut *self.tree, facts: self.facts, scrolls: self.scrolls, parent, subject, keys: PhantomData }
@@ -1263,6 +1287,44 @@ impl<'a, C, S> Ui<'a, C, S> {
     pub fn table<'r, T: Record, F: Field>(&mut self, items: impl Into<Rows<'r, T>>, selection: FactPath<F, Selection<T>>, mut row: impl FnMut(&mut Row<'_, '_, C, T>, &T)) -> Tabled<'_, 'a, C, S, T> {
         let i = self.rows(&items.into(), selection, Location::caller(), true, |_, _, _, _| {}, |ui, item, heads| row(&mut Row { ui, heads, column: 0 }, item));
         Tabled { ui: self, node: i, items: PhantomData }
+    }
+
+    /// A field to type in over the items whose words match it, best first, eight at a time with one highlighted. Give it the items in an order made by [`Order::found`](crate::table::Order::found) from the list and the `Text` at `filter`, worked out in the background; `row` describes one item, and the letters typed are marked in its first text. Up and Down in the field move the highlight, and Return or a click runs the command given to `on_choose` for the item.
+    #[track_caller]
+    pub fn picker<'r, T: Record, F: Field>(&mut self, items: impl Into<Rows<'r, T>>, filter: FactPath<F, Text>, mut row: impl FnMut(&mut Ui<'_, C, Key<T>>, &T)) -> Picked<'_, 'a, C, S, T> {
+        let (at, items, subject) = (Location::caller(), items.into(), self.subject);
+        let id = Id::ROOT.mix(filter.erased().hash64()).mix(0x91c);
+        let i = self.tree.add(self.parent, Kind::Picker, Some(id), at);
+        let query = self.facts::<F>().and_then(|f| filter.get(f)).map_or(String::new(), |t| t.as_str().to_string());
+        self.child::<S>(i, subject).field_as(filter, Message::from("Find"), Holds::Search, at);
+        let len = items.len() as u32;
+        let picking = self.tree.picks.get(&id).copied().filter(|p| p.query == crate::search::hashed(&query)).unwrap_or_default();
+        let chosen = picking.at.min(len.saturating_sub(1));
+        let first = picking.first.min(chosen).max((chosen + 1).saturating_sub(PICKED));
+        let m = self.tree.add(i, Kind::Matches { count: len, first, shown: 0, at: chosen }, Some(id.mix(1)), at);
+        let mut shown = 0;
+        for index in first..(first + PICKED).min(len) {
+            let Some(item) = items.get(index as usize) else { break };
+            let raw = item.key().raw();
+            let r = self.tree.add(m, Kind::Match { chosen: index == chosen }, Some(id.mix(raw as u64).mix((raw >> 64) as u64)), at);
+            self.tree.nodes[r as usize].subject = Some(raw);
+            row(&mut self.child(r, Some(raw)), item);
+            if let Some(t) = self.tree.children(r).find(|&c| matches!(self.tree.nodes[c as usize].kind, Kind::Text { .. })) {
+                let marks = crate::search::marked(&query, self.tree.str(self.tree.nodes[t as usize].text));
+                if !marks.is_empty() {
+                    self.tree.marks.push((t, marks));
+                }
+            }
+            shown += 1;
+        }
+        if let Kind::Matches { shown: s, .. } = &mut self.tree.nodes[m as usize].kind {
+            *s = shown;
+        }
+        if len == 0 && !query.trim().is_empty() {
+            let said = if items.coming() { "Searching…".to_string() } else { format!("Nothing matches “{}”", query.trim()) };
+            self.child::<S>(i, subject).muted(said);
+        }
+        Picked { ui: self, node: m, items: PhantomData }
     }
 
     fn rows<T: Record, F: Field>(

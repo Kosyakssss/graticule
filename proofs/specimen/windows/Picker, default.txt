@@ -1,0 +1,66 @@
+window		0 0 120 30	
+  page	Picker	0 0 120 24	
+    list		2 3 116 20	24 items
+      list item		2 3 114 2	
+        text	A field to type in over the items that match what is typed, best first, with the letters typed marked in each. The same search as the palette's, for the app's own things: files to open, places to go to, symbols to add.	2 3 114 2	
+      list item		2 5 114 1	
+      list item		2 6 114 9	
+        group		2 6 114 9	
+          column		2 6 14 1	
+            text	Live	2 6 14 1	muted
+          column		18 6 98 9	
+            picker		18 6 98 9	
+              search field	Find	18 6 98 1	
+              matches		18 7 98 8	12 found
+                match	Go to “Amsterdam”	18 7 98 1	highlighted
+                  text	Amsterdam	18 7 9 1	
+                  text	Netherlands	29 7 10 1	muted
+                match	Go to “Athens”	18 8 98 1	
+                  text	Athens	18 8 6 1	
+                  text	Greece	26 8 6 1	muted
+                match	Go to “Berlin”	18 9 98 1	
+                  text	Berlin	18 9 5 1	
+                  text	Germany	25 9 7 1	muted
+                match	Go to “Lisbon”	18 10 98 1	
+                  text	Lisbon	18 10 5 1	
+                  text	Portugal	25 10 7 1	muted
+                match	Go to “London”	18 11 98 1	
+                  text	London	18 11 6 1	
+                  text	United Kingdom	26 11 12 1	muted
+                match	Go to “Madrid”	18 12 98 1	
+                  text	Madrid	18 12 6 1	
+                  text	Spain	26 12 5 1	muted
+                match	Go to “Oslo”	18 13 98 1	
+                  text	Oslo	18 13 4 1	
+                  text	Norway	24 13 6 1	muted
+                match	Go to “Paris”	18 14 98 1	
+                  text	Paris	18 14 4 1	
+                  text	France	24 14 6 1	muted
+      list item		2 15 114 1	
+      list item		2 16 114 1	
+        heading	Use it for	2 16 7 1	strong
+      list item		2 17 114 1	
+        text	Choosing one of many things by name, when the user knows roughly what it is called: opening a file, going to a page, finding a symbol.	2 17 100 1	
+      list item		2 18 114 1	
+      list item		2 19 114 1	
+        heading	Code	2 19 4 1	strong
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Bold	46 26 6 1	
+    button	Go one level in	54 26 13 1	
+    button	Say it	69 26 7 1	unavailable (Type something first)
+    button	Back to all components	78 26 20 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

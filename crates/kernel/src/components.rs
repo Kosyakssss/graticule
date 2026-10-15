@@ -702,6 +702,21 @@ fn knob(p: &mut Painter, n: &Node, x: f32, cell: Rect, look: Look) {
     border(p, knob, if look.focused { t * 2.0 } else { t }, ink);
 }
 
+fn marked(p: &mut Painter, area: Area, text: &str, mono: bool, weight: f32, marks: &[(u32, u32)], ink: Color) {
+    let style = if mono { p.m.mono() } else { p.m.sans(weight) };
+    let r = p.rect(area);
+    if area.rows != 1 || p.measure(text, style) > r.w {
+        return;
+    }
+    let t = p.style.line(p.m);
+    let y = (r.y + p.m.cell_h * 0.86).round();
+    for &(start, end) in marks {
+        let (Some(before), Some(upto)) = (text.get(..start as usize), text.get(..end as usize)) else { continue };
+        let (x0, x1) = (p.measure(before, style), p.measure(upto, style));
+        p.fill(Rect::new((r.x + x0).round(), y, (x1 - x0).round().max(t), t), ink);
+    }
+}
+
 fn scrollbar(p: &mut Painter, track: Rect, first: u32, shown: u32, count: u32) {
     if count <= shown || track.h <= 0.0 {
         return;
@@ -734,7 +749,28 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         }
         (Layer::Over, Kind::Text { mono, tone: t, strong }) => {
             let color = tone(p, t);
-            wrapped(p, n.area, text, mono, if strong { 600.0 } else { 400.0 }, color);
+            let weight = if strong { 600.0 } else { 400.0 };
+            wrapped(p, n.area, text, mono, weight, color);
+            if let Some((_, marks)) = tree.marks.iter().find(|m| m.0 == i) {
+                marked(p, n.area, text, mono, weight, marks, color);
+            }
+        }
+        (Layer::Under, Kind::Match { chosen }) => {
+            let theme = p.theme;
+            if chosen {
+                p.fill_area(n.area, theme.selection);
+            } else if look.hovered {
+                p.fill_area(n.area, theme.hover);
+            }
+        }
+        (Layer::Over, Kind::Matches { count, first, shown, .. }) => {
+            let (r, t, rule) = (p.rect(n.area), p.style.line(p.m) * 2.0, p.theme.rule);
+            if first > 0 {
+                p.fill(Rect::new(r.x, r.y, r.w, t), rule);
+            }
+            if first + shown < count {
+                p.fill(Rect::new(r.x, r.bottom() - t, r.w, t), rule);
+            }
         }
         (Layer::Over, Kind::Button | Kind::Browse | Kind::Confirm { open: false }) => button(p, &n, text, joined(tree, i), look),
         (Layer::Under, Kind::Group) => {

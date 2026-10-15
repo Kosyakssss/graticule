@@ -63,7 +63,8 @@ fn state<C>(tree: &Tree<C>, n: &Node) -> String {
             parts.extend(selected.then(|| "chosen".to_string()));
             parts.extend(focused.then(|| "focused".to_string()));
         }
-        Kind::Choice { chosen: true } => parts.push("highlighted".to_string()),
+        Kind::Choice { chosen: true } | Kind::Match { chosen: true } => parts.push("highlighted".to_string()),
+        Kind::Matches { count, .. } => parts.push(format!("{count} found")),
         Kind::List { count, .. } => parts.push(format!("{count} items")),
         Kind::Gauge { filled, .. } => parts.push(format!("{} %", f32::from(filled) / 10.0)),
         Kind::Head { sorted: 1, .. } => parts.push("sorted".to_string()),

@@ -34,6 +34,7 @@ pub mod px;
 mod reload;
 pub mod runner;
 pub mod scope;
+pub mod search;
 pub mod shell;
 pub mod table;
 pub mod text;

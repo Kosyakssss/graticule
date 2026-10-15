@@ -1,6 +1,8 @@
 use ropey::RopeSlice;
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
+use ledger::wrap;
+
 use crate::doc::Doc;
 
 /// A way to move through text. Left and right step over whole characters as a reader sees them, so an accented letter or an emoji with its modifiers is one step.
@@ -20,6 +22,9 @@ pub enum Motion {
     LineEnd,
     Up,
     Down,
+    /// Up by one of the rows long lines wrap into at this many cells, keeping the cursor's column in cells.
+    RowUp(u16),
+    RowDown(u16),
     /// To the blank line after this paragraph.
     ParagraphNext,
     /// To the blank line before this paragraph.
@@ -86,6 +91,8 @@ impl Doc {
                 let range = self.line(target);
                 (range.start + column).min(range.end)
             }
+            Motion::RowUp(width) => self.row(at, usize::from(width), false),
+            Motion::RowDown(width) => self.row(at, usize::from(width), true),
             Motion::ParagraphNext => {
                 let mut line = self.line_of(at);
                 while line < self.lines() && self.blank(line) {
@@ -114,10 +121,36 @@ impl Doc {
         }
     }
 
+    fn row(&self, at: usize, width: usize, down: bool) -> usize {
+        let line = self.line_of(at);
+        let span = self.line(line);
+        let text = self.text(span.clone());
+        let byte = byte_of(&text, at - span.start);
+        let (k, row) = wrap::row_of(&text, width, byte);
+        let cells = wrap::cells_to(&text, &row, byte);
+        let count = wrap::rows(&text, width).count();
+        let (line, k) = match (down, k) {
+            (false, 0) if line == 0 => return 0,
+            (false, 0) => (line - 1, usize::MAX),
+            (false, k) => (line, k - 1),
+            (true, k) if k + 1 < count => (line, k + 1),
+            (true, _) if line + 1 >= self.lines() => return self.len(),
+            (true, _) => (line + 1, 0),
+        };
+        let span = self.line(line);
+        let text = self.text(span.clone());
+        let Some(row) = wrap::rows(&text, width).take(k.saturating_add(1)).last() else { return span.start };
+        span.start + text[..wrap::at_cells(&text, &row, cells)].chars().count()
+    }
+
     fn blank(&self, line: usize) -> bool {
         let range = self.line(line);
         (range.start..range.end).all(|i| matches!(self.char(i), Some(' ' | '\t')))
     }
+}
+
+fn byte_of(text: &str, chars: usize) -> usize {
+    text.char_indices().nth(chars).map_or(text.len(), |(b, _)| b)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -29,6 +29,9 @@ pub enum Travel {
     WordRight,
     Up,
     Down,
+    /// Up by one of the rows long lines wrap into at this many cells, as the editor draws them.
+    RowUp(u16),
+    RowDown(u16),
     LineStart,
     LineEnd,
     /// Up by this many lines: what shows of the editor.
@@ -68,6 +71,8 @@ impl Travel {
             Travel::WordRight => ("word right", 0),
             Travel::Up => ("up", 0),
             Travel::Down => ("down", 0),
+            Travel::RowUp(n) => ("row up", *n),
+            Travel::RowDown(n) => ("row down", *n),
             Travel::LineStart => ("line start", 0),
             Travel::LineEnd => ("line end", 0),
             Travel::PageUp(n) => ("page up", *n),
@@ -91,6 +96,8 @@ impl Travel {
             "word right" => Travel::WordRight,
             "up" => Travel::Up,
             "down" => Travel::Down,
+            "row up" => Travel::RowUp(n),
+            "row down" => Travel::RowDown(n),
             "line start" => Travel::LineStart,
             "line end" => Travel::LineEnd,
             "page up" => Travel::PageUp(n),

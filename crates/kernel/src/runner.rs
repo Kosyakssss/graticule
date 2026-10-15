@@ -3768,7 +3768,8 @@ impl<A: App> Runner<A> {
             }
             let Kind::Editor { single, .. } = self.tree.nodes[i as usize].kind else { return false };
             let rows = self.tree.nodes[i as usize].area.rows.clamp(1, i32::from(u16::MAX)) as u16;
-            match field::editor_key(chord.key, chord.mods, rows, single) {
+            let width = self.spans.get(&self.tree.nodes[i as usize].id).copied().unwrap_or(80).clamp(1, i32::from(u16::MAX)) as u16;
+            match field::editor_key(chord.key, chord.mods, rows, width, single) {
                 Some(field::EditorKey::Typed(t)) => return self.type_in(i, t),
                 Some(field::EditorKey::Copy) => {
                     let text = self.editor_selected(i);

@@ -15,6 +15,7 @@ mod store;
 mod text;
 mod typed;
 mod value;
+pub mod wrap;
 
 pub use bulk::{Bulk, Search, deferred};
 pub use edit::{Change, Edit};

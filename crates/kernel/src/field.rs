@@ -125,19 +125,19 @@ pub enum EditorKey {
 }
 
 /// The key an editor takes, by the platform's conventions, given how many rows it shows and whether it has one cursor with nothing selected.
-pub fn editor_key(key: Key, m: Mods, rows: u16, single: bool) -> Option<EditorKey> {
+pub fn editor_key(key: Key, m: Mods, rows: u16, width: u16, single: bool) -> Option<EditorKey> {
     use ledger::{Travel, Typed};
     let Mods { shift, alt, primary, control } = m;
     let mac = cfg!(target_os = "macos");
     let to = match (key, primary, alt, control) {
         (Key::Left, false, false, false) => Travel::Left,
         (Key::Right, false, false, false) => Travel::Right,
-        (Key::Up, false, false, false) => Travel::Up,
-        (Key::Down, false, false, false) => Travel::Down,
+        (Key::Up, false, false, false) => Travel::RowUp(width),
+        (Key::Down, false, false, false) => Travel::RowDown(width),
         (Key::Char('b'), false, false, true) if mac => Travel::Left,
         (Key::Char('f'), false, false, true) if mac => Travel::Right,
-        (Key::Char('p'), false, false, true) if mac => Travel::Up,
-        (Key::Char('n'), false, false, true) if mac => Travel::Down,
+        (Key::Char('p'), false, false, true) if mac => Travel::RowUp(width),
+        (Key::Char('n'), false, false, true) if mac => Travel::RowDown(width),
         (Key::Left, false, true, false) if mac => Travel::WordLeft,
         (Key::Right, false, true, false) if mac => Travel::WordRight,
         (Key::Left, true, false, false) if !mac => Travel::WordLeft,
@@ -297,80 +297,7 @@ pub fn word_at(text: &str, at: usize) -> Caret {
     }
 }
 
-/// The rows a text wraps into at `width` cells, as byte ranges: a new line ends a row, and a line too long for the width breaks after its last space that fits, or mid-word when there is none. A row that wraps keeps its space, so the rows of a line touch.
-pub fn rows(text: &str, width: usize) -> Rows<'_> {
-    Rows { text, width: width.max(1), at: 0, done: false }
-}
-
-/// The rows of a text, from [`rows`].
-pub struct Rows<'a> {
-    text: &'a str,
-    width: usize,
-    at: usize,
-    done: bool,
-}
-
-impl Iterator for Rows<'_> {
-    type Item = Range<usize>;
-
-    fn next(&mut self) -> Option<Range<usize>> {
-        if self.done {
-            return None;
-        }
-        let at = self.at;
-        let line_end = self.text[at..].find('\n').map_or(self.text.len(), |k| at + k);
-        let (mut used, mut space) = (0, None);
-        for (k, c) in self.text[at..line_end].char_indices() {
-            let w = crate::text::cells(c);
-            if used + w > self.width && k > 0 {
-                let end = space.unwrap_or(at + k);
-                self.at = end;
-                return Some(at..end);
-            }
-            used += w;
-            if c == ' ' {
-                space = Some(at + k + 1);
-            }
-        }
-        if line_end == self.text.len() {
-            self.done = true;
-        } else {
-            self.at = line_end + 1;
-        }
-        Some(at..line_end)
-    }
-}
-
-/// The row a byte sits on, and that row: the last row that starts at or before it.
-pub fn row_of(text: &str, width: usize, at: usize) -> (usize, Range<usize>) {
-    let mut found = (0, 0..0);
-    for (k, row) in rows(text, width).enumerate() {
-        if row.start > at {
-            break;
-        }
-        found = (k, row);
-    }
-    found
-}
-
-/// Where a row really ends for the caret: before the last character of a row that wraps, since the end of such a row is the start of the next.
-fn row_end(text: &str, row: &Range<usize>) -> usize {
-    if row.end < text.len() && !text[row.end..].starts_with('\n') { prev(text, row.end) } else { row.end }
-}
-
-/// The byte on `row` nearest to `cells` cells in from its start.
-pub fn at_cells(text: &str, row: &Range<usize>, cells: usize) -> usize {
-    let end = row_end(text, row);
-    let mut used = 0;
-    for (k, c) in text[row.start..end].char_indices() {
-        let w = crate::text::cells(c);
-        if used + w / 2 >= cells {
-            return row.start + k;
-        }
-        used += w;
-    }
-    end
-}
+pub use ledger::wrap::{Rows, at_cells, row_end, row_of, rows};
 
 /// What a key does to a field of several rows, `width` cells wide: Return starts a new line, the arrows up and down move between rows, and Home and End go to the ends of the row. Every other key does what it does in one line.
 pub fn key_rows(text: &str, at: Caret, key: Key, m: Mods, kill: &mut String, width: usize) -> Action {

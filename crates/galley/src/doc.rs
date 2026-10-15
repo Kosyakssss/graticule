@@ -208,6 +208,8 @@ impl Doc {
                     Travel::WordRight => (Motion::WordEnd, 1),
                     Travel::Up => (Motion::Up, 1),
                     Travel::Down => (Motion::Down, 1),
+                    Travel::RowUp(width) => (Motion::RowUp(*width), 1),
+                    Travel::RowDown(width) => (Motion::RowDown(*width), 1),
                     Travel::LineStart => (Motion::LineStart, 1),
                     Travel::LineEnd => (Motion::LineEnd, 1),
                     Travel::PageUp(n) => (Motion::Up, (*n).max(1)),

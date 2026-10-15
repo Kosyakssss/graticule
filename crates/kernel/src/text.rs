@@ -74,26 +74,7 @@ impl Scratch {
     }
 }
 
-/// How many cells a character takes in mono text: two for Chinese, Japanese and Korean, as in a terminal.
-pub fn cells(c: char) -> usize {
-    match c as u32 {
-        0x1100..=0x115F
-        | 0x2E80..=0x303E
-        | 0x3041..=0x33FF
-        | 0x3400..=0x4DBF
-        | 0x4E00..=0x9FFF
-        | 0xA000..=0xA4CF
-        | 0xAC00..=0xD7A3
-        | 0xF900..=0xFAFF
-        | 0xFE30..=0xFE4F
-        | 0xFF00..=0xFF60
-        | 0xFFE0..=0xFFE6
-        | 0x1F300..=0x1F64F
-        | 0x1F900..=0x1F9FF
-        | 0x20000..=0x3FFFD => 2,
-        _ => 1,
-    }
-}
+pub use ledger::wrap::cells;
 
 /// Whether a character belongs to a script whose letters join, combine or run right to left, so text holding it has to be shaped as a whole rather than drawn a cell at a time.
 pub fn shaped(c: char) -> bool {

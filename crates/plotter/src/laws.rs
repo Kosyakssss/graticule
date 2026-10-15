@@ -1,7 +1,7 @@
 use ledger::{ErasedPath, Field, Key, Op, Selection, Transaction};
 use proptest::prelude::*;
 
-use crate::{Board, Bounds, End, Gesture, Intent, Kind, Point, Shape, Tool, order};
+use crate::{Board, Bounds, End, Gesture, Index, Intent, Kind, Point, Shape, Tool, order};
 
 #[derive(Clone, Debug)]
 enum Act {
@@ -46,7 +46,7 @@ fn run(board: &mut Board, chosen: &mut Selection<Shape>, act: &Act, next: &mut u
             let tool = [Tool::Select, Tool::Rect, Tool::Ellipse, Tool::Arrow, Tool::Draw][t as usize % 5];
             let (from, to) = (Point::new(a, b), Point::new(c, d));
             let gesture = Gesture { from, to, trail: vec![from, to], moved: from.distance(to) > 3.0, shift };
-            let intent = Intent::of(board, chosen, tool, &gesture, 1.0);
+            let intent = Intent::of(board, &Index::of(board), chosen, tool, &gesture, 1.0);
             let _ = board.perform(chosen, intent, || {
                 *next += 1;
                 Key::<Shape>::fixed(*next).raw()
@@ -117,6 +117,25 @@ proptest! {
             prop_assert!(at == 0 || keys[at - 1] < key, "{:?} is not after {:?}", key, keys[at - 1]);
             prop_assert!(at == keys.len() || key < keys[at], "{:?} is not before {:?}", key, keys[at]);
             keys.insert(at, key);
+        }
+    }
+
+    #[test]
+    fn hit_testing_agrees_with_what_is_drawn(acts in proptest::collection::vec(act(), 0..60), probes in proptest::collection::vec((coord(), coord(), coord(), coord()), 1..20)) {
+        let mut board = Board::default();
+        let (mut next, mut chosen) = (0, Selection::new());
+        for act in &acts {
+            run(&mut board, &mut chosen, act, &mut next);
+        }
+        let index = Index::of(&board);
+        for (x, y, w, h) in probes {
+            let p = Point::new(x, y);
+            let drawn = board.stacked().into_iter().rev().find(|s| s.geometry().hit(p, 4.0)).map(|s| s.id);
+            prop_assert_eq!(index.hit(&board, p, 4.0), drawn, "at {:?}", p);
+            let area = Bounds::new(x, y, w, h);
+            let inside: Vec<_> = board.stacked().into_iter().filter(|s| s.bounds().intersects(&area)).map(|s| s.id).collect();
+            let found: Vec<_> = index.query(area).into_iter().map(|e| e.key).filter(|k| inside.contains(k)).collect();
+            prop_assert_eq!(found, inside, "in {:?}", area);
         }
     }
 

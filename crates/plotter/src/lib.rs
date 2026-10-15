@@ -2,6 +2,7 @@
 
 mod board;
 mod geometry;
+mod index;
 pub mod order;
 mod snap;
 mod svg;
@@ -12,6 +13,7 @@ mod laws;
 
 pub use board::{Binding, Board, End, Ink, Kind, Shape};
 pub use geometry::{Bounds, Geometry, Point};
+pub use index::{Entry, Index};
 pub use snap::{Guide, Snapped, snap};
 pub use svg::svg;
 pub use tool::{Gesture, Intent, Tool};

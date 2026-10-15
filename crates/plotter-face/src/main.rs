@@ -1,10 +1,11 @@
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use graticule::kernel::canvas::Weight;
 use graticule::kernel::{Camera, Drag, Drawing};
 use graticule::prelude::*;
-use plotter::{Board, Bounds, End, Gesture, Intent, Kind, Point, Shape, Tool};
+use plotter::{Board, Bounds, End, Gesture, Index, Intent, Kind, Point, Shape, Tool};
 
 #[derive(Facts, Default)]
 struct Whiteboard {
@@ -17,7 +18,9 @@ struct Whiteboard {
     camera: Camera,
     #[session]
     file: Text,
-    #[derived(Layers::of, from = [board])]
+    #[derived(Index::of, from = [board])]
+    index: Derived<Index>,
+    #[derived(Layers::of, from = [board, index, camera])]
     layers: Derived<Layers>,
     #[derived(Chosen::of, from = [board, chosen])]
     around: Derived<Chosen>,
@@ -43,17 +46,24 @@ impl Chosen {
     }
 }
 
-/// The board drawn off the main thread, in slices of the stack, so a drag draws again only the slices holding what it moves.
+/// The shapes in sight drawn off the main thread, in slices of the stack, so a drag draws again only the slices holding what it moves.
 struct Layers {
     slices: Vec<(Vec<Key<Shape>>, Arc<Drawing>)>,
 }
 
+/// How many shapes go in a slice, and how big a board is drawn and indexed on the main thread while the background catches up after a change.
 const SLICE: usize = 512;
+const SMALL: usize = 4_096;
+
+/// The most a canvas shows, in points: what is in sight through the camera on the largest screen.
+const SIGHT: (f64, f64) = (3_840.0, 2_160.0);
 
 impl Layers {
-    fn of(board: &Board) -> Layers {
-        let slices = board
-            .stacked()
+    fn of(board: &Board, index: &Derived<Index>, camera: &Camera) -> Layers {
+        let Some(index) = index.get() else { return Layers { slices: Vec::new() } };
+        let [left, right, top, bottom] = camera.showing(SIGHT.0, SIGHT.1);
+        let seen: Vec<&Shape> = index.query(Bounds::new(left, top, right - left, bottom - top)).into_iter().filter_map(|e| board.shapes.find(e.key)).collect();
+        let slices = seen
             .chunks(SLICE)
             .map(|shapes| {
                 let mut drawing = Drawing::new();
@@ -149,7 +159,7 @@ impl App for Whiteboard {
                 }
             }
             Cmd::ShowAll => {
-                let Some(area) = self.board.shapes.iter().map(Shape::bounds).reduce(|a, b| a.union(&b)) else { return Outcome::Nothing };
+                let Some(area) = self.index_now().bounds() else { return Outcome::Nothing };
                 let zoom = (720.0 / area.w.max(1.0)).min(400.0 / area.h.max(1.0)).clamp(Camera::ZOOMS.0, 1.0);
                 let camera = Camera { x: area.x - 24.0 / zoom, y: area.y - 24.0 / zoom, zoom };
                 if camera == self.camera {
@@ -185,7 +195,7 @@ impl App for Whiteboard {
             }
             Cmd::Saved(Ok(path)) => cx.say(t!("Saved to {path}")),
             Cmd::Drew(drag) => {
-                let intent = Intent::of(&self.board, &self.chosen, self.tool, &gesture(&drag), self.camera.zoom);
+                let intent = Intent::of(&self.board, &self.index_now(), &self.chosen, self.tool, &gesture(&drag), self.camera.zoom);
                 let made = matches!(intent, Intent::Create { .. });
                 let outcome = self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw());
                 if made {
@@ -214,11 +224,12 @@ impl App for Whiteboard {
             ui.canvas(t!("Board, {count} shapes"), 0, |canvas| {
                 canvas.camera(Whiteboard::camera);
                 canvas.on_drag(Cmd::Drew);
-                let intent = canvas.drag().map(|drag| Intent::of(&self.board, &self.chosen, self.tool, &gesture(drag), self.camera.zoom));
+                let intent = canvas.drag().map(|drag| Intent::of(&self.board, &self.index_now(), &self.chosen, self.tool, &gesture(drag), self.camera.zoom));
                 let moved = intent.as_ref().map(|i| i.preview(&self.board)).unwrap_or_default();
                 let moving: HashSet<Key<Shape>> = moved.iter().map(|m| m.id).collect();
                 let shown = |key: Key<Shape>| moved.iter().find(|m| m.id == key).or(self.board.shapes.find(key));
-                match self.layers.get().filter(|_| !self.layers.coming()) {
+                let small = self.board.shapes.len() <= SMALL;
+                match self.layers.get().filter(|_| !(small && (self.layers.coming() || self.index.coming()))) {
                     Some(layers) => {
                         for (keys, drawing) in &layers.slices {
                             if keys.iter().any(|k| moving.contains(k)) {
@@ -232,11 +243,12 @@ impl App for Whiteboard {
                             }
                         }
                     }
-                    None => {
+                    None if small => {
                         for shape in self.board.stacked() {
                             draw(canvas, shown(shape.id).unwrap_or(shape));
                         }
                     }
+                    None => {}
                 }
                 for shape in moved.iter().filter(|m| !self.board.shapes.has(m.id)) {
                     draw(canvas, shape);
@@ -285,6 +297,16 @@ impl App for Whiteboard {
 }
 
 impl Whiteboard {
+    /// Where the shapes are: the index worked out in the background, or for a small board while that catches up after a change, one made now.
+    fn index_now(&self) -> Cow<'_, Index> {
+        let fresh = !self.index.coming() || self.board.shapes.len() > SMALL;
+        match self.index.get().filter(|_| fresh) {
+            Some(index) => Cow::Borrowed(index),
+            None if self.board.shapes.len() <= SMALL => Cow::Owned(Index::of(&self.board)),
+            None => Cow::Owned(Index::default()),
+        }
+    }
+
     fn hold(&mut self, tool: Tool) -> Outcome {
         self.tool = tool;
         Outcome::Changed
@@ -311,7 +333,7 @@ impl Whiteboard {
         for (from, to) in [(commands, facts), (facts, view)] {
             let (Some(a), Some(b)) = (w.board.shapes.find(from).map(|s| s.bounds().center()), w.board.shapes.find(to).map(|s| s.bounds().center())) else { continue };
             let drawn = Gesture { from: a, to: b, trail: vec![a, b], moved: true, shift: false };
-            let intent = Intent::of(&w.board, &w.chosen, Tool::Arrow, &drawn, 1.0);
+            let intent = Intent::of(&w.board, &Index::of(&w.board), &w.chosen, Tool::Arrow, &drawn, 1.0);
             let _ = w.board.perform(&mut w.chosen, intent, &mut next);
         }
         let _ = w.chosen.choose(&ledger::Choose::Clear);
@@ -327,10 +349,11 @@ impl Whiteboard {
 
     fn many(count: u64) -> Whiteboard {
         let mut w = Whiteboard::default();
-        for n in 0..count {
+        let stack = plotter::order::run(None, None, count as usize);
+        for (n, index) in (0..count).zip(stack) {
             let (col, row) = ((n % 50) as f64, (n / 50) as f64);
             let kind = if n % 2 == 0 { Kind::Rect } else { Kind::Ellipse };
-            let _ = w.board.add(Shape::new(Key::fixed(n + 1), kind, Bounds::new(col * 40.0, row * 40.0, 30.0, 30.0)));
+            let _ = w.board.shapes.push(Shape { index, ..Shape::new(Key::fixed(n + 1), kind, Bounds::new(col * 40.0, row * 40.0, 30.0, 30.0)) });
         }
         w.camera = Camera { zoom: 0.5, ..Camera::default() };
         w

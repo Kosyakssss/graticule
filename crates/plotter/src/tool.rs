@@ -1,8 +1,11 @@
+use std::collections::HashSet;
+
 use graticule_macros::Facts;
 use ledger::{Choose, Key, Outcome, Selection};
 
 use crate::board::{Board, End, Kind, Shape};
 use crate::geometry::{Bounds, Point};
+use crate::index::Index;
 use crate::snap::{Guide, snap};
 
 /// What a drag on the board does.
@@ -28,15 +31,15 @@ pub struct Gesture {
     pub shift: bool,
 }
 
-/// What letting go of a gesture does, worked out from the board, the chosen shapes and the tool alone. It is the state the tool is in, so showing a drag under way and finishing it can never disagree.
+/// What letting go of a gesture does, worked out from the board, its index, the chosen shapes and the tool alone. It is the state the tool is in, so showing a drag under way and finishing it can never disagree.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Intent {
     /// Choose `shape`, or with `adding` add it to the chosen ones or take it away; no shape lets go of them all.
     Choose { shape: Option<Key<Shape>>, adding: bool },
     /// Move shapes by a distance, snapped to the others, with the lines they snapped to.
     Translate { keys: Vec<Key<Shape>>, dx: f64, dy: f64, guides: Vec<Guide> },
-    /// Choose the shapes wholly inside a box, with `adding` as well as the chosen ones.
-    Brush { area: Bounds, adding: bool },
+    /// Choose the shapes wholly inside a box, which are `keys`, with `adding` as well as the chosen ones.
+    Brush { area: Bounds, keys: Vec<Key<Shape>>, adding: bool },
     /// Give a shape a new box by dragging one of its corners.
     Resize { key: Key<Shape>, to: Bounds },
     /// Put a new shape on the board, and hold an arrow's ends to the shapes they start and finish on.
@@ -49,8 +52,8 @@ const SNAP: f64 = 8.0;
 const NEW: f64 = 100.0;
 
 impl Intent {
-    /// What `gesture` does with `tool` in hand, on a board seen at `zoom`.
-    pub fn of(board: &Board, chosen: &Selection<Shape>, tool: Tool, gesture: &Gesture, zoom: f64) -> Intent {
+    /// What `gesture` does with `tool` in hand, on a board seen at `zoom`. Shapes are found through `index`, so it costs what is near the gesture, not what the board holds.
+    pub fn of(board: &Board, index: &Index, chosen: &Selection<Shape>, tool: Tool, gesture: &Gesture, zoom: f64) -> Intent {
         let reach = REACH / zoom;
         let (from, to) = (gesture.from, gesture.to);
         match tool {
@@ -61,18 +64,25 @@ impl Intent {
                         false => Intent::Choose { shape: Some(key), adding: false },
                     };
                 }
-                match (board.hit(from, reach), gesture.moved) {
+                match (index.hit(board, from, reach), gesture.moved) {
                     (Some(key), false) => Intent::Choose { shape: Some(key), adding: gesture.shift },
                     (Some(key), true) => {
                         let keys: Vec<_> = if chosen.contains(key) { chosen.iter().filter(|k| board.shapes.has(*k)).collect() } else { vec![key] };
                         let (dx, dy) = (to.x - from.x, to.y - from.y);
                         let moving = keys.iter().filter_map(|k| board.shapes.find(*k)).map(|s| s.bounds()).reduce(|a, b| a.union(&b)).unwrap_or_default();
-                        let others: Vec<Bounds> = board.shapes.iter().filter(|s| !keys.contains(&s.id) && s.kind != Kind::Arrow).map(Shape::bounds).collect();
-                        let snapped = snap(Bounds { x: moving.x + dx, y: moving.y + dy, ..moving }, &others, SNAP / zoom);
+                        let moved = Bounds { x: moving.x + dx, y: moving.y + dy, ..moving };
+                        let mine: HashSet<Key<Shape>> = keys.iter().copied().collect();
+                        let others: Vec<Bounds> =
+                            index.query(moved.expand(SNAP / zoom)).into_iter().filter(|e| !e.arrow && !mine.contains(&e.key)).filter_map(|e| board.shapes.find(e.key)).map(Shape::bounds).collect();
+                        let snapped = snap(moved, &others, SNAP / zoom);
                         Intent::Translate { keys, dx: dx + snapped.dx, dy: dy + snapped.dy, guides: snapped.guides }
                     }
                     (None, false) => Intent::Choose { shape: None, adding: gesture.shift },
-                    (None, true) => Intent::Brush { area: Bounds::around(from, to), adding: gesture.shift },
+                    (None, true) => {
+                        let area = Bounds::around(from, to);
+                        let keys = index.query(area).into_iter().filter_map(|e| board.shapes.find(e.key)).filter(|s| area.holds(&s.bounds())).map(|s| s.id).collect();
+                        Intent::Brush { area, keys, adding: gesture.shift }
+                    }
                 }
             }
             Tool::Rect | Tool::Ellipse => {
@@ -81,20 +91,20 @@ impl Intent {
                     true => Bounds::around(from, to),
                     false => Bounds::new(from.x - NEW / 2.0, from.y - NEW / 2.0, NEW, NEW),
                 };
-                Intent::Create { shape: Shape::new(Key::default(), kind, area), start: None, end: None }
+                Intent::Create { shape: index.above(Shape::new(Key::default(), kind, area)), start: None, end: None }
             }
             Tool::Arrow => {
                 let to = if gesture.moved { to } else { from + Point::new(NEW, 0.0) };
-                let start = target(board, from, reach);
-                let end = target(board, to, reach).filter(|e| gesture.moved && Some(*e) != start);
+                let start = target(board, index, from, reach);
+                let end = target(board, index, to, reach).filter(|e| gesture.moved && Some(*e) != start);
                 let edge = |held: Option<Key<Shape>>, outside: Point, inside: Point| held.and_then(|k| board.shapes.find(k)).and_then(|s| s.geometry().crossing(outside, inside)).unwrap_or(inside);
-                Intent::Create { shape: Shape::arrow(Key::default(), edge(start, to, from), edge(end, from, to)), start, end }
+                Intent::Create { shape: index.above(Shape::arrow(Key::default(), edge(start, to, from), edge(end, from, to))), start, end }
             }
             Tool::Draw => {
                 let trail = if gesture.trail.is_empty() { vec![from] } else { gesture.trail.clone() };
                 let area = trail.iter().fold(Bounds::new(from.x, from.y, 0.0, 0.0), |b, p| b.union(&Bounds::new(p.x, p.y, 0.0, 0.0)));
                 let points = trail.iter().flat_map(|p| [p.x - area.x, p.y - area.y]).collect();
-                Intent::Create { shape: Shape::new(Key::default(), Kind::Draw(points), area), start: None, end: None }
+                Intent::Create { shape: index.above(Shape::new(Key::default(), Kind::Draw(points), area)), start: None, end: None }
             }
         }
     }
@@ -131,8 +141,8 @@ impl Board {
                 }
                 self.translate(&keys, dx, dy)
             }
-            Intent::Brush { area, adding } => {
-                let mut keys: Vec<u128> = self.inside(area).into_iter().map(Key::raw).collect();
+            Intent::Brush { keys, adding, .. } => {
+                let mut keys: Vec<u128> = keys.into_iter().filter(|k| self.shapes.has(*k)).map(Key::raw).collect();
                 if adding {
                     keys.extend(chosen.iter().map(Key::raw));
                 }
@@ -143,7 +153,7 @@ impl Board {
                 shape.id = Key::from_raw(key());
                 let id = shape.id;
                 let (from, to) = (shape.end(End::Start), shape.end(End::End));
-                let outcome = self.add(shape);
+                let outcome = if shape.index.is_empty() { self.add(shape) } else { self.shapes.push(shape) };
                 for (held, end, at) in [(start, End::Start, from), (end, End::End, to)] {
                     if let Some(target) = held {
                         let _ = self.bind(Key::from_raw(key()), id, end, target, at);
@@ -157,10 +167,14 @@ impl Board {
 
     /// A board of only `keys`, the arrows held to them and what those arrows are held to, with their bindings: enough to work out how a change to `keys` would move the rest.
     fn part(&self, keys: &[Key<Shape>]) -> Board {
-        let held: Vec<_> = self.bindings.iter().filter(|b| keys.contains(&b.to) || keys.contains(&b.arrow)).map(|b| b.arrow).collect();
+        let touched: HashSet<Key<Shape>> = keys.iter().copied().collect();
+        let held: HashSet<Key<Shape>> = self.bindings.iter().filter(|b| touched.contains(&b.to) || touched.contains(&b.arrow)).map(|b| b.arrow).collect();
         let bindings: Vec<_> = self.bindings.iter().filter(|b| held.contains(&b.arrow)).cloned().collect();
+        let mut inside: Vec<Key<Shape>> = touched.iter().chain(&held).copied().chain(bindings.iter().map(|b| b.to)).collect();
+        inside.sort_unstable();
+        inside.dedup();
         let mut part = Board::default();
-        for s in self.shapes.iter().filter(|s| keys.contains(&s.id) || held.contains(&s.id) || bindings.iter().any(|b| b.to == s.id)) {
+        for s in inside.into_iter().filter_map(|k| self.shapes.find(k)) {
             let _ = part.shapes.push(s.clone());
         }
         for b in bindings {
@@ -180,6 +194,7 @@ fn handle(board: &Board, chosen: &Selection<Shape>, p: Point, reach: f64) -> Opt
     Some((key, corners[(near + 2) % 4]))
 }
 
-fn target(board: &Board, p: Point, reach: f64) -> Option<Key<Shape>> {
-    board.stacked().into_iter().rev().find(|s| s.kind != Kind::Arrow && (s.geometry().inside(p) || s.geometry().hit(p, reach))).map(|s| s.id)
+fn target(board: &Board, index: &Index, p: Point, reach: f64) -> Option<Key<Shape>> {
+    let near = Bounds::new(p.x - reach, p.y - reach, reach * 2.0, reach * 2.0);
+    index.query(near).into_iter().rev().filter(|e| !e.arrow).filter_map(|e| board.shapes.find(e.key)).find(|s| s.geometry().inside(p) || s.geometry().hit(p, reach)).map(|s| s.id)
 }

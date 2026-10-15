@@ -236,3 +236,18 @@ impl<T: Field, E: Field> Field for Result<T, E> {
     }
 }
 impl<T: Document, E: Document> Document for Result<T, E> {}
+
+impl<T: Field> Field for Box<T> {
+    crate::register!(Box<T>);
+
+    fn same(&self, other: &Self) -> bool {
+        (**self).same(other)
+    }
+    fn value(&self) -> Value {
+        (**self).value()
+    }
+    fn from_value(value: &Value) -> Option<Self> {
+        T::from_value(value).map(Box::new)
+    }
+}
+impl<T: Document> Document for Box<T> {}

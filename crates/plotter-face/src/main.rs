@@ -141,6 +141,10 @@ enum Cmd {
     Paste,
     #[internal]
     Pasted(String),
+    #[label("Import a board")]
+    Import(Path),
+    #[internal]
+    Laid(Box<Result<Board, Failure>>),
     #[label("Lock")]
     Lock,
     #[label("Unlock")]
@@ -187,7 +191,7 @@ impl App for Whiteboard {
             Cmd::Arrow => no_if(self.tool == Tool::Arrow, t!("Drawing arrows already")),
             Cmd::Draw => no_if(self.tool == Tool::Draw, t!("Drawing freehand already")),
             Cmd::Write { .. } => no_if(self.chosen.len() > 1, t!("Choose one shape at most")),
-            Cmd::Paste | Cmd::Pasted(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
+            Cmd::Paste | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
         }
     }
 
@@ -219,7 +223,21 @@ impl App for Whiteboard {
                 cx.paste(Cmd::Pasted);
                 Outcome::Nothing
             }
-            Cmd::Pasted(text) => self.paste(&text, cx),
+            Cmd::Pasted(text) => self.paste(text, cx),
+            Cmd::Import(path) => {
+                let name = path.0.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let reading = t!("Reading {name}");
+                let read = move || {
+                    let svg = std::fs::read_to_string(&path.0).map_err(|e| Failure::new(e.to_string()));
+                    Box::new(svg.and_then(|svg| Board::from_svg(&svg).ok_or_else(|| Failure::new(format!("{name} holds no board")))))
+                };
+                cx.job(reading, read, Cmd::Laid);
+                Outcome::Nothing
+            }
+            Cmd::Laid(laid) => match *laid {
+                Ok(board) => self.lay(&board, cx),
+                Err(failure) => cx.say_failure(failure),
+            },
             Cmd::Lock | Cmd::Unlock => {
                 let keys: Vec<_> = self.chosen.iter().collect();
                 let locking = matches!(cmd, Cmd::Lock);
@@ -324,6 +342,7 @@ impl App for Whiteboard {
                 ui.button(Cmd::ShowAll);
             });
             let count = self.board.shapes.len();
+            ui.on_files(Cmd::Import);
             ui.canvas(t!("Board, {count} shapes"), 0, |canvas| {
                 canvas.camera(Whiteboard::camera);
                 canvas.on_drag(Cmd::Drew);
@@ -453,14 +472,11 @@ impl Whiteboard {
         self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw())
     }
 
-    /// Puts what was pasted on the board: a board copied from here or saved as SVG, moved a little so it doesn't hide what it came from, or any other text as a text shape.
-    fn paste(&mut self, text: &str, cx: &mut Cx<Cmd>) -> Outcome {
-        if let Some(board) = Board::from_svg(text) {
-            let made = self.board.paste(&board, PASTED, PASTED, || cx.key::<Shape>().raw());
-            let count = made.len();
-            let _ = self.chosen.choose(&ledger::Choose::All(made.into_iter().map(Key::raw).collect()));
-            let _ = cx.say(t!("Pasted {count} shapes"));
-            return Outcome::Changed;
+    /// Puts what was pasted on the board: a board copied from here or saved as SVG, read in a job since it may be large, or any other text as a text shape.
+    fn paste(&mut self, text: String, cx: &mut Cx<Cmd>) -> Outcome {
+        if text.trim_start().starts_with("<svg") {
+            cx.job(t!("Reading the pasted board"), move || Box::new(Board::from_svg(&text).ok_or_else(|| Failure::new("The pasted picture holds no board"))), Cmd::Laid);
+            return Outcome::Nothing;
         }
         let words = text.split_whitespace().collect::<Vec<_>>().join(" ");
         if words.is_empty() {
@@ -471,6 +487,15 @@ impl Whiteboard {
         shape.ink = self.pen.ink();
         let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None };
         self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw())
+    }
+
+    /// Lays a pasted or imported board on top, a little down and to the right of where it was, so it doesn't hide what it came from, and chooses it.
+    fn lay(&mut self, board: &Board, cx: &mut Cx<Cmd>) -> Outcome {
+        let made = self.board.paste(board, PASTED, PASTED, || cx.key::<Shape>().raw());
+        let count = made.len();
+        let _ = self.chosen.choose(&ledger::Choose::All(made.into_iter().map(Key::raw).collect()));
+        let _ = cx.say(t!("Added {count} shapes"));
+        if count == 0 { Outcome::Nothing } else { Outcome::Changed }
     }
 
     fn nudge(&mut self, dx: f64, dy: f64, cx: &mut Cx<Cmd>) -> Outcome {

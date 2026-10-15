@@ -29,15 +29,16 @@ window		0 0 99 15
     button	Move down	42 12 13 1	
     button	Copy	57 12 13 1	
     button	Paste	72 12 14 1	
-    button	Lock	88 12 6 1	
-    button	Unlock	2 13 8 1	
-    button	Choose everything	12 13 23 1	
-    button	Bring to front	37 13 12 1	
-    button	Send to back	51 13 12 1	
-    button	Show everything	65 13 15 1	
-    button	Open	82 13 6 1	unavailable (Choose a file first)
-    button	Save	90 13 6 1	unavailable (Choose a file first)
-    button	Export a picture	2 14 14 1	unavailable (Choose a file first)
-    button	Undo	18 14 13 1	unavailable (Nothing to undo)
-    button	Redo	33 14 19 1	unavailable (Nothing to redo)
-    button	Open the palette	54 14 28 1	
+    button	Import…	88 12 9 1	
+    button	Lock	2 13 6 1	
+    button	Unlock	10 13 8 1	
+    button	Choose everything	20 13 23 1	
+    button	Bring to front	45 13 12 1	
+    button	Send to back	59 13 12 1	
+    button	Show everything	73 13 15 1	
+    button	Open	90 13 6 1	unavailable (Choose a file first)
+    button	Save	2 14 6 1	unavailable (Choose a file first)
+    button	Export a picture	10 14 14 1	unavailable (Choose a file first)
+    button	Undo	26 14 13 1	unavailable (Nothing to undo)
+    button	Redo	41 14 19 1	unavailable (Nothing to redo)
+    button	Open the palette	62 14 28 1	

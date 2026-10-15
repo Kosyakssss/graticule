@@ -185,7 +185,7 @@ mod tree {
                 tree.nodes[i].text = r;
             }
         }
-        for i in 0..tree.nodes.len() {
+        for i in (0..tree.nodes.len()).rev() {
             tree.hash_node(i);
         }
         tree.reindex();

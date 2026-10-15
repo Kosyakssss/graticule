@@ -1493,6 +1493,22 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.scale(xs, plot.x_labels(), crate::tree::Fill);
     }
 
+    /// A node graph: each of `graph`'s nodes a box holding what `node` puts in it for that node's number, set out in layers from left to right with wires between them. A graph too wide for its place lists its nodes one under another, without wires.
+    #[track_caller]
+    pub fn graph(&mut self, label: impl AsRef<str>, graph: &crate::graph::Graph, mut node: impl FnMut(&mut Ui<'_, C, S>, usize)) {
+        let at = Location::caller();
+        let i = self.add(Kind::Graph, at);
+        let r = self.tree.put(label.as_ref());
+        self.tree.nodes[i as usize].text = r;
+        let (id, subject) = (self.tree.nodes[i as usize].id, self.subject);
+        for k in 0..graph.len() {
+            let v = self.tree.add(i, Kind::Vertex, Some(id.mix(k as u64)), at);
+            self.tree.nodes[v as usize].subject = subject;
+            node(&mut self.child(v, subject), k);
+        }
+        self.tree.graphs.push(crate::tree::Graphed { node: i, shape: graph.shape().clone(), places: Vec::new() });
+    }
+
     fn scale(&mut self, node: u32, labels: &[(f32, String)], span: Span) {
         let words: Vec<&str> = labels.iter().map(|(_, s)| s.as_str()).collect();
         let r = self.tree.put(&words.join(", "));

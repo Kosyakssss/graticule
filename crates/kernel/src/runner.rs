@@ -1007,7 +1007,7 @@ impl<A: App> Runner<A> {
                 self.tree.nodes[i].reason = r;
             }
         }
-        for i in 0..self.tree.nodes.len() {
+        for i in (0..self.tree.nodes.len()).rev() {
             self.tree.hash_node(i);
         }
     }

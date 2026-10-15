@@ -23,6 +23,7 @@ fn role(kind: Kind) -> Role {
         Kind::Chart => Role::Figure,
         Kind::Scale { .. } => Role::Label,
         Kind::Spark => Role::Image,
+        Kind::Graph | Kind::Vertex => Role::Group,
         Kind::Divider => Role::Splitter,
         Kind::ListRow { .. } => Role::ListItem,
         Kind::Field { holds: Holds::Lines { .. } } => Role::MultilineTextInput,

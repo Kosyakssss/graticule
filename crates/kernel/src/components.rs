@@ -809,6 +809,50 @@ fn scrollbar(p: &mut Painter, track: Rect, first: u32, shown: u32, count: u32) {
     p.fill(Rect::new((track.x + (track.w - w) / 2.0).round(), y, w, thumb_h), muted);
 }
 
+/// A graph's wires: out of a node's right edge, along to a track of their own in the gap between layers, up or down to the next place and into it, with a square where each arrives.
+fn wires(p: &mut Painter, g: &crate::tree::Graphed) {
+    if g.places.is_empty() {
+        return;
+    }
+    let (t, d, ink) = (p.style.line(p.m), shadow(p), p.theme.muted);
+    let port = (p.m.cell_h * 0.2).round().max(t * 3.0);
+    let rights: Vec<f32> = g.places.iter().map(|l| l.iter().map(|a| p.rect(*a).right()).fold(0.0, f32::max)).collect();
+    let mut crossing = vec![0u32; g.places.len()];
+    for w in &g.shape.wires {
+        for pair in w.path.windows(2) {
+            crossing[pair[0].0 as usize] += 1;
+        }
+    }
+    let mut taken = vec![0u32; g.places.len()];
+    let at = |(l, s): (u32, u32)| g.places.get(l as usize).and_then(|l| l.get(s as usize)).copied();
+    let middle = |p: &Painter, a: Area| {
+        let r = p.rect(Area::new(a.col, a.row, a.cols, 1));
+        (r.y + r.h / 2.0 - t / 2.0).round()
+    };
+    for w in &g.shape.wires {
+        let Some(places) = w.path.iter().map(|&k| at(k)).collect::<Option<Vec<Area>>>() else { continue };
+        let ends = places.len() - 1;
+        for (k, pair) in places.windows(2).enumerate() {
+            let gap = w.path[k].0 as usize;
+            let (a, b) = (p.rect(pair[0]), p.rect(pair[1]));
+            let (ya, yb) = (middle(p, pair[0]), middle(p, pair[1]));
+            let from = if k == 0 { a.right() - d } else { a.right() };
+            let (left, right) = (rights[gap], b.x);
+            taken[gap] += 1;
+            let x = (left + (right - left) * taken[gap] as f32 / (crossing[gap] + 1) as f32).round();
+            p.fill(Rect::new(from, ya, x - from + t, t), ink);
+            p.fill(Rect::new(x, ya.min(yb), t, (ya - yb).abs() + t), ink);
+            p.fill(Rect::new(x, yb, b.x - x, t), ink);
+            if k + 1 < ends {
+                p.fill(Rect::new(b.x, yb, b.w, t), ink);
+            }
+        }
+        let (end, y) = if w.back { (p.rect(places[0]).right() - d, middle(p, places[0])) } else { (p.rect(places[ends]).x, middle(p, places[ends])) };
+        let ink = p.theme.ink;
+        p.fill(Rect::new((end - port / 2.0).round(), (y + t / 2.0 - port / 2.0).round(), port, port), ink);
+    }
+}
+
 /// Paints one node's own drawing, not its children's, into one layer.
 pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Layer) {
     let n = tree.nodes[i as usize];
@@ -864,6 +908,22 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             }
         }
         (Layer::Over, Kind::Button | Kind::Browse | Kind::Confirm { open: false }) => button(p, &n, text, joined(tree, i), look),
+        (Layer::Over, Kind::Graph) => {
+            if let Some(g) = tree.graphs.iter().find(|g| g.node == i) {
+                wires(p, g);
+            }
+        }
+        (Layer::Under, Kind::Vertex) => {
+            let outer = p.rect(n.area);
+            let d = shadow(p);
+            let body = Rect::new(outer.x, outer.y, outer.w - d, outer.h - d);
+            let (theme, t) = (p.theme, p.style.line(p.m));
+            if d > 0.0 {
+                p.fill(Rect::new(body.x + d, body.y + d, body.w, body.h), theme.ink);
+            }
+            p.fill(body, theme.bg);
+            border(p, body, t, theme.ink);
+        }
         (Layer::Under, Kind::Group) => {
             let r = p.rect(n.area);
             let d = shadow(p);

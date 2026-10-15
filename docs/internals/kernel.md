@@ -238,7 +238,7 @@ Canvases, raster images and paint hooks each draw into a texture of their own, a
 
 The GPU draws quads in runs that share a texture. The kept layers know their runs too, worked out again only when a layer changed. A canvas's texture is let go of when its node leaves the kept list; an image's lasts as long as the app holds the image, which the presenter thread sees through a weak reference.
 
-A node's hash takes in what it draws from the tree's side tables, a color slider's color as much as a canvas's drawings, since the kept list repaints a node only when its hash changes.
+A node's hash takes in what it draws from the tree's side tables, a color slider's color as much as a canvas's drawings, since the kept list repaints a node only when its hash changes. A node graph draws its wires from where layout put its nodes, so its hash also takes in the hashes of everything below it; nodes are hashed from the last to the first so those are ready when the graph is hashed.
 
 A law (§19) checks that patching the quad list gives the same pixels as building it from scratch. It compares the quads themselves, layer by layer, which is enough because boxes on the grid never overlap.
 

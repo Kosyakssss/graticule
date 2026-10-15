@@ -144,6 +144,8 @@ The time axis is the start of a sequencer or a video editor: a ruler across the 
 
 Charts draw numbers as lines, bars or candles, the kind traders read, with a scale up the left and along the bottom. The app says how many rows tall a chart is, and Graticule picks round numbers for the scale so each one sits in the middle of a row. A table can carry a sparkline in a cell: a tiny chart of a row's trend, where the shape matters more than the values. Pointing at a chart to read a value off it isn't done yet.
 
+A node graph shows boxes joined by wires, such as the states a post moves through. The app only says which boxes lead to which; Graticule sets them out from left to right so the wires run forward and cross as little as it can, and a loop is drawn running back. In a window too narrow for it, the boxes are listed one under another instead.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

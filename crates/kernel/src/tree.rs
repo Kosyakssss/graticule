@@ -199,6 +199,8 @@ pub enum Kind {
     Chart,
     Scale { vertical: bool, rows: i32 },
     Spark,
+    Graph,
+    Vertex,
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -282,6 +284,8 @@ impl Kind {
                 | Kind::Match { .. }
                 | Kind::TimeAxis
                 | Kind::Chart
+                | Kind::Graph
+                | Kind::Vertex
         )
     }
 
@@ -307,6 +311,8 @@ impl Kind {
             Kind::Chart => "chart",
             Kind::Scale { .. } => "scale",
             Kind::Spark => "sparkline",
+            Kind::Graph => "graph",
+            Kind::Vertex => "node",
             Kind::ListRow { .. } => "list item",
             Kind::Field { holds: Holds::Lines { .. } } => "text area",
             Kind::Field { holds: Holds::Search } => "search field",
@@ -549,6 +555,16 @@ pub struct Tree<C> {
     pub scales: Vec<(u32, Vec<(f32, String)>)>,
     /// The heights of sparklines' bars, from 0 to 1, by the sparkline's node.
     pub sparks: Vec<(u32, Vec<f32>)>,
+    /// Node graphs, each with its shape and where layout put its places.
+    pub(crate) graphs: Vec<Graphed>,
+}
+
+/// A node graph in the tree: its node, the layers and wires worked out off the main thread, and the area of each place in each layer once laid out, empty when its nodes are listed instead.
+#[derive(Clone, Debug)]
+pub(crate) struct Graphed {
+    pub node: u32,
+    pub shape: std::sync::Arc<crate::graph::Shape>,
+    pub places: Vec<Vec<Area>>,
 }
 
 /// A time axis's ruler: how its time is counted, what it shows, where the playhead is and the facts it sets.
@@ -611,6 +627,7 @@ impl<C> Default for Tree<C> {
             spans: HashMap::new(),
             scales: Vec::new(),
             sparks: Vec::new(),
+            graphs: Vec::new(),
         }
     }
 }
@@ -633,6 +650,7 @@ impl<C> Tree<C> {
         self.rulers.clear();
         self.scales.clear();
         self.sparks.clear();
+        self.graphs.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;
@@ -775,6 +793,14 @@ impl<C> Tree<C> {
         if let Some((_, heights)) = self.sparks.iter().find(|s| s.0 == i as u32) {
             for v in heights {
                 v.to_bits().hash(&mut h);
+            }
+        }
+        if let Some(g) = self.graphs.iter().find(|g| g.node == i as u32) {
+            g.shape.hash(&mut h);
+            let mut below: Vec<u32> = self.children(i as u32).collect();
+            while let Some(c) = below.pop() {
+                self.nodes[c as usize].hash.hash(&mut h);
+                below.extend(self.children(c));
             }
         }
         if let Some(r) = self.rulers.iter().find(|r| r.node == i as u32) {

@@ -1,3 +1,4 @@
+use crate::graph::{Shape, Slot};
 use crate::grid::Area;
 use crate::metrics::Metrics;
 use crate::picture::Picture;
@@ -23,6 +24,7 @@ pub const CODE: i32 = 4;
 pub const HIDDEN: i32 = 7;
 const GAUGE: i32 = 20;
 const GAUGE_MIN: i32 = 8;
+const WIRES: i32 = 6;
 
 /// Lays a tree out in whole cells: each node's `Area` from its parent's, top down, measuring text in columns as it goes.
 pub struct Layout<'t> {
@@ -193,6 +195,32 @@ impl<'t> Layout<'t> {
             Kind::Scale { vertical: false, .. } => (8, 8),
             Kind::Scale { vertical: true, .. } => (1, 1),
             Kind::Spark => (6, 12),
+            Kind::Vertex => {
+                let (start, end) = self.children(tree, i);
+                let (mut min, mut pref) = (1, 1);
+                for k in start..end {
+                    let (a, b) = self.size(tree, self.stack[k]);
+                    (min, pref) = (min.max(a), pref.max(b));
+                }
+                self.release(start);
+                (min + 2, pref + 2)
+            }
+            Kind::Graph => {
+                let (start, end) = self.children(tree, i);
+                let mut min = 0;
+                for k in start..end {
+                    min = min.max(self.size(tree, self.stack[k]).0);
+                }
+                let pref = match tree.graphs.iter().find(|g| g.node == i).map(|g| g.shape.clone()) {
+                    Some(shape) => {
+                        let widths = self.layer_widths(tree, &shape, start);
+                        widths.iter().sum::<i32>() + WIRES * (widths.len() as i32 - 1).max(0)
+                    }
+                    None => min,
+                };
+                self.release(start);
+                (min, pref.max(min))
+            }
             Kind::Split => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref, mut count) = (0, 0, 0);
@@ -514,6 +542,30 @@ impl<'t> Layout<'t> {
             Kind::Value { .. } => 1,
             Kind::Header | Kind::Head { .. } | Kind::Cell { .. } | Kind::Twig { .. } | Kind::Divider | Kind::Ruler | Kind::Spark => 1,
             Kind::Scale { rows, .. } => rows.max(1),
+            Kind::Vertex => {
+                let (start, end) = self.children(tree, i);
+                let mut rows = 0;
+                for k in start..end {
+                    rows += self.rows(tree, self.stack[k], cols - 2);
+                }
+                self.release(start);
+                rows.max(1)
+            }
+            Kind::Graph => {
+                let (start, end) = self.children(tree, i);
+                let rows = match self.graph_places(tree, i, start, Area::new(0, 0, cols, 0)) {
+                    Some(places) => places.iter().flatten().map(|a| a.bottom()).max().unwrap_or(0),
+                    None => {
+                        let mut rows = -1;
+                        for k in start..end {
+                            rows += self.rows(tree, self.stack[k], cols) + 1;
+                        }
+                        rows
+                    }
+                };
+                self.release(start);
+                rows.max(1)
+            }
             Kind::Split => {
                 let (start, end) = self.children(tree, i);
                 let mut rows = 0;
@@ -714,6 +766,30 @@ impl<'t> Layout<'t> {
             }
             Kind::Root | Kind::Column | Kind::Pane | Kind::Picker | Kind::Matches { .. } | Kind::TimeAxis | Kind::Chart | Kind::Palette => self.stack_down(tree, i, area, 0),
             Kind::Split => self.split(tree, i, area),
+            Kind::Vertex => self.stack_down(tree, i, Area::new(area.col + 1, area.row, area.cols - 2, area.rows), 0),
+            Kind::Graph => {
+                let (start, end) = self.children(tree, i);
+                let shape = tree.graphs.iter().find(|g| g.node == i).map(|g| g.shape.clone());
+                let places = self.graph_places(tree, i, start, area);
+                if let (Some(shape), Some(places)) = (shape, &places) {
+                    for (layer, at) in shape.layers.iter().zip(places) {
+                        for (slot, &a) in layer.iter().zip(at) {
+                            if let Slot::Node(v) = *slot
+                                && let Some(&c) = self.stack.get(start + v as usize).filter(|_| start + (v as usize) < end)
+                            {
+                                self.place(tree, c, if area.holds(a) { a } else { Area::default() });
+                            }
+                        }
+                    }
+                    self.release(start);
+                } else {
+                    self.release(start);
+                    self.stack_down(tree, i, area, 1);
+                }
+                if let Some(g) = tree.graphs.iter_mut().find(|g| g.node == i) {
+                    g.places = places.unwrap_or_default();
+                }
+            }
             Kind::Overlay { .. } => self.stack_down(tree, i, Area::new(area.col + 1, area.row, area.cols - 2, area.rows), 0),
             Kind::Empty => self.stack_down(tree, i, area, 1),
             Kind::Row | Kind::ListRow { .. } | Kind::Match { .. } | Kind::Columns | Kind::Confirm { open: true } => self.side_by_side(tree, i, area),
@@ -887,6 +963,50 @@ impl<'t> Layout<'t> {
             }
             _ => {}
         }
+    }
+
+    /// How wide each layer of a graph is, its children starting at `start` in the stack: its widest node, or room for a wire passing through.
+    fn layer_widths<C>(&mut self, tree: &Tree<C>, shape: &Shape, start: usize) -> Vec<i32> {
+        let mut widths = Vec::with_capacity(shape.layers.len());
+        for layer in &shape.layers {
+            let mut w = 2;
+            for slot in layer {
+                if let Slot::Node(v) = *slot {
+                    w = w.max(self.size(tree, self.stack[start + v as usize]).1);
+                }
+            }
+            widths.push(w);
+        }
+        widths
+    }
+
+    /// Where each place of a graph goes inside `area`, layer by layer from the left, each layer centred on the tallest; or nothing when the layers don't fit side by side, and its nodes are listed one under another instead.
+    fn graph_places<C>(&mut self, tree: &Tree<C>, i: u32, start: usize, area: Area) -> Option<Vec<Vec<Area>>> {
+        let shape = tree.graphs.iter().find(|g| g.node == i)?.shape.clone();
+        let widths = self.layer_widths(tree, &shape, start);
+        if widths.iter().sum::<i32>() + WIRES * (widths.len() as i32 - 1).max(0) > area.cols {
+            return None;
+        }
+        let (mut layers, mut col) = (Vec::with_capacity(widths.len()), area.col);
+        for (layer, &w) in shape.layers.iter().zip(&widths) {
+            let (mut row, mut places) = (0, Vec::with_capacity(layer.len()));
+            for slot in layer {
+                let (cols, rows) = match *slot {
+                    Slot::Node(v) => {
+                        let c = self.stack[start + v as usize];
+                        let cols = self.size(tree, c).1.min(w);
+                        (cols, self.rows(tree, c, cols))
+                    }
+                    Slot::Through => (w, 1),
+                };
+                places.push(Area::new(col, row, cols, rows));
+                row += rows + 1;
+            }
+            layers.push((places, (row - 1).max(0)));
+            col += w + WIRES;
+        }
+        let tall = layers.iter().map(|l| l.1).max().unwrap_or(0);
+        Some(layers.into_iter().map(|(places, rows)| places.into_iter().map(|a| Area::new(a.col, area.row + a.row + (tall - rows) / 2, a.cols, a.rows)).collect()).collect())
     }
 
     fn stack_down<C>(&mut self, tree: &mut Tree<C>, i: u32, area: Area, gap: i32) {

@@ -2,7 +2,7 @@ use graticule_macros::{Choice, Commands, Facts, Form};
 use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
-use kernel::{App, Available, Channel, Clock, Cx, Day, Derived, Failure, Image, Ink, Message, Oklch, Order, PaintHook, Path, Plot, Sort, States, Time, TimeView, Ui};
+use kernel::{App, Available, Channel, Clock, Cx, Day, Derived, Failure, Graph, Image, Ink, Message, Oklch, Order, PaintHook, Path, Plot, Sort, States, Time, TimeView, Ui};
 use ledger::{Edit, Key, List, Outcome, Selection, Text};
 
 use crate::style::{self, Mark, Mix, Nudge, Reach, Reaches, Side, Weight};
@@ -312,6 +312,10 @@ const RAIN: [(&str, f64, f64); 12] = [
     ("Dec", 84.0, 4.9),
 ];
 
+const STATES: [(&str, u32); 8] = [("Draft", 14), ("In review", 5), ("Changes asked", 3), ("Approved", 2), ("Scheduled", 4), ("Published", 61), ("Archived", 230), ("Discarded", 18)];
+
+const MOVES: [(usize, usize); 10] = [(0, 1), (1, 2), (2, 0), (1, 3), (3, 4), (4, 5), (3, 5), (5, 6), (0, 7), (2, 7)];
+
 fn candles() -> Vec<kernel::Candle> {
     let mut price = 100.0;
     (0..24)
@@ -502,10 +506,11 @@ pub enum Component {
     Records,
     TimeAxis,
     Chart,
+    Graph,
 }
 
 impl Component {
-    const ALL: [Component; 79] = [
+    const ALL: [Component; 80] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -585,6 +590,7 @@ impl Component {
         Component::Records,
         Component::TimeAxis,
         Component::Chart,
+        Component::Graph,
     ];
 
     fn name(self) -> &'static str {
@@ -668,6 +674,7 @@ impl Component {
             Component::Records => "Table from data",
             Component::TimeAxis => "Time axis",
             Component::Chart => "Chart",
+            Component::Graph => "Node graph",
         }
     }
 
@@ -752,6 +759,7 @@ impl Component {
             Component::Records => include_str!("../../../docs/components/table-from-data.md"),
             Component::TimeAxis => include_str!("../../../docs/components/time-axis.md"),
             Component::Chart => include_str!("../../../docs/components/chart.md"),
+            Component::Graph => include_str!("../../../docs/components/node-graph.md"),
         }
     }
 
@@ -1350,6 +1358,10 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::Graph => ui.graph("How a post moves from draft to archive", &Graph::new(STATES.len(), MOVES), |ui, k| {
+                ui.text(STATES[k].0);
+                ui.muted(format!("{} posts", STATES[k].1));
+            }),
             Component::Chart => {
                 let rain = Plot::new(6)
                     .bars(RAIN.iter().enumerate().map(|(k, m)| (k as f64, m.1)), Ink::Selection)

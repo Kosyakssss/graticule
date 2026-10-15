@@ -1,0 +1,34 @@
+window		0 0 24 26	
+  page	Twin	0 0 24 14	
+    split		2 3 20 10	
+      pane	Left	2 3 20 3	
+        text field	Folder	2 3 20 1	holds “Sample/Nowhere”
+        text	There is no folder “Sample/Nowhere”	2 4 20 2	muted
+      pane	Right	2 6 20 5	
+        text field	Folder	2 6 20 1	holds “Sample”
+        text	5 items	2 7 20 1	muted
+        list		2 8 20 3	5 items
+          column heads		2 8 18 1	
+            column head	Name	2 8 10 1	
+            column head	Kind	14 8 6 1	
+          list item		2 9 18 1	
+            cell	A huge folder	2 9 10 1	
+            cell	Folder	14 9 6 1	
+          list item		2 10 18 1	
+            cell	Code	2 10 10 1	
+            cell	Folder	14 10 6 1	
+      pane	Preview	2 11 20 2	
+        text	Choose a file to see what it holds	2 11 20 2	muted
+  alert		2 14 20 1	
+  status		2 15 20 1	
+  toolbar		2 16 20 10	
+    button	Go up a folder	2 16 20 1	
+    button	New folder…	2 17 12 1	
+    button	Show the same folder on the other side	2 18 20 1	
+    button	Swap the sides	2 19 14 1	
+    button	Show hidden files	2 20 16 1	
+    button	Hide hidden files	2 21 15 1	unavailable (Hidden files are hidden already)
+    button	Read the folders again	2 22 19 1	
+    button	Undo	2 23 13 1	unavailable (Nothing to undo)
+    button	Redo	2 24 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 25 15 1	

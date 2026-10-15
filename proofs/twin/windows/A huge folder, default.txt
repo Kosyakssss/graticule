@@ -1,0 +1,132 @@
+window		0 0 120 30	
+  page	Twin	0 0 120 26	
+    split		2 3 116 22	
+      pane	Left	2 3 35 22	
+        text field	Folder	2 3 35 1	holds “Sample/A huge folder”
+        text	100000 items	2 4 35 1	muted
+        list		2 5 35 20	100000 items
+          column heads		2 5 33 1	
+            column head	Name	2 5 14 1	
+            column head	Kind	18 5 7 1	
+            column head	Size	27 5 8 1	
+          list item		2 6 33 1	
+            cell	record 000001.txt	2 6 14 1	
+            cell	Text	18 6 7 1	
+            cell	101 bytes	27 6 8 1	
+          list item		2 7 33 1	
+            cell	record 000002.txt	2 7 14 1	
+            cell	Text	18 7 7 1	
+            cell	102 bytes	27 7 8 1	
+          list item		2 8 33 1	
+            cell	record 000003.txt	2 8 14 1	
+            cell	Text	18 8 7 1	
+            cell	103 bytes	27 8 8 1	
+          list item		2 9 33 1	
+            cell	record 000004.txt	2 9 14 1	
+            cell	Text	18 9 7 1	
+            cell	104 bytes	27 9 8 1	
+          list item		2 10 33 1	
+            cell	record 000005.txt	2 10 14 1	
+            cell	Text	18 10 7 1	
+            cell	105 bytes	27 10 8 1	
+          list item		2 11 33 1	
+            cell	record 000006.txt	2 11 14 1	
+            cell	Text	18 11 7 1	
+            cell	106 bytes	27 11 8 1	
+          list item		2 12 33 1	
+            cell	record 000007.txt	2 12 14 1	
+            cell	Text	18 12 7 1	
+            cell	107 bytes	27 12 8 1	
+          list item		2 13 33 1	
+            cell	record 000008.txt	2 13 14 1	
+            cell	Text	18 13 7 1	
+            cell	108 bytes	27 13 8 1	
+          list item		2 14 33 1	
+            cell	record 000009.txt	2 14 14 1	
+            cell	Text	18 14 7 1	
+            cell	109 bytes	27 14 8 1	
+          list item		2 15 33 1	
+            cell	record 000010.txt	2 15 14 1	
+            cell	Text	18 15 7 1	
+            cell	110 bytes	27 15 8 1	
+          list item		2 16 33 1	
+            cell	record 000011.txt	2 16 14 1	
+            cell	Text	18 16 7 1	
+            cell	111 bytes	27 16 8 1	
+          list item		2 17 33 1	
+            cell	record 000012.txt	2 17 14 1	
+            cell	Text	18 17 7 1	
+            cell	112 bytes	27 17 8 1	
+          list item		2 18 33 1	
+            cell	record 000013.txt	2 18 14 1	
+            cell	Text	18 18 7 1	
+            cell	113 bytes	27 18 8 1	
+          list item		2 19 33 1	
+            cell	record 000014.txt	2 19 14 1	
+            cell	Text	18 19 7 1	
+            cell	114 bytes	27 19 8 1	
+          list item		2 20 33 1	
+            cell	record 000015.txt	2 20 14 1	
+            cell	Text	18 20 7 1	
+            cell	115 bytes	27 20 8 1	
+          list item		2 21 33 1	
+            cell	record 000016.txt	2 21 14 1	
+            cell	Text	18 21 7 1	
+            cell	116 bytes	27 21 8 1	
+          list item		2 22 33 1	
+            cell	record 000017.txt	2 22 14 1	
+            cell	Text	18 22 7 1	
+            cell	117 bytes	27 22 8 1	
+          list item		2 23 33 1	
+            cell	record 000018.txt	2 23 14 1	
+            cell	Text	18 23 7 1	
+            cell	118 bytes	27 23 8 1	
+          list item		2 24 33 1	
+            cell	record 000019.txt	2 24 14 1	
+            cell	Text	18 24 7 1	
+            cell	119 bytes	27 24 8 1	
+      divider	Between “Left” and “Right”	39 3 1 22	
+      pane	Right	42 3 35 22	
+        text field	Folder	42 3 35 1	holds “Sample”
+        text	5 items	42 4 35 1	muted
+        list		42 5 35 20	5 items
+          column heads		42 5 33 1	
+            column head	Name	42 5 14 1	
+            column head	Kind	58 5 7 1	
+            column head	Size	67 5 8 1	
+          list item		42 6 33 1	
+            cell	A huge folder	42 6 14 1	
+            cell	Folder	58 6 7 1	
+            cell	Size	67 6 8 1	
+          list item		42 7 33 1	
+            cell	Code	42 7 14 1	
+            cell	Folder	58 7 7 1	
+            cell	Size	67 7 8 1	
+          list item		42 8 33 1	
+            cell	Documents	42 8 14 1	
+            cell	Folder	58 8 7 1	
+            cell	Size	67 8 8 1	
+          list item		42 9 33 1	
+            cell	Pictures	42 9 14 1	
+            cell	Folder	58 9 7 1	
+            cell	Size	67 9 8 1	
+          list item		42 10 33 1	
+            cell	notes.txt	42 10 14 1	
+            cell	Text	58 10 7 1	
+            cell	28 bytes	67 10 8 1	
+      divider	Between “Right” and “Preview”	79 3 1 22	
+      pane	Preview	82 3 36 22	
+        text	Choose a file to see what it holds	82 3 36 1	muted
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Go up a folder	2 28 23 1	
+    button	New folder…	27 28 12 1	
+    button	Show the same folder on the other side	41 28 32 1	
+    button	Swap the sides	75 28 14 1	
+    button	Show hidden files	91 28 16 1	
+    button	Hide hidden files	2 29 15 1	unavailable (Hidden files are hidden already)
+    button	Read the folders again	19 29 19 1	
+    button	Undo	40 29 13 1	unavailable (Nothing to undo)
+    button	Redo	55 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	76 29 15 1	

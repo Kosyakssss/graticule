@@ -1,0 +1,44 @@
+window		0 0 24 28	
+  page	Twin	0 0 24 16	
+    split		2 3 20 12	
+      pane	Left	2 3 20 5	
+        text field	Folder	2 3 20 1	holds “Sample”
+        text	5 items	2 4 20 1	muted
+        list		2 5 20 3	5 items
+          column heads		2 5 18 1	
+            column head	Name	2 5 10 1	
+            column head	Kind	14 5 6 1	
+          list item		2 6 18 1	
+            cell	A huge folder	2 6 10 1	
+            cell	Folder	14 6 6 1	
+          list item		2 7 18 1	
+            cell	Code	2 7 10 1	
+            cell	Folder	14 7 6 1	
+      pane	Right	2 8 20 5	
+        text field	Folder	2 8 20 1	holds “Sample/Documents”
+        text	4 items	2 9 20 1	muted
+        list		2 10 20 3	4 items
+          column heads		2 10 18 1	
+            column head	Name	2 10 10 1	
+            column head	Kind	14 10 6 1	
+          list item		2 11 18 1	
+            cell	budget.csv	2 11 10 1	
+            cell	CSV table	14 11 6 1	
+          list item		2 12 18 1	
+            cell	letter.txt	2 12 10 1	
+            cell	Text	14 12 6 1	
+      pane	Preview	2 13 20 2	
+        text	Choose a file to see what it holds	2 13 20 2	muted
+  alert		2 16 20 1	
+  status		2 17 20 1	
+  toolbar		2 18 20 10	
+    button	Go up a folder	2 18 20 1	unavailable (This is the top folder)
+    button	New folder…	2 19 12 1	
+    button	Show the same folder on the other side	2 20 20 1	
+    button	Swap the sides	2 21 14 1	
+    button	Show hidden files	2 22 16 1	
+    button	Hide hidden files	2 23 15 1	unavailable (Hidden files are hidden already)
+    button	Read the folders again	2 24 19 1	
+    button	Undo	2 25 13 1	unavailable (Nothing to undo)
+    button	Redo	2 26 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 27 15 1	

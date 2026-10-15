@@ -68,6 +68,8 @@ Graticule is made of named parts, each with a model code. Every one is two thing
 
 Galley's editor and Plotter's whiteboard are already apps. Beside them, six small apps each push Graticule somewhere hard: Twin (files), Ticker (fast live data), Atlas (maps), Patchbay (wires and boxes, built on Plotter), Lightbox (photos and scans) and Four-track (recording music). They live next to Graticule, so any change to it shows in all of them at once.
 
+Twin is the first of them. It shows two folders side by side with a preview of the chosen file beside them: Enter goes into a folder or opens a file in its usual app, Backspace goes up a folder, and copying or moving to the other side, renaming, making a folder and dropping files in from elsewhere each run in the background where you can see them. A folder of 100,000 files is as quick to scroll as one of five. Twin can't yet delete, show a file in the system's quick viewer, or let you drag files out to other apps; those need decisions from you (question 17 in the spec).
+
 ## The order things are built in
 
 The build plan, at the end of the spec, is one list from top to bottom, and anyone (a person or an AI) asked to build Graticule works down it item by item.

@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -25,6 +26,8 @@ struct Whiteboard {
     index: Derived<Index>,
     #[derived(Layers::of, from = [board, index, camera])]
     layers: Derived<Layers>,
+    #[derived(Overview::of, from = [board])]
+    overview: Derived<Overview>,
     #[derived(Chosen::of, from = [board, chosen])]
     around: Derived<Chosen>,
 }
@@ -71,6 +74,50 @@ impl Chosen {
             corners = shape.kind != Kind::Arrow && !shape.locked;
         }
         Chosen(around.map(|a| (a, count == 1 && corners)))
+    }
+}
+
+/// The whole board drawn small for the map, off the main thread: each shape's box on a small board, and on a large one the places that hold shapes, so the map costs the same at any size.
+struct Overview {
+    area: Option<Bounds>,
+    drawing: Arc<Drawing>,
+}
+
+/// How many shapes the map draws one by one, and how many places across and down it marks beyond that.
+const MAP_EACH: usize = 2_000;
+const MAP_PLACES: (usize, usize) = (48, 32);
+
+/// How many rows tall and columns wide the map is.
+const MAP_ROWS: i32 = 8;
+const MAP_COLS: i32 = 24;
+
+impl Overview {
+    fn of(board: &Board) -> Overview {
+        let area = board.shapes.iter().map(Shape::bounds).reduce(|a, b| a.union(&b));
+        let mut drawing = Drawing::new();
+        match area {
+            Some(area) if board.shapes.len() > MAP_EACH => {
+                let (across, down) = MAP_PLACES;
+                let (w, h) = (area.w.max(1.0) / across as f64, area.h.max(1.0) / down as f64);
+                let mut held = vec![false; across * down];
+                for shape in board.shapes.iter() {
+                    let c = shape.bounds().center();
+                    let (i, j) = ((((c.x - area.x) / w) as usize).min(across - 1), (((c.y - area.y) / h) as usize).min(down - 1));
+                    held[j * across + i] = true;
+                }
+                for (k, _) in held.iter().enumerate().filter(|(_, held)| **held) {
+                    let (x, y) = (area.x + (k % across) as f64 * w, area.y + (k / across) as f64 * h);
+                    drawing.rect(at(x, y), at(x + w, y + h)).fill().ink(Ink::Muted);
+                }
+            }
+            Some(_) => {
+                for shape in board.shapes.iter() {
+                    corners(&mut drawing, shape.bounds(), Ink::Muted);
+                }
+            }
+            None => {}
+        }
+        Overview { area, drawing: Arc::new(drawing) }
     }
 }
 
@@ -343,66 +390,73 @@ impl App for Whiteboard {
             });
             let count = self.board.shapes.len();
             ui.on_files(Cmd::Import);
-            ui.canvas(t!("Board, {count} shapes"), 0, |canvas| {
-                canvas.camera(Whiteboard::camera);
-                canvas.on_drag(Cmd::Drew);
-                let intent = canvas.drag().map(|drag| Intent::of(&self.board, &self.index_now(), &self.chosen, self.tool, &gesture(drag), self.camera.zoom));
-                let moved = intent.as_ref().map(|i| i.preview(&self.board)).unwrap_or_default();
-                let moving: HashSet<Key<Shape>> = moved.iter().map(|m| m.id).collect();
-                let shown = |key: Key<Shape>| moved.iter().find(|m| m.id == key).or(self.board.shapes.find(key));
-                let small = self.board.shapes.len() <= SMALL;
-                match self.layers.get().filter(|_| !(small && (self.layers.coming() || self.index.coming()))) {
-                    Some(layers) => {
-                        for (keys, drawing) in &layers.slices {
-                            if keys.iter().any(|k| moving.contains(k)) {
-                                let mut redrawn = Drawing::new();
-                                for shape in keys.iter().filter_map(|k| shown(*k)) {
-                                    draw(&mut redrawn, shape);
+            let seen = Cell::new(None);
+            ui.split(|ui| {
+                ui.pane(t!("Board"), Fill, |ui| {
+                    ui.canvas(t!("Board, {count} shapes"), 0, |canvas| {
+                        canvas.camera(Whiteboard::camera);
+                        canvas.on_drag(Cmd::Drew);
+                        let intent = canvas.drag().map(|drag| Intent::of(&self.board, &self.index_now(), &self.chosen, self.tool, &gesture(drag), self.camera.zoom));
+                        let moved = intent.as_ref().map(|i| i.preview(&self.board)).unwrap_or_default();
+                        let moving: HashSet<Key<Shape>> = moved.iter().map(|m| m.id).collect();
+                        let shown = |key: Key<Shape>| moved.iter().find(|m| m.id == key).or(self.board.shapes.find(key));
+                        let small = self.board.shapes.len() <= SMALL;
+                        match self.layers.get().filter(|_| !(small && (self.layers.coming() || self.index.coming()))) {
+                            Some(layers) => {
+                                for (keys, drawing) in &layers.slices {
+                                    if keys.iter().any(|k| moving.contains(k)) {
+                                        let mut redrawn = Drawing::new();
+                                        for shape in keys.iter().filter_map(|k| shown(*k)) {
+                                            draw(&mut redrawn, shape);
+                                        }
+                                        canvas.drawing(&Arc::new(redrawn));
+                                    } else {
+                                        canvas.drawing(drawing);
+                                    }
                                 }
-                                canvas.drawing(&Arc::new(redrawn));
-                            } else {
-                                canvas.drawing(drawing);
                             }
-                        }
-                    }
-                    None if small => {
-                        for shape in self.board.stacked() {
-                            draw(canvas, shown(shape.id).unwrap_or(shape));
-                        }
-                    }
-                    None => {}
-                }
-                for shape in moved.iter().filter(|m| !self.board.shapes.has(m.id)) {
-                    draw(canvas, shape);
-                }
-                let around = match self.around.get().filter(|_| moved.is_empty() && !self.around.coming()) {
-                    Some(Chosen(around)) => *around,
-                    None => Chosen::around(self.chosen.iter().filter_map(shown)).0,
-                };
-                if let Some((b, corners)) = around {
-                    outline(canvas, b, corners);
-                }
-                match &intent {
-                    Some(Intent::Brush { area, .. }) => {
-                        corners(canvas, *area, Ink::Muted);
-                    }
-                    Some(Intent::Translate { guides, gaps, .. }) => {
-                        let reach = moved.iter().map(Shape::bounds).reduce(|a, b| a.union(&b)).unwrap_or_default().expand(400.0);
-                        for g in guides {
-                            let (from, to) = if g.vertical { ((g.at, reach.y), (g.at, reach.bottom())) } else { ((reach.x, g.at), (reach.right(), g.at)) };
-                            canvas.line(at(from.0, from.1), at(to.0, to.1)).ink(Ink::Danger).stroke(Weight::Hair);
-                        }
-                        let tick = 6.0 / self.camera.zoom;
-                        for g in gaps {
-                            let point = |along: f64, off: f64| if g.across { at(along, g.at + off) } else { at(g.at + off, along) };
-                            canvas.line(point(g.from, 0.0), point(g.to, 0.0)).ink(Ink::Danger).stroke(Weight::Hair);
-                            for end in [g.from, g.to] {
-                                canvas.line(point(end, -tick), point(end, tick)).ink(Ink::Danger).stroke(Weight::Hair);
+                            None if small => {
+                                for shape in self.board.stacked() {
+                                    draw(canvas, shown(shape.id).unwrap_or(shape));
+                                }
                             }
+                            None => {}
                         }
-                    }
-                    _ => {}
-                }
+                        for shape in moved.iter().filter(|m| !self.board.shapes.has(m.id)) {
+                            draw(canvas, shape);
+                        }
+                        let around = match self.around.get().filter(|_| moved.is_empty() && !self.around.coming()) {
+                            Some(Chosen(around)) => *around,
+                            None => Chosen::around(self.chosen.iter().filter_map(shown)).0,
+                        };
+                        if let Some((b, corners)) = around {
+                            outline(canvas, b, corners);
+                        }
+                        match &intent {
+                            Some(Intent::Brush { area, .. }) => {
+                                corners(canvas, *area, Ink::Muted);
+                            }
+                            Some(Intent::Translate { guides, gaps, .. }) => {
+                                let reach = moved.iter().map(Shape::bounds).reduce(|a, b| a.union(&b)).unwrap_or_default().expand(400.0);
+                                for g in guides {
+                                    let (from, to) = if g.vertical { ((g.at, reach.y), (g.at, reach.bottom())) } else { ((reach.x, g.at), (reach.right(), g.at)) };
+                                    canvas.line(at(from.0, from.1), at(to.0, to.1)).ink(Ink::Danger).stroke(Weight::Hair);
+                                }
+                                let tick = 6.0 / self.camera.zoom;
+                                for g in gaps {
+                                    let point = |along: f64, off: f64| if g.across { at(along, g.at + off) } else { at(g.at + off, along) };
+                                    canvas.line(point(g.from, 0.0), point(g.to, 0.0)).ink(Ink::Danger).stroke(Weight::Hair);
+                                    for end in [g.from, g.to] {
+                                        canvas.line(point(end, -tick), point(end, tick)).ink(Ink::Danger).stroke(Weight::Hair);
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                        seen.set(canvas.showing());
+                    });
+                });
+                ui.pane(t!("Map"), MAP_COLS, |ui| self.map(ui, seen.get()));
             });
             ui.row(|ui| {
                 ui.file_field(t!("File"), Whiteboard::file);
@@ -470,6 +524,36 @@ impl Whiteboard {
         shape.ink = self.pen.ink();
         let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None };
         self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw())
+    }
+
+    /// The whole board small, with a box round what the board shows; a press on it moves the board's view there.
+    fn map(&self, ui: &mut Ui<Cmd>, seen: Option<[f64; 4]>) {
+        ui.canvas(t!("Map of the board"), MAP_ROWS, |map| {
+            map.steers(Whiteboard::camera);
+            let now;
+            let overview = match self.overview.get().filter(|_| !(self.overview.coming() && self.board.shapes.len() <= SMALL)) {
+                Some(overview) => overview,
+                None if self.board.shapes.len() <= SMALL => {
+                    now = Overview::of(&self.board);
+                    &now
+                }
+                None => return,
+            };
+            let Some(area) = overview.area else { return };
+            let area = match seen {
+                Some([left, right, top, bottom]) => area.union(&Bounds::new(left, top, right - left, bottom - top)),
+                None => area,
+            };
+            let area = area.expand(area.w.max(area.h) * 0.05);
+            let (w, h) = map.size().unwrap_or((1.0, 1.0));
+            let zoom = (w / area.w.max(1.0)).min(h / area.h.max(1.0));
+            let c = area.center();
+            map.look(Camera { x: c.x - w / 2.0 / zoom, y: c.y - h / 2.0 / zoom, zoom });
+            map.drawing(&overview.drawing);
+            if let Some([left, right, top, bottom]) = seen {
+                map.polyline([at(left, top), at(right, top), at(right, bottom), at(left, bottom), at(left, top)]).ink(Ink::Link).stroke(Weight::Hair);
+            }
+        });
     }
 
     /// Puts what was pasted on the board: a board copied from here or saved as SVG, read in a job since it may be large, or any other text as a text shape.

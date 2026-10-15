@@ -261,6 +261,7 @@ pub struct Runner<A: App> {
     picks: HashMap<Id, crate::tree::Picking>,
     scrub: Option<(Id, i64)>,
     spans: HashMap<Id, i32>,
+    sizes: HashMap<Id, (f64, f64)>,
     dragging: Option<(Id, crate::canvas::Drag, (f32, f32))>,
     aim: Option<(Id, u64)>,
     opened: Option<Id>,
@@ -365,6 +366,7 @@ impl<A: App> Runner<A> {
             picks: HashMap::new(),
             scrub: None,
             spans: HashMap::new(),
+            sizes: HashMap::new(),
             dragging: None,
             aim: None,
             opened: None,
@@ -471,6 +473,7 @@ impl<A: App> Runner<A> {
         self.tree.picks.clone_from(&self.picks);
         self.tree.scrub = self.scrub;
         self.tree.spans.clone_from(&self.spans);
+        self.tree.sizes.clone_from(&self.sizes);
         self.tree.dragging = self.dragging.as_ref().map(|(id, drag, _)| (*id, drag.clone()));
         self.tree.reveal = self.reveal;
         let root = self.tree.root();
@@ -1349,7 +1352,7 @@ impl<A: App> Runner<A> {
             layout.run(&mut self.tree);
             self.minimum = Some(layout.minimum(&self.tree));
             (self.stack, self.widths) = layout.finish();
-            if !self.settle() {
+            if !self.settle(p.m) {
                 break;
             }
             self.build();
@@ -1361,8 +1364,17 @@ impl<A: App> Runner<A> {
         self.laid = true;
     }
 
-    fn settle(&mut self) -> bool {
+    fn settle(&mut self, m: crate::metrics::Metrics) -> bool {
         let mut moved = false;
+        for c in 0..self.tree.canvases.len() {
+            let n = self.tree.nodes[self.tree.canvases[c].node as usize];
+            let r = m.rect(n.area);
+            let size = (f64::from(r.w / m.scale), f64::from(r.h / m.scale));
+            if n.area.cols > 0 && self.sizes.get(&n.id) != Some(&size) {
+                self.sizes.insert(n.id, size);
+                moved = true;
+            }
+        }
         for r in 0..self.tree.rulers.len() {
             let n = self.tree.nodes[self.tree.rulers[r].node as usize];
             if n.area.cols > 0 && self.spans.get(&n.id) != Some(&n.area.cols) {
@@ -2973,7 +2985,7 @@ impl<A: App> Runner<A> {
 
     fn drag_canvas(&self, col: i32, row: i32) -> Option<u32> {
         let i = self.hit(col, row)?;
-        self.tree.drags.iter().any(|(n, _)| *n == i).then_some(i)
+        (self.tree.drags.iter().any(|(n, _)| *n == i) || self.tree.steers.iter().any(|(n, _)| *n == i)).then_some(i)
     }
 
     fn press_canvas(&mut self, frame: &Frame, i: u32) -> bool {
@@ -3004,6 +3016,10 @@ impl<A: App> Runner<A> {
     fn let_go(&mut self) -> bool {
         let Some((id, drag, _)) = self.dragging.take() else { return false };
         self.stale = true;
+        let steer = self.tree.find(id).and_then(|i| self.tree.steers.iter().find(|(n, _)| *n == i)).map(|(_, path)| *path);
+        if let Some(path) = steer {
+            return self.steer(path, drag.to);
+        }
         let cmd = self.tree.find(id).and_then(|i| self.tree.drags.iter().find(|(n, _)| *n == i)).map(|(_, cmd)| *cmd);
         match cmd {
             Some(cmd) => self.run(cmd(drag)),
@@ -3011,9 +3027,19 @@ impl<A: App> Runner<A> {
         }
     }
 
+    fn steer(&mut self, path: ErasedPath, (x, y): (f64, f64)) -> bool {
+        let Some((node, camera)) = self.tree.canvases.iter().find_map(|b| b.camera.filter(|(p, _)| *p == Some(path)).map(|(_, c)| (b.node, c))) else { return true };
+        let Some(&(w, h)) = self.sizes.get(&self.tree.nodes[node as usize].id) else { return true };
+        let to = crate::canvas::Camera { x: x - w / 2.0 / camera.zoom, y: y - h / 2.0 / camera.zoom, zoom: camera.zoom };
+        if to != camera {
+            self.set_value(path, ledger::Field::value(&to), "Look there".to_string());
+        }
+        true
+    }
+
     fn wheel_camera(&mut self, frame: &Frame, col: i32, row: i32, dx: f32, dy: f32) -> Option<bool> {
         let i = self.hit(col, row)?;
-        let (path, camera) = self.tree.canvases.iter().find(|b| b.node == i)?.camera?;
+        let (Some(path), camera) = self.tree.canvases.iter().find(|b| b.node == i)?.camera? else { return None };
         let m = frame.metrics;
         let (x, y) = frame.pointer?;
         let r = m.rect(self.tree.nodes[i as usize].area);

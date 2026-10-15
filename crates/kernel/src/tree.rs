@@ -692,6 +692,8 @@ pub struct Tree<C> {
     pub canvases: Vec<Board>,
     /// The canvases that take drags, each with the command a drag makes when it is let go.
     pub drags: Vec<(u32, Drags<C>)>,
+    /// The canvases a press on which moves another canvas's camera there, each with the path of that camera.
+    pub steers: Vec<(u32, ErasedPath)>,
     /// The drag under way on a canvas, by the canvas's id.
     pub dragging: Option<(Id, crate::canvas::Drag)>,
     /// The shape the keyboard has reached in a canvas, by the canvas's id and the shape's key.
@@ -724,6 +726,8 @@ pub struct Tree<C> {
     pub scrub: Option<(Id, i64)>,
     /// How many columns wide each ruler was last laid out, by its id, so its lanes know how much time they show.
     pub spans: HashMap<Id, i32>,
+    /// How many points wide and tall each canvas was last laid out, by its id, so its camera can say what it shows.
+    pub sizes: HashMap<Id, (f64, f64)>,
     /// Whether the view should bring the focused part into sight, as after typing or a move.
     pub reveal: bool,
     /// The labels of charts' scales, each with where it falls from 0 to 1, by the scale's node.
@@ -775,8 +779,8 @@ pub struct Board {
     pub paint: Option<std::sync::Arc<dyn crate::canvas::Paint>>,
     pub drawings: Vec<std::sync::Arc<crate::canvas::Drawing>>,
     pub presses: Vec<(u64, u32)>,
-    /// The camera it looks through, with where it is in the facts.
-    pub camera: Option<(ledger::ErasedPath, crate::canvas::Camera)>,
+    /// The camera it looks through, with where it is in the facts when it is kept there.
+    pub camera: Option<(Option<ledger::ErasedPath>, crate::canvas::Camera)>,
     /// Its own space, for a canvas without a camera: left, right, top and bottom.
     pub space: [f32; 4],
 }
@@ -803,6 +807,7 @@ impl<C> Default for Tree<C> {
             shades: Vec::new(),
             canvases: Vec::new(),
             drags: Vec::new(),
+            steers: Vec::new(),
             dragging: None,
             aim: None,
             images: Vec::new(),
@@ -819,6 +824,7 @@ impl<C> Default for Tree<C> {
             rulers: Vec::new(),
             scrub: None,
             spans: HashMap::new(),
+            sizes: HashMap::new(),
             reveal: false,
             scales: Vec::new(),
             sparks: Vec::new(),
@@ -840,6 +846,7 @@ impl<C> Tree<C> {
         self.shades.clear();
         self.canvases.clear();
         self.drags.clear();
+        self.steers.clear();
         self.images.clear();
         self.orders.clear();
         self.marks.clear();

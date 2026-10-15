@@ -51,6 +51,12 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 **Here.** `Index` is a tree of boxes packed from the bottom up, sixteen to a box, by sort-tile-recursive packing, built off the main thread as a derived value of the board. A query costs what it finds. The tools find shapes through it: what is under the pointer, what an arrow starts and finishes on, what a box chooses and what a moving shape can snap to. It knows the top of the stack, so a new shape goes on top without a look at every shape. The whiteboard draws only what is in sight on the largest screen through the camera (a fixed 3840 by 2160 points, since the facts don't know the window's size), as a derived value of the board, the index and the camera, in slices of 512 from the bottom of the stack; a drag draws again only the slices holding what it moves. The box around the chosen shapes is derived too. While the background catches up after a change, a board of up to 4,096 shapes is drawn and indexed directly, and a larger one shows the last finished drawing, which the camera still moves, so the main thread's work never grows with the board. Shapes that arrive in sight are drawn a moment after the pan that brings them. The law that hit testing agrees with what is drawn checks the index against looking at every shape.
 
 
+## The map
+
+**tldraw.** A minimap in a corner shows the whole document small, with a box for the viewport; dragging on it moves the camera.
+
+**Here.** The map is a pane beside the board, its own canvas with a camera the view works out to fit the board and the view's box, so it keeps its proportions. What it draws is a derived value of the board made off the main thread: each shape's box while there are up to 2,000, and past that a grid of 48 by 32 places, each marked when a shape's centre falls in it, so drawing the map costs the same at any size. The view's box comes from the board canvas, which knows its last size (`Canvas::showing`); the facts don't know the window. A press on the map moves the board's camera through `Canvas::steers`, which the kernel carries out because only it knows how big the board canvas is, so the point pressed lands in the middle.
+
 ## Strokes and pictures
 
 **tldraw.** A freehand stroke keeps its points and draws through perfect-freehand, which turns them into the outline of a filled polygon whose width follows the pen's pressure or, without one, how fast the hand moved.
@@ -71,4 +77,4 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 ## Also in tldraw, later here
 
-Groups, frames and pages; a read-only board, which waits on a way for an app to say that undo can't run, since undo would otherwise change a board meant to stay as it is; pasting or dropping images; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; rotation, and a minimap. Export to SVG comes with the core, since a board must render without a screen.
+Groups, frames and pages; a read-only board, which waits on a way for an app to say that undo can't run, since undo would otherwise change a board meant to stay as it is; pasting or dropping images; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; and rotation. Export to SVG comes with the core, since a board must render without a screen.

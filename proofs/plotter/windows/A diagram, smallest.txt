@@ -1,5 +1,5 @@
-window		0 0 99 15	
-  page	Plotter	0 0 99 9	
+window		0 0 99 22	
+  page	Plotter	0 0 99 16	
     group		2 3 95 1	
       group		2 3 46 1	
         toggle button	Choose	2 3 9 1	unavailable (Choosing already)
@@ -12,33 +12,44 @@ window		0 0 99 15
         select	Ink	55 3 11 1	
       button	Remove	68 3 9 1	unavailable (Choose a shape first)
       button	Show everything	79 3 18 1	
-    canvas	Board, 9 shapes	2 5 95 3	
-  alert		2 9 95 1	
-  status		2 10 95 1	
-  toolbar		2 11 95 4	
-    button	Choose	2 11 10 1	unavailable (Choosing already)
-    button	Rectangle	14 11 12 1	
-    button	Ellipse	28 11 9 1	
-    button	Arrow	39 11 9 1	
-    button	Draw	50 11 8 1	
-    button	Write…	60 11 10 1	
-    button	Remove	72 11 16 1	unavailable (Choose a shape first)
-    button	Move left	2 12 11 1	unavailable (Choose a shape first)
-    button	Move right	15 12 12 1	unavailable (Choose a shape first)
-    button	Move up	29 12 11 1	unavailable (Choose a shape first)
-    button	Move down	42 12 13 1	unavailable (Choose a shape first)
-    button	Copy	57 12 13 1	unavailable (Choose a shape first)
-    button	Paste	72 12 14 1	
-    button	Import…	88 12 9 1	
-    button	Lock	2 13 6 1	unavailable (Choose a shape first)
-    button	Unlock	10 13 8 1	unavailable (Choose a shape first)
-    button	Choose everything	20 13 23 1	
-    button	Bring to front	45 13 12 1	unavailable (Choose a shape first)
-    button	Send to back	59 13 12 1	unavailable (Choose a shape first)
-    button	Show everything	73 13 15 1	
-    button	Open	90 13 6 1	unavailable (Choose a file first)
-    button	Save	2 14 6 1	unavailable (Choose a file first)
-    button	Export a picture	10 14 14 1	unavailable (Choose a file first)
-    button	Undo	26 14 13 1	unavailable (Nothing to undo)
-    button	Redo	41 14 19 1	unavailable (Nothing to redo)
-    button	Open the palette	62 14 28 1	
+    split		2 5 95 8	
+      pane	Board	2 5 66 8	
+        canvas	Board, 9 shapes	2 5 66 8	
+      divider	Between “Board” and “Map”	70 5 1 8	
+      pane	Map	73 5 24 8	
+        canvas	Map of the board	73 5 24 8	
+    group		2 14 95 1	
+      group		2 14 77 1	
+        text field	File	2 14 65 1	
+        button	Choose…	69 14 10 1	
+      button	Open	81 14 7 1	unavailable (Choose a file first)
+      button	Save	90 14 7 1	unavailable (Choose a file first)
+  alert		2 16 95 1	
+  status		2 17 95 1	
+  toolbar		2 18 95 4	
+    button	Choose	2 18 10 1	unavailable (Choosing already)
+    button	Rectangle	14 18 12 1	
+    button	Ellipse	28 18 9 1	
+    button	Arrow	39 18 9 1	
+    button	Draw	50 18 8 1	
+    button	Write…	60 18 10 1	
+    button	Remove	72 18 16 1	unavailable (Choose a shape first)
+    button	Move left	2 19 11 1	unavailable (Choose a shape first)
+    button	Move right	15 19 12 1	unavailable (Choose a shape first)
+    button	Move up	29 19 11 1	unavailable (Choose a shape first)
+    button	Move down	42 19 13 1	unavailable (Choose a shape first)
+    button	Copy	57 19 13 1	unavailable (Choose a shape first)
+    button	Paste	72 19 14 1	
+    button	Import…	88 19 9 1	
+    button	Lock	2 20 6 1	unavailable (Choose a shape first)
+    button	Unlock	10 20 8 1	unavailable (Choose a shape first)
+    button	Choose everything	20 20 23 1	
+    button	Bring to front	45 20 12 1	unavailable (Choose a shape first)
+    button	Send to back	59 20 12 1	unavailable (Choose a shape first)
+    button	Show everything	73 20 15 1	
+    button	Open	90 20 6 1	unavailable (Choose a file first)
+    button	Save	2 21 6 1	unavailable (Choose a file first)
+    button	Export a picture	10 21 14 1	unavailable (Choose a file first)
+    button	Undo	26 21 13 1	unavailable (Nothing to undo)
+    button	Redo	41 21 19 1	unavailable (Nothing to redo)
+    button	Open the palette	62 21 28 1	

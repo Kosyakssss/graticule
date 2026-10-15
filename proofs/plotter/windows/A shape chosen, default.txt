@@ -12,7 +12,12 @@ window		0 0 120 30
         select	Ink	55 3 11 1	
       button	Remove	68 3 9 1	
       button	Show everything	79 3 18 1	
-    canvas	Board, 9 shapes	2 5 116 16	
+    split		2 5 116 16	
+      pane	Board	2 5 87 16	
+        canvas	Board, 9 shapes	2 5 87 16	
+      divider	Between “Board” and “Map”	91 5 1 16	
+      pane	Map	94 5 24 16	
+        canvas	Map of the board	94 5 24 8	
     group		2 22 116 1	
       group		2 22 98 1	
         text field	File	2 22 86 1	

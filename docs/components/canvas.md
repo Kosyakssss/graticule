@@ -40,6 +40,8 @@ ui.canvas("Board", 0, |c| {
 
 With `c.camera(path)` the canvas looks through a `Camera` fact onto an endless page: what it draws is in page units, one to a screen point at zoom 1, the wheel pans the camera and the wheel with the primary key zooms it around the pointer, each one change to the fact. With `c.on_drag(cmd)`, a press, any moves and a let-go on the canvas run `cmd` with a `Drag` when it is let go: where it was pressed and let go and every place between, in the canvas's space, whether it moved further than a click's wobble and whether Shift was held. `c.drag()` gives the drag under way, so the view can show what letting go would do; Escape drops it. Plotter's whiteboard is built this way.
 
+A canvas also says how big it was when last laid out: `c.size()` in points, and, with a camera, `c.showing()`, the part of the page in view. A map of a larger canvas looks through `c.look(camera)`, a camera the view works out rather than a fact, so the wheel leaves it alone, and `c.steers(path)` makes a press on it, or a drag let go on it, move the camera at `path` so that point is in the middle of its canvas. Plotter's map is built this way.
+
 ## Keys
 
 A canvas with shapes to press is one tab stop. The arrows move between those shapes, in the order their presses were given, Home and End go to the first and last, and Return runs the command of the one reached, which is ringed.

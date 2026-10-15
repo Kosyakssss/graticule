@@ -1786,13 +1786,37 @@ impl<C, S> Canvas<'_, '_, C, S> {
     /// Draws in page units through the camera at `path`, which the wheel pans and, with the primary key held, zooms around the pointer, each as one change to it.
     pub fn camera<F: Field>(&mut self, path: FactPath<F, crate::canvas::Camera>) {
         if let Some(camera) = self.ui.facts::<F>().and_then(|f| path.get(f)).copied() {
-            self.board.camera = Some((path.erased(), camera));
+            self.board.camera = Some((Some(path.erased()), camera));
         }
+    }
+
+    /// Draws in page units through `camera`, worked out by the view rather than kept in the facts, so the wheel doesn't move it: a map that always shows a whole board.
+    pub fn look(&mut self, camera: crate::canvas::Camera) {
+        self.board.camera = Some((None, camera));
     }
 
     /// Runs `cmd` with each drag on the canvas, a press and a let-go with any moves between, when it is let go: `canvas.on_drag(Cmd::Drew)`. Escape drops a drag under way.
     pub fn on_drag(&mut self, cmd: crate::tree::Drags<C>) {
         self.ui.tree.drags.push((self.board.node, cmd));
+    }
+
+    /// Makes a press on this canvas, or a drag let go on it, move the camera at `path` so the point under it is in the middle of the canvas that camera belongs to: a map of a larger canvas, drawn in that canvas's page units. Each move is one change to the camera.
+    pub fn steers<F: Field>(&mut self, path: FactPath<F, crate::canvas::Camera>) {
+        self.ui.tree.steers.push((self.board.node, path.erased()));
+    }
+
+    /// How many points wide and tall the canvas was when it was last laid out, so what is drawn on it can keep its proportions; before it has been laid out there is no size.
+    pub fn size(&self) -> Option<(f64, f64)> {
+        let id = self.ui.tree.nodes[self.board.node as usize].id;
+        self.ui.tree.sizes.get(&id).copied()
+    }
+
+    /// The part of the page the canvas showed through its camera when it was last laid out: left, right, top and bottom. Give it its camera first; before it has been laid out, or without a camera, there is none.
+    pub fn showing(&self) -> Option<[f64; 4]> {
+        let id = self.ui.tree.nodes[self.board.node as usize].id;
+        let (_, camera) = self.board.camera?;
+        let (w, h) = self.ui.tree.sizes.get(&id)?;
+        Some(camera.showing(*w, *h))
     }
 
     /// The drag under way on this canvas, for showing what letting it go would do.

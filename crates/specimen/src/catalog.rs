@@ -176,7 +176,15 @@ pub struct Catalog {
     labels: Vec<String>,
     #[session]
     hours: (u8, u8),
+    #[session]
+    showing: Vec<Folder>,
+    #[session]
+    city: Text,
+    #[session]
+    details: bool,
 }
+
+const CITIES: [&str; 12] = ["Amsterdam", "Athens", "Berlin", "Lisbon", "London", "Madrid", "Oslo", "Paris", "Prague", "Rome", "Vienna", "Warsaw"];
 
 #[derive(Facts)]
 pub struct Section {
@@ -303,10 +311,17 @@ pub enum Component {
     FileField,
     TagField,
     RangeSlider,
+    Select,
+    ComboBox,
+    MultiSelect,
+    Menu,
+    Popover,
+    ConfirmRow,
+    SidePanel,
 }
 
 impl Component {
-    const ALL: [Component; 53] = [
+    const ALL: [Component; 60] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -360,6 +375,13 @@ impl Component {
         Component::FileField,
         Component::TagField,
         Component::RangeSlider,
+        Component::Select,
+        Component::ComboBox,
+        Component::MultiSelect,
+        Component::Menu,
+        Component::Popover,
+        Component::ConfirmRow,
+        Component::SidePanel,
     ];
 
     fn name(self) -> &'static str {
@@ -417,6 +439,13 @@ impl Component {
             Component::FileField => "File field",
             Component::TagField => "Tag field",
             Component::RangeSlider => "Range slider",
+            Component::Select => "Select",
+            Component::ComboBox => "Combo box",
+            Component::MultiSelect => "Multi-select",
+            Component::Menu => "Menu",
+            Component::Popover => "Popover",
+            Component::ConfirmRow => "Confirm row",
+            Component::SidePanel => "Side panel",
         }
     }
 
@@ -475,6 +504,13 @@ impl Component {
             Component::FileField => include_str!("../../../docs/components/file-field.md"),
             Component::TagField => include_str!("../../../docs/components/tag-field.md"),
             Component::RangeSlider => include_str!("../../../docs/components/range-slider.md"),
+            Component::Select => include_str!("../../../docs/components/select.md"),
+            Component::ComboBox => include_str!("../../../docs/components/combo-box.md"),
+            Component::MultiSelect => include_str!("../../../docs/components/multi-select.md"),
+            Component::Menu => include_str!("../../../docs/components/menu.md"),
+            Component::Popover => include_str!("../../../docs/components/popover.md"),
+            Component::ConfirmRow => include_str!("../../../docs/components/confirm-row.md"),
+            Component::SidePanel => include_str!("../../../docs/components/side-panel.md"),
         }
     }
 
@@ -592,6 +628,9 @@ impl Default for Catalog {
             attachment: Text::default(),
             labels: vec!["groceries".to_string(), "weekend".to_string()],
             hours: (9, 17),
+            showing: vec![Folder::Inbox, Folder::Drafts],
+            city: Text::default(),
+            details: true,
         }
     }
 }
@@ -995,6 +1034,34 @@ impl Catalog {
             Component::FileField => ui.file_field("Attachment", Catalog::attachment),
             Component::TagField => ui.tag_field("Tags", Catalog::labels),
             Component::RangeSlider => ui.labelled("Opening hours", |ui| ui.range_slider(Catalog::hours, 0..=24)),
+            Component::Select => ui.select("Move to", Catalog::folder),
+            Component::ComboBox => ui.combo_box(Catalog::city, Message::from("City"), &CITIES),
+            Component::MultiSelect => ui.multi_select("Show", Catalog::showing),
+            Component::Menu => ui.menu("Edit", |ui| {
+                ui.button(Cmd::Press);
+                ui.button(Cmd::Bold);
+                ui.button(Cmd::Say);
+            }),
+            Component::Popover => ui.popover("Rename", |ui| {
+                ui.field(Catalog::title, Message::from("Title"));
+                ui.button(Cmd::Press);
+            }),
+            Component::ConfirmRow => ui.confirm(Cmd::Press, Message::from("Press it? This press can't be taken back.")),
+            Component::SidePanel => {
+                ui.switch("Show the details", Catalog::details);
+                ui.columns(|ui| {
+                    ui.column(kernel::Fill, |ui| {
+                        ui.text("Groceries");
+                        ui.muted("Milk, eggs and bread.");
+                    });
+                    if self.details {
+                        ui.column(28, |ui| {
+                            ui.text("Details");
+                            ui.muted("Two tags, made on Friday");
+                        });
+                    }
+                });
+            }
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);

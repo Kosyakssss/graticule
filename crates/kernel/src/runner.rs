@@ -229,6 +229,7 @@ pub struct Runner<A: App> {
     carets: HashMap<Id, Caret>,
     drafts: HashMap<Id, String>,
     sliding: Option<(Id, i128)>,
+    opened: Option<Id>,
     browse: Option<Id>,
     browsing: Option<(ErasedPath, String, mpsc::Receiver<Option<std::path::PathBuf>>)>,
     kill: String,
@@ -312,6 +313,7 @@ impl<A: App> Runner<A> {
             carets: HashMap::new(),
             drafts: HashMap::new(),
             sliding: None,
+            opened: None,
             browse: None,
             browsing: None,
             kill: String::new(),
@@ -398,6 +400,7 @@ impl<A: App> Runner<A> {
         }
         self.tree.calendar = self.calendar.clone();
         self.tree.only_changed = self.only_changed;
+        (self.tree.opened, self.tree.focus) = (self.opened, self.focus);
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
@@ -468,17 +471,27 @@ impl<A: App> Runner<A> {
 
     fn open_more(&mut self, i: u32) -> bool {
         let n = self.tree.nodes[i as usize];
+        let (from, under) = if n.kind == Kind::MenuButton { (n.first, NONE) } else { (self.tree.nodes[n.parent as usize].first, i) };
         let mut items = Vec::new();
-        let mut k = self.tree.nodes[n.parent as usize].first;
+        let mut k = from;
         while k != NONE {
             let c = self.tree.nodes[k as usize];
-            if k != i && c.area.is_empty() {
-                let label = if c.text.is_empty() { self.tree.str(c.name) } else { self.tree.str(c.text) };
-                items.push(crate::menu::MenuItem { id: c.id.0, label: label.to_string(), keys: None, enabled: c.enabled });
+            if k != under && c.area.is_empty() && (c.kind.acts() || c.cmd != NONE) {
+                items.push(self.entry_for(k));
             }
             k = c.next;
         }
-        self.show_menu((n.area.col, n.area.row + 1), items)
+        self.show_menu((n.area.col, n.area.row), items)
+    }
+
+    fn entry_for(&self, i: u32) -> crate::menu::MenuItem {
+        let n = self.tree.nodes[i as usize];
+        let label = if n.text.is_empty() { self.tree.str(n.name) } else { self.tree.str(n.text) };
+        let why = self.tree.str(n.reason);
+        let label = if n.enabled || why.is_empty() { label.to_string() } else { format!("{label}: {why}") };
+        let entry = (n.cmd != NONE).then(|| self.tree.commands[n.cmd as usize].name()).and_then(|name| A::Cmd::entries().iter().find(|e| e.name == name));
+        let keys = entry.and_then(|e| self.keymap.chord_for(self.mode, e.name));
+        crate::menu::MenuItem { id: n.id.0, label, keys, enabled: n.enabled }
     }
 
     fn show_menu(&mut self, (col, row): (i32, i32), items: Vec<crate::menu::MenuItem>) -> bool {
@@ -2249,12 +2262,106 @@ impl<A: App> Runner<A> {
         if self.inspecting {
             return self.describe(i);
         }
+        let n = self.tree.nodes[i as usize];
+        let asked = n.builtin.is_none() && self.tree.nodes.get(n.parent as usize).is_some_and(|p| p.kind == Kind::Confirm { open: true });
         let fired = self.fire_once(i);
+        if asked && fired {
+            self.close_opened();
+        }
         if self.count > 0 {
             self.count = 0;
             self.stale = true;
         }
         fired
+    }
+
+    fn toggle_open(&mut self, id: Id) -> bool {
+        if self.opened == Some(id) {
+            return self.close_opened();
+        }
+        self.opened = Some(id);
+        self.focus = Some(id);
+        self.build();
+        let Some(i) = self.tree.find(id) else { return true };
+        let inside = (i as usize + 1..self.tree.nodes.len()).take_while(|&j| self.tree.within(self.tree.nodes[j].id, id));
+        let mut first = None;
+        for j in inside {
+            match self.tree.nodes[j].kind {
+                Kind::Pick { on: true } => {
+                    first = Some(j);
+                    break;
+                }
+                _ if first.is_none() && self.focusable(j) => first = Some(j),
+                _ => {}
+            }
+        }
+        if let Some(j) = first {
+            self.focus_on(self.tree.nodes[j].id, false);
+        }
+        true
+    }
+
+    fn close_opened(&mut self) -> bool {
+        let Some(id) = self.opened.take() else { return false };
+        if self.focus.is_some_and(|f| self.tree.within(f, id)) {
+            self.focus = Some(id);
+        }
+        self.stale = true;
+        true
+    }
+
+    fn keep_opened(&mut self, at: Option<Id>) -> bool {
+        match (self.opened, at) {
+            (Some(o), Some(at)) if self.tree.within(at, o) => false,
+            (Some(_), _) => self.close_opened(),
+            _ => false,
+        }
+    }
+
+    fn completed(&self, i: u32) -> Option<u32> {
+        let parent = self.tree.nodes[i as usize].parent;
+        let Kind::Overlay { anchor: crate::tree::Anchor::Node(f) } = self.tree.nodes.get(parent as usize)?.kind else { return None };
+        matches!(self.tree.nodes[f as usize].kind, Kind::Field { .. }).then_some(f)
+    }
+
+    fn completions(&self, field: u32) -> Option<u32> {
+        let mut c = self.tree.nodes[field as usize].first;
+        while c != NONE {
+            if matches!(self.tree.nodes[c as usize].kind, Kind::Overlay { .. }) {
+                return Some(self.tree.nodes[c as usize].first).filter(|&p| p != NONE);
+            }
+            c = self.tree.nodes[c as usize].next;
+        }
+        None
+    }
+
+    fn pick_key(&mut self, i: u32, key: Key) -> bool {
+        let n = self.tree.nodes[i as usize];
+        if let Some(f) = self.completed(i)
+            && (key == Key::Escape || key == Key::Up && self.tree.nodes[n.parent as usize].first == i)
+        {
+            self.focus = Some(self.tree.nodes[f as usize].id);
+            self.stale = true;
+            return true;
+        }
+        let mut picks = Vec::new();
+        let mut c = self.tree.nodes[n.parent as usize].first;
+        while c != NONE {
+            if matches!(self.tree.nodes[c as usize].kind, Kind::Pick { .. }) {
+                picks.push(self.tree.nodes[c as usize].id);
+            }
+            c = self.tree.nodes[c as usize].next;
+        }
+        let Some(k) = picks.iter().position(|&id| id == n.id) else { return false };
+        let to = match key {
+            Key::Up => k.saturating_sub(1),
+            Key::Down => (k + 1).min(picks.len() - 1),
+            Key::Home => 0,
+            Key::End => picks.len() - 1,
+            _ => return false,
+        };
+        self.focus_on(picks[to], false);
+        true
     }
 
     fn set_value(&mut self, path: ErasedPath, value: Value, said: String) -> bool {
@@ -2461,13 +2568,31 @@ impl<A: App> Runner<A> {
         if n.asks != NONE {
             return self.ask_for(n.asks as usize);
         }
+        if let Kind::Select { .. } | Kind::Popover { .. } | Kind::Confirm { open: false } = n.kind {
+            return self.toggle_open(n.id);
+        }
+        if let Kind::Pick { .. } = n.kind
+            && n.set != NONE
+            && let Some(path) = n.path
+        {
+            let (value, said) = self.tree.sets[n.set as usize].clone();
+            if matches!(self.tree.nodes[n.parent as usize].kind, Kind::Select { many: false, .. }) {
+                self.close_opened();
+            }
+            if let Some(f) = self.completed(i) {
+                let id = self.tree.nodes[f as usize].id;
+                (self.focus, self.typing) = (Some(id), None);
+                self.carets.remove(&id);
+            }
+            return self.set_value(path, value, said);
+        }
         if n.set != NONE
             && let Some(path) = n.path
         {
             let (value, said) = self.tree.sets[n.set as usize].clone();
             return self.set_value(path, value, said);
         }
-        if n.kind == Kind::More {
+        if matches!(n.kind, Kind::More | Kind::MenuButton) {
             return self.open_more(i);
         }
         if n.kind == Kind::Browse {
@@ -2590,7 +2715,9 @@ impl<A: App> Runner<A> {
 
     fn focusable(&self, i: usize) -> bool {
         match self.tree.nodes[i].kind {
-            kind if matches!(kind, Kind::Field { .. }) || kind.control() => !self.tree.in_row(i as u32) && self.tree.ancestor(i as u32, |n| n.kind == Kind::Palette).is_none(),
+            kind if matches!(kind, Kind::Field { .. }) || kind.control() => {
+                !self.tree.in_row(i as u32) && !self.tree.hidden(i as u32) && self.tree.ancestor(i as u32, |n| n.kind == Kind::Palette).is_none()
+            }
             Kind::List { .. } => true,
             _ => false,
         }
@@ -2629,6 +2756,9 @@ impl<A: App> Runner<A> {
         if self.sheet.take().is_some() {
             self.stale = true;
             return true;
+        }
+        if self.opened.is_some() {
+            return self.close_opened();
         }
         if std::mem::take(&mut self.inspecting) {
             self.said = None;
@@ -2695,7 +2825,8 @@ impl<A: App> Runner<A> {
     /// Handles a key and the text it types: the palette when it is open, then the focused field, then a focused control's own keys, then the keymap, then the platform's conventions.
     pub fn press(&mut self, chord: Chord, text: Option<&str>) -> bool {
         let pressed = self.key_down(chord, text);
-        self.settle_drafts() || pressed
+        let left = self.keep_opened(self.focus);
+        self.settle_drafts() || pressed || left
     }
 
     fn key_down(&mut self, chord: Chord, text: Option<&str>) -> bool {
@@ -2710,6 +2841,9 @@ impl<A: App> Runner<A> {
             && let Some(done) = self.menu_key(chord)
         {
             return done;
+        }
+        if chord.key == Key::Escape && chord.mods == Mods::default() && self.opened.is_some() {
+            return self.close_opened();
         }
         if chord.key == Key::Escape && self.carry.is_some_and(|c| c.to.is_some()) {
             self.carry = None;
@@ -2787,6 +2921,15 @@ impl<A: App> Runner<A> {
                 let len = self.tree.str(n.text).len();
                 return self.splice(i, 0..len, String::new(), 0, field::Kind::Alone);
             }
+            if holds == Holds::Line
+                && chord.key == Key::Down
+                && chord.mods == Mods::default()
+                && let Some(p) = self.completions(i)
+            {
+                self.focus = Some(self.tree.nodes[p as usize].id);
+                self.stale = true;
+                return true;
+            }
             if field::handles(chord.key, chord.mods) || several && matches!(chord.key, Key::Up | Key::Down) {
                 let value = self.tree.str(n.text).to_string();
                 let action = if several {
@@ -2802,6 +2945,25 @@ impl<A: App> Runner<A> {
                 }
                 return done;
             }
+        }
+        if self.pending.is_empty()
+            && typing
+            && chord.types()
+            && let Some(t) = &text
+            && let Some(i) = self.focused_control()
+            && let Some(f) = self.completed(i)
+        {
+            self.focus = Some(self.tree.nodes[f as usize].id);
+            return self.field_action(f, field::insert(self.caret(f), t));
+        }
+        if self.pending.is_empty()
+            && typing
+            && chord.mods == Mods::default()
+            && let Some(i) = self.focused_control()
+            && matches!(self.tree.nodes[i as usize].kind, Kind::Pick { .. })
+            && matches!(chord.key, Key::Up | Key::Down | Key::Home | Key::End | Key::Escape)
+        {
+            return self.pick_key(i, chord.key);
         }
         if self.pending.is_empty()
             && typing
@@ -3525,6 +3687,15 @@ impl<A: App> Face for Runner<A> {
 
     fn act(&mut self, node: u64, action: accesskit::Action) -> bool {
         let Some(i) = self.tree.find(Id(node)) else { return false };
+        let away = self.keep_opened(Some(Id(node)));
+        let Some(i) = (if away {
+            self.build();
+            self.tree.find(Id(node))
+        } else {
+            Some(i)
+        }) else {
+            return away;
+        };
         let acted = match action {
             accesskit::Action::Click => self.activate(i, Mods::default()),
             accesskit::Action::Focus => {
@@ -3533,7 +3704,8 @@ impl<A: App> Face for Runner<A> {
             }
             _ => false,
         };
-        self.settle_drafts() || acted
+        let left = self.keep_opened(self.focus);
+        self.settle_drafts() || acted || left || away
     }
 
     fn input(&mut self, input: Input, frame: &mut Frame) -> bool {
@@ -3611,6 +3783,9 @@ impl<A: App> Runner<A> {
                     return self.inspect_at(col, row);
                 }
                 self.pressed = self.hovered(frame);
+                if self.keep_opened(self.pressed) {
+                    self.build();
+                }
                 self.carry = self.pressed.and_then(|id| self.tree.find(id)).and_then(|i| self.lift(i, clicks, frame.mods));
                 if self.pressed.is_none() {
                     let had = self.reading.take().is_some();

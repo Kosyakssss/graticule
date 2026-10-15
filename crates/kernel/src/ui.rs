@@ -623,6 +623,93 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.set(c, path, value.clone(), format!("{label}: {next}"));
     }
 
+    /// A button named `label` that opens a menu of the controls `f` describes, anchored under it. Each entry runs what its control would, shows its key, and says why when it can't run.
+    #[track_caller]
+    pub fn menu(&mut self, label: impl AsRef<str>, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let i = self.add(Kind::MenuButton, Location::caller());
+        let r = self.tree.put(label.as_ref());
+        self.tree.nodes[i as usize].text = r;
+        let subject = self.subject;
+        f(&mut self.child::<S>(i, subject));
+    }
+
+    /// A button named `label` that opens what `f` describes in an overlay anchored under it, for a few controls that belong to the button: sharing, a filter's details, a quick setting. Escape, a click elsewhere or moving the focus out closes it. What `f` describes is built only while it is open.
+    #[track_caller]
+    pub fn popover(&mut self, label: impl AsRef<str>, f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let at = Location::caller();
+        let i = self.add(Kind::Popover { open: false }, at);
+        let id = self.tree.nodes[i as usize].id;
+        let open = self.tree.opened == Some(id);
+        let r = self.tree.put(label.as_ref());
+        (self.tree.nodes[i as usize].text, self.tree.nodes[i as usize].kind) = (r, Kind::Popover { open });
+        if open {
+            let o = self.tree.add(i, Kind::Overlay { anchor: crate::tree::Anchor::Node(i) }, Some(id.mix(1)), at);
+            let subject = self.subject;
+            f(&mut self.child::<S>(o, subject));
+        }
+    }
+
+    /// One of a few named options, as a button that shows the chosen one after `label` and opens the options in place under it: the fact at `path`, an enum with `derive(Choice)`. Choosing one closes them again; each choice is an `Edit` and one undo step.
+    #[track_caller]
+    pub fn select<F: Field, T: Setting>(&mut self, label: impl AsRef<str>, path: FactPath<F, T>) {
+        let (Control::Choice(options), Some(now)) = (T::control(), self.facts::<F>().and_then(|f| path.get(f)).map(Field::value)) else { return };
+        let label = label.as_ref();
+        let on: Vec<bool> = options.iter().map(|(_, value)| *value == now).collect();
+        let shown = options.iter().find(|(_, value)| *value == now).map_or("", |(option, _)| option).to_string();
+        let picks = options.iter().zip(on).map(|(&(option, ref value), on)| (option, on, value.clone(), format!("{label}: {option}"))).collect();
+        self.select_at(label, path.erased(), picks, shown, false, Location::caller());
+    }
+
+    /// Any of a few named options, as a button that shows the chosen ones after `label` and opens the options in place under it, each ticked or not: the list at `path`, of an enum with `derive(Choice)`. Ticking or unticking one is an `Edit` and one undo step, and the options stay open until Escape or a click elsewhere.
+    #[track_caller]
+    pub fn multi_select<F: Field, T: Setting>(&mut self, label: impl AsRef<str>, path: FactPath<F, Vec<T>>) {
+        let (Control::Choice(options), Some(ledger::Value::List(now))) = (T::control(), self.facts::<F>().and_then(|f| path.get(f)).map(Field::value)) else { return };
+        let label = label.as_ref();
+        let on: Vec<bool> = options.iter().map(|(_, value)| now.contains(value)).collect();
+        let names: Vec<&str> = options.iter().zip(&on).filter(|(_, on)| **on).map(|((option, _), _)| *option).collect();
+        let widest = options.iter().map(|(option, _)| option.chars().count()).max().unwrap_or(0) * 2 + 2;
+        let joined = names.join(", ");
+        let shown = match names.len() {
+            0 => "None".to_string(),
+            _ if joined.chars().count() <= widest => joined,
+            n => format!("{n} of {}", options.len()),
+        };
+        let picks = options
+            .iter()
+            .zip(&on)
+            .enumerate()
+            .map(|(k, (&(option, _), &was))| {
+                let next = options.iter().zip(&on).enumerate().filter(|&(j, (_, on))| if j == k { !was } else { *on }).map(|(_, ((_, value), _))| value.clone()).collect();
+                (option, was, ledger::Value::List(next), format!("{label}: {} “{option}”", if was { "untick" } else { "tick" }))
+            })
+            .collect();
+        self.select_at(label, path.erased(), picks, shown, true, Location::caller());
+    }
+
+    fn select_at(&mut self, label: &str, path: ledger::ErasedPath, picks: Vec<(&'static str, bool, ledger::Value, String)>, shown: String, many: bool, at: &'static Location<'static>) {
+        let id = Id::ROOT.mix(path.hash64());
+        let row = self.tree.add(self.parent, Kind::Row, Some(id.mix(1)), at);
+        let l = self.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(2)), at);
+        let r = self.tree.put(label);
+        self.tree.nodes[l as usize].text = r;
+        let longest = picks.iter().map(|(option, ..)| option.chars().count()).max().unwrap_or(0);
+        let widest = if many { longest * 2 + 2 } else { longest }.min(u8::MAX as usize) as u8;
+        let open = self.tree.opened == Some(id);
+        let s = self.tree.add(row, Kind::Select { widest, many, open }, Some(id), at);
+        let (r, named) = (self.tree.put(&shown), self.tree.put(label));
+        let n = &mut self.tree.nodes[s as usize];
+        (n.text, n.name, n.subject) = (r, named, self.subject);
+        if !open {
+            return;
+        }
+        for (k, (option, on, value, said)) in picks.into_iter().enumerate() {
+            let o = self.tree.add(s, Kind::Pick { on }, Some(id.mix(k as u64 + 3)), at);
+            let r = self.tree.put(option);
+            self.tree.nodes[o as usize].text = r;
+            self.set(o, path, value, said);
+        }
+    }
+
     fn segments_at(&mut self, label: &str, path: ledger::ErasedPath, options: &[(&'static str, ledger::Value)], now: &ledger::Value, at: &'static Location<'static>) {
         let id = Id::ROOT.mix(path.hash64());
         let row = self.tree.add(self.parent, Kind::Row, Some(id), at);
@@ -829,6 +916,51 @@ impl<'a, C, S> Ui<'a, C, S> {
         (n.text, n.name, n.path, n.subject) = (r, named, Some(erased), subject);
     }
 
+    /// A button for `cmd` that asks `question` in its own place before running it: pressing it puts the question there, with a button that runs `cmd` and one that cancels. Escape, a click elsewhere or moving the focus away cancels too. For what can't be undone or would lose work; anything that can be undone should just run.
+    #[track_caller]
+    pub fn confirm<M>(&mut self, cmd: impl Bind<C, S, M>, question: Message) {
+        let at = Location::caller();
+        let i = self.add(Kind::Confirm { open: false }, at);
+        let id = self.tree.nodes[i as usize].id;
+        self.command(i, cmd);
+        if self.tree.opened != Some(id) {
+            return;
+        }
+        let (r, run) = (self.tree.put(question.as_str()), self.tree.nodes[i as usize].cmd);
+        let n = &mut self.tree.nodes[i as usize];
+        (n.kind, n.cmd, n.name) = (Kind::Confirm { open: true }, NONE, r);
+        let q = self.tree.add(i, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(1)), at);
+        self.tree.nodes[q as usize].text = r;
+        let yes = self.tree.add(i, Kind::Button, Some(id.mix(2)), at);
+        let no = self.tree.add(i, Kind::Button, Some(id.mix(3)), at);
+        (self.tree.nodes[yes as usize].cmd, self.tree.nodes[no as usize].builtin) = (run, Some(crate::builtin::Builtin::Cancel));
+        self.tree.nodes[yes as usize].enabled = run != NONE;
+    }
+
+    /// A one-line field that types into the `Text` at `path`, with the `completions` that contain what is typed listed under it while it has the focus. Down reaches them, and Return or a click takes one, setting the text by one `Edit`.
+    #[track_caller]
+    pub fn combo_box<F: Field>(&mut self, path: FactPath<F, Text>, placeholder: Message, completions: &[impl AsRef<str>]) {
+        let (at, erased) = (Location::caller(), path.erased());
+        let id = Id::ROOT.mix(erased.hash64());
+        let typed = self.facts::<F>().and_then(|f| path.get(f)).map_or(String::new(), |t| t.as_str().to_string());
+        let name = placeholder.as_str().to_string();
+        let i = self.field_as(path, placeholder, Holds::Line, at).node;
+        let wanted = typed.to_lowercase();
+        let shown: Vec<&str> = completions.iter().map(AsRef::as_ref).filter(|c| *c != typed && c.to_lowercase().contains(&wanted)).take(COMPLETIONS).collect();
+        let pick = |k: usize| id.mix(k as u64 + 2);
+        let focused = self.tree.focus.is_some_and(|f| f == id || (0..shown.len()).any(|k| pick(k) == f));
+        if shown.is_empty() || !focused {
+            return;
+        }
+        let o = self.tree.add(i, Kind::Overlay { anchor: crate::tree::Anchor::Node(i) }, Some(id.mix(1)), at);
+        for (k, c) in shown.into_iter().enumerate() {
+            let p = self.tree.add(o, Kind::Pick { on: false }, Some(pick(k)), at);
+            let r = self.tree.put(c);
+            self.tree.nodes[p as usize].text = r;
+            self.set(p, erased, ledger::Value::Str(c.to_string()), format!("{name}: {c}"));
+        }
+    }
+
     /// Words that tag something, in the list at `path`: each a tag that removes itself when pressed, then a field to type another. Return adds what was typed, and so does moving to another field; Backspace in the empty field removes the last tag. Each change is one `Edit`, named after `label`.
     #[track_caller]
     pub fn tag_field<F: Field>(&mut self, label: impl AsRef<str>, path: FactPath<F, Vec<String>>) {
@@ -948,7 +1080,7 @@ impl<'a, C, S> Ui<'a, C, S> {
 impl<C> Tree<C> {
     /// The row a node sits in, if any, and its key.
     pub fn row_of(&self, i: u32) -> Option<u32> {
-        self.ancestor(i, |n| matches!(n.kind, Kind::ListRow { .. }))
+        self.ancestor(i, |n| matches!(n.kind, Kind::ListRow { .. } | Kind::Overlay { .. } | Kind::Confirm { open: true })).filter(|&r| matches!(self.nodes[r as usize].kind, Kind::ListRow { .. }))
     }
 
     pub fn in_row(&self, i: u32) -> bool {
@@ -956,6 +1088,8 @@ impl<C> Tree<C> {
         parent != NONE && self.row_of(parent).is_some()
     }
 }
+
+const COMPLETIONS: usize = 8;
 
 fn keys<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, selection: ledger::ErasedPath, span: Option<(u128, u128)>) -> Vec<u128> {
     let Some(facts) = facts.downcast_ref::<F>() else { return Vec::new() };

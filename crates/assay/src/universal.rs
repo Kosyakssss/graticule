@@ -363,7 +363,7 @@ fn take<A: App>(runner: &mut Runner<A>, step: Step) -> (String, Option<Probe<A>>
                 runner.act(node.id.0, Action::Focus);
                 return (format!("go to the {what}"), None);
             }
-            let probe = (node.enabled && node.cmd != NONE && node.builtin.is_none() && node.host == NONE && node.many == 0)
+            let probe = (node.enabled && node.kind != (Kind::Confirm { open: false }) && node.cmd != NONE && node.builtin.is_none() && node.host == NONE && node.many == 0)
                 .then(|| runner.tree.commands[node.cmd as usize].clone())
                 .filter(|cmd| runner.facts.available(cmd).is_yes())
                 .map(|cmd| Probe { facts: runner.facts.clone(), history: runner.history.len(), effects: runner.effects().len(), name: cmd.name() });

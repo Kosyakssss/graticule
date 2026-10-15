@@ -162,6 +162,11 @@ pub enum Kind {
     Chip,
     Range { label: u8 },
     Thumb { at: u16, high: bool },
+    Select { widest: u8, many: bool, open: bool },
+    Pick { on: bool },
+    MenuButton,
+    Popover { open: bool },
+    Confirm { open: bool },
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -197,6 +202,11 @@ impl Kind {
                 | Kind::Browse
                 | Kind::Chip
                 | Kind::Thumb { .. }
+                | Kind::Select { .. }
+                | Kind::Pick { .. }
+                | Kind::MenuButton
+                | Kind::Popover { .. }
+                | Kind::Confirm { open: false }
         )
     }
 
@@ -211,6 +221,7 @@ impl Kind {
                 | Kind::List { .. }
                 | Kind::ListRow { .. }
                 | Kind::Overlay { .. }
+                | Kind::Confirm { open: true }
                 | Kind::Callout { .. }
                 | Kind::Card
                 | Kind::Group
@@ -289,6 +300,13 @@ impl Kind {
             Kind::Chip => "removable tag",
             Kind::Range { .. } => "range slider",
             Kind::Thumb { .. } => "slider handle",
+            Kind::Select { many: false, .. } => "select",
+            Kind::Select { many: true, .. } => "multi-select",
+            Kind::Pick { .. } => "option",
+            Kind::MenuButton => "menu button",
+            Kind::Popover { .. } => "popover button",
+            Kind::Confirm { open: false } => "button that asks first",
+            Kind::Confirm { open: true } => "question",
             Kind::More => "more",
         }
     }
@@ -424,6 +442,10 @@ pub struct Tree<C> {
     pub moves: Vec<(u32, Mover<C>)>,
     /// The number fields and sliders, each with the least and most its number can be.
     pub numbers: Vec<(u32, i128, i128)>,
+    /// The select, popover or menu that is open, by its id; the view builds what it shows only while it is.
+    pub opened: Option<Id>,
+    /// The focused component, for the parts of the view that show only around it, such as a combo box's completions.
+    pub focus: Option<Id>,
 }
 
 impl<C> Default for Tree<C> {
@@ -442,6 +464,8 @@ impl<C> Default for Tree<C> {
             files: Vec::new(),
             moves: Vec::new(),
             numbers: Vec::new(),
+            opened: None,
+            focus: None,
         }
     }
 }
@@ -537,6 +561,18 @@ impl<C> Tree<C> {
             i = self.nodes[i as usize].parent;
         }
         None
+    }
+
+    /// Whether a container has hidden this node for want of room, or because it is an entry of a menu that opens.
+    pub fn hidden(&self, i: u32) -> bool {
+        let n = &self.nodes[i as usize];
+        n.area.is_empty() && n.parent != NONE && matches!(self.nodes[n.parent as usize].kind, Kind::Overflow | Kind::Places | Kind::MenuButton)
+    }
+
+    /// Whether the node with id `inner` is the node with id `outer` or inside it.
+    pub fn within(&self, inner: Id, outer: Id) -> bool {
+        let Some(i) = self.find(inner) else { return false };
+        self.ancestor(i, |n| n.id == outer).is_some()
     }
 
     pub fn ancestor(&self, mut i: u32, pred: impl Fn(&Node) -> bool) -> Option<u32> {

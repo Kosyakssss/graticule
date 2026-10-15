@@ -222,6 +222,33 @@ fn pressable(p: &mut Painter, n: &Node, label: &str, picture: Option<&'static Pi
 }
 
 fn cycle(p: &mut Painter, n: &Node, label: &str, look: Look) {
+    opener(p, n, label, &crate::picture::icons::CHEVRON_RIGHT, look);
+}
+
+fn select(p: &mut Painter, n: &Node, label: &str, open: bool, look: Look) {
+    let mut top = *n;
+    top.area.rows = 1;
+    opener(p, &top, label, if open { &crate::picture::icons::CHEVRON_UP } else { &crate::picture::icons::CHEVRON_DOWN }, look);
+}
+
+fn option(p: &mut Painter, n: &Node, label: &str, on: bool, look: Look) {
+    let r = p.rect(n.area);
+    let (theme, w, h) = (p.theme, p.m.cell_w, p.m.cell_h);
+    if look.focused || look.pressed {
+        p.fill(r, theme.selection);
+    } else if look.hovered {
+        p.fill(r, theme.hover);
+    }
+    let ink = if n.enabled { theme.ink } else { theme.faint };
+    if on {
+        let side = (h * 0.6).round();
+        draw_picture(p, Rect::new((r.x + w * 0.5).round(), (r.y + (h - side) / 2.0).round(), side, side), &crate::picture::icons::CHECK, Some(ink));
+    }
+    let mono = p.m.mono();
+    p.text(label, mono, (r.x + w * 2.0, r.y), Some((r.w - w * 2.5).max(0.0)), ink);
+}
+
+fn opener(p: &mut Painter, n: &Node, label: &str, mark: &'static Picture, look: Look) {
     let r = pressable(p, n, "", None, false, Joined::Alone, look);
     let (theme, w, h) = (p.theme, p.m.cell_w, p.m.cell_h);
     let ink = if n.enabled { theme.ink } else { theme.faint };
@@ -229,8 +256,8 @@ fn cycle(p: &mut Painter, n: &Node, label: &str, look: Look) {
     let mono = p.m.mono();
     p.text(label, mono, (r.x + w, y), Some((r.w - w * 3.0).max(0.0)), ink);
     let side = (h * 0.6).round();
-    let mark = Rect::new((r.right() - w * 1.5 - side / 2.0).round(), (y + (h - side) / 2.0).round(), side, side);
-    draw_picture(p, mark, &crate::picture::icons::CHEVRON_RIGHT, Some(if n.enabled { theme.muted } else { theme.faint }));
+    let place = Rect::new((r.right() - w * 1.5 - side / 2.0).round(), (y + (h - side) / 2.0).round(), side, side);
+    draw_picture(p, place, mark, Some(if n.enabled { theme.muted } else { theme.faint }));
 }
 
 fn keycap(p: &mut Painter, at: (f32, f32), keys: &str, enabled: bool) -> f32 {
@@ -562,7 +589,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let color = tone(p, t);
             wrapped(p, n.area, text, mono, if strong { 600.0 } else { 400.0 }, color);
         }
-        (Layer::Over, Kind::Button | Kind::Browse) => button(p, &n, text, joined(tree, i), look),
+        (Layer::Over, Kind::Button | Kind::Browse | Kind::Confirm { open: false }) => button(p, &n, text, joined(tree, i), look),
         (Layer::Under, Kind::Group) => {
             let r = p.rect(n.area);
             let d = shadow(p);
@@ -838,6 +865,16 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         (Layer::Over, Kind::Range { label }) => range(p, tree, &n, text, label),
         (Layer::Over, Kind::Thumb { at, .. }) => thumb(p, &n, at, look),
         (Layer::Over, Kind::Cycle { .. }) => cycle(p, &n, text, look),
+        (Layer::Over, Kind::Select { open, .. }) => select(p, &n, text, open, look),
+        (Layer::Over, Kind::MenuButton) => opener(p, &n, text, &crate::picture::icons::CHEVRON_DOWN, look),
+        (Layer::Over, Kind::Popover { open }) => opener(p, &n, text, if open { &crate::picture::icons::CHEVRON_UP } else { &crate::picture::icons::CHEVRON_DOWN }, look),
+        (Layer::Under, Kind::Select { open: true, .. }) if n.area.rows > 1 => {
+            let r = p.rect(Area::new(n.area.col, n.area.row + 1, n.area.cols, n.area.rows - 1));
+            let (t, theme) = (p.style.line(p.m), p.theme);
+            p.fill(r, theme.bg);
+            border(p, r, t, theme.ink);
+        }
+        (Layer::Over, Kind::Pick { on }) => option(p, &n, text, on, look),
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);

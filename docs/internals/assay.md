@@ -11,7 +11,7 @@ The generator is guided by what it has found so far, deterministically. Steps th
 After each step it checks:
 
 - **It never crashes or fails.** A panic anywhere (`available`, `update`, the view, layout, painting) or a failure the runner reports: a command that panicked and was rolled back, one that returned `Outcome::Nothing` but changed the facts, a container replaced by assignment (below).
-- **A command `available` says yes to does something.** When a click lands on a control whose command is available, the command must change the facts, ask for an effect or say something.
+- **A command `available` says yes to does something.** When a click lands on a control whose command is available, the command must change the facts, ask for an effect or say something. A button that asks first (a confirm row) is not held to this when it is pressed, since pressing it only asks; its answer is.
 - **No internal command is reachable.** No control on screen runs an internal command, and running one by name from each named state changes nothing.
 - **Undo returns.** Right after a step that undo can take back, Assay undoes it and compares the facts with just before the step, then redoes it and compares with just after. Checking at once, rather than undoing everything at the end, keeps changes that are deliberately not undoable (a session field like the page Specimen shows) from looking like failures.
 

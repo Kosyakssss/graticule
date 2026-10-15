@@ -16,6 +16,8 @@ fn role(kind: Kind) -> Role {
         Kind::Slider { .. } | Kind::Thumb { .. } => Role::Slider,
         Kind::Range { .. } => Role::Group,
         Kind::Cycle { .. } | Kind::Browse | Kind::Chip => Role::Button,
+        Kind::Select { .. } => Role::ComboBox,
+        Kind::Pick { .. } => Role::ListBoxOption,
         Kind::Field { .. } => Role::TextInput,
         Kind::Check { .. } => Role::CheckBox,
         Kind::Link => Role::Link,
@@ -37,6 +39,8 @@ fn role(kind: Kind) -> Role {
         Kind::Place { .. } | Kind::PageLink { .. } => Role::Link,
         Kind::Crumbs | Kind::Places => Role::Navigation,
         Kind::Opener { .. } | Kind::More => Role::Button,
+        Kind::MenuButton | Kind::Popover { .. } | Kind::Confirm { open: false } => Role::Button,
+        Kind::Confirm { open: true } => Role::AlertDialog,
         Kind::Overflow => Role::Toolbar,
         Kind::Switch { .. } => Role::Switch,
         Kind::Bar => Role::Toolbar,
@@ -82,6 +86,24 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
             Kind::Tab { on } | Kind::Place { on } | Kind::PageLink { on } => {
                 node.set_label(if name.is_empty() { text } else { name });
                 node.set_selected(on);
+            }
+            Kind::Select { open, .. } => {
+                node.set_label(name);
+                node.set_value(text);
+                node.set_expanded(open);
+            }
+            Kind::Pick { on } => {
+                node.set_label(text);
+                node.set_selected(on);
+            }
+            Kind::Popover { open } => {
+                node.set_label(text);
+                node.set_expanded(open);
+                node.set_has_popup(accesskit::HasPopup::Dialog);
+            }
+            Kind::MenuButton => {
+                node.set_label(text);
+                node.set_has_popup(accesskit::HasPopup::Menu);
             }
             Kind::Opener { open } => {
                 node.set_label(text);

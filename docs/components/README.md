@@ -73,21 +73,14 @@ Several names on either side are the same component. They are merged into one ro
 | File field | | FileInput | a path typed in, or chosen with the system's file panel |
 | Tag field | TagGroup (removable) | TagInput | a list of words, each removable, and a field to add another |
 | Range slider | Slider (range) | RangeSlider | two handles on one track, each its own tab stop; more handles are not done |
-
-## Wave 3: choices that open
-
-These need anchored overlays (build-plan item 14) or the grounded forms of overlays.
-
-| Graticule | HeroUI | Blueprint | Notes |
-|---|---|---|---|
-| Select | Select, ListBox sections | Select | grounded: a choice that opens inline |
-| Combo box | ComboBox, Autocomplete | Suggest | anchored: completions under the field |
-| Multi-select | Select (multiple) | MultiSelect | |
-| Menu | Dropdown, Menu, MenuItem, MenuSection | Menu, MenuItem | built from the registry (§3.3) |
-| Context menu | | ContextMenu | from the registry: the native menu on macOS, an anchored overlay elsewhere |
-| Popover | Popover | Popover | anchored |
-| Confirm row | AlertDialog, Modal | Alert, Dialog | grounded: an inline row that asks |
-| Side panel | Drawer | Drawer | grounded: a pane that docks, not a sheet over the page |
+| Select | Select, ListBox | Select | grounded: a choice that opens inline, its options under it; sections are not done |
+| Combo box | ComboBox, Autocomplete | Suggest | anchored: the completions that contain what is typed, under the field while it has the focus |
+| Multi-select | Select (multiple) | MultiSelect | grounded: the same select, ticking options on and off in a list |
+| Menu | Dropdown, Menu, MenuItem | Menu, MenuItem | anchored: the controls it holds as entries, with their keys and reasons, drawn like the context menu; sections are not done |
+| Context menu | | ContextMenu | from the registry: an anchored overlay on Windows and Linux; the native menu on macOS waits for the Mac |
+| Popover | Popover | Popover | anchored: a few controls under a button, built only while open |
+| Confirm row | AlertDialog, Modal | Alert, Dialog | grounded: a button that asks in its own place before running its command |
+| Side panel | Drawer | Drawer | grounded: a fact and a column, not a component of its own |
 | Help page | | Hotkeys dialog | the registry as a tree with its keys (§8.3, item 12) |
 
 ## Wave 4: time

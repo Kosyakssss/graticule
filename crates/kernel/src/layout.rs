@@ -121,7 +121,7 @@ impl<'t> Layout<'t> {
                 let pref = self.cols_as(tree.str(n.text), style);
                 (pref.min(8), pref)
             }
-            Kind::Button | Kind::Browse | Kind::Toggle { .. } => {
+            Kind::Button | Kind::Browse | Kind::Toggle { .. } | Kind::Confirm { open: false } => {
                 let c = self.cols(tree.str(n.text), true) + BUTTON;
                 (c.min(BUTTON_MIN + BUTTON), c)
             }
@@ -223,9 +223,17 @@ impl<'t> Layout<'t> {
                 (c, c)
             }
             Kind::Slider { label, .. } | Kind::Range { label } => (13 + label as i32, 33 + label as i32),
-            Kind::Cycle { widest } => (widest as i32 + BUTTON + 2, widest as i32 + BUTTON + 2),
+            Kind::Cycle { widest } | Kind::Select { widest, .. } => (widest as i32 + BUTTON + 2, widest as i32 + BUTTON + 2),
             Kind::Field { .. } => (16, 32),
             Kind::Rule | Kind::Placeholder { .. } | Kind::Thumb { .. } => (0, 0),
+            Kind::Pick { .. } => {
+                let c = self.cols(tree.str(n.text), true) + 3;
+                (c, c)
+            }
+            Kind::MenuButton | Kind::Popover { .. } => {
+                let c = self.cols(tree.str(n.text), true) + BUTTON + 2;
+                (c, c)
+            }
             Kind::Chip => {
                 let c = self.cols(tree.str(n.text), false) + 3;
                 (c, c)
@@ -255,7 +263,7 @@ impl<'t> Layout<'t> {
                 let c = self.picture_cols(picture, rows);
                 (c, c)
             }
-            Kind::Row | Kind::ListRow { .. } | Kind::Columns => {
+            Kind::Row | Kind::ListRow { .. } | Kind::Columns | Kind::Confirm { open: true } => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref, mut count) = (0, 0, 0);
                 for k in start..end {
@@ -380,6 +388,7 @@ impl<'t> Layout<'t> {
                 let style = self.text_style(n.kind);
                 self.wrapped_as(tree.str(n.text), style, cols)
             }
+            Kind::Select { .. } => 1 + tree.children(i).count() as i32,
             Kind::Check { .. } | Kind::Radio { .. } => self.wrapped(tree.str(n.text), false, cols - CHECK - 1),
             Kind::Switch { .. } => self.wrapped(tree.str(n.text), false, cols - SWITCH - 1),
             Kind::Field { holds: Holds::Lines { rows } } => (crate::field::rows(tree.str(n.text), (cols - 1).max(1) as usize).count() as i32).max(rows as i32),
@@ -438,6 +447,10 @@ impl<'t> Layout<'t> {
             | Kind::Range { .. }
             | Kind::Thumb { .. }
             | Kind::Cycle { .. }
+            | Kind::Pick { .. }
+            | Kind::MenuButton
+            | Kind::Popover { .. }
+            | Kind::Confirm { open: false }
             | Kind::Browse
             | Kind::Status
             | Kind::Note
@@ -471,7 +484,7 @@ impl<'t> Layout<'t> {
                 self.release(start);
                 rows
             }
-            Kind::Row | Kind::ListRow { .. } | Kind::Columns => {
+            Kind::Row | Kind::ListRow { .. } | Kind::Columns | Kind::Confirm { open: true } => {
                 let (start, end) = self.children(tree, i);
                 let rows = if self.fits(tree, i, cols) {
                     let at = self.share(tree, start, end, cols);
@@ -585,7 +598,7 @@ impl<'t> Layout<'t> {
             Kind::Root | Kind::Column | Kind::Palette => self.stack_down(tree, i, area, 0),
             Kind::Overlay { .. } => self.stack_down(tree, i, Area::new(area.col + 1, area.row, area.cols - 2, area.rows), 0),
             Kind::Empty => self.stack_down(tree, i, area, 1),
-            Kind::Row | Kind::ListRow { .. } | Kind::Columns => self.side_by_side(tree, i, area),
+            Kind::Row | Kind::ListRow { .. } | Kind::Columns | Kind::Confirm { open: true } => self.side_by_side(tree, i, area),
             Kind::Callout { .. } => self.stack_down(tree, i, Area::new(area.col + CALLOUT, area.row, area.cols - CALLOUT - 1, area.rows), 0),
             Kind::Card => self.stack_down(tree, i, Area::new(area.col + 2, area.row + 2, area.cols - 4, area.rows - 3), 0),
             Kind::Fieldset | Kind::Labelled => {
@@ -593,6 +606,23 @@ impl<'t> Layout<'t> {
                 self.stack_down(tree, i, Area::new(area.col, area.row + label, area.cols, area.rows - label), 0);
             }
             Kind::Tabs => self.stack_down(tree, i, area, 1),
+            Kind::MenuButton => {
+                let (start, end) = self.children(tree, i);
+                for k in start..end {
+                    let c = self.stack[k];
+                    self.place(tree, c, Area::default());
+                }
+                self.release(start);
+            }
+            Kind::Select { .. } => {
+                let (start, end) = self.children(tree, i);
+                for k in start..end {
+                    let c = self.stack[k];
+                    let row = area.row + 1 + (k - start) as i32;
+                    self.place(tree, c, if row < area.bottom() { Area::new(area.col, row, area.cols, 1) } else { Area::default() });
+                }
+                self.release(start);
+            }
             Kind::Range { label } => {
                 let track = crate::components::slider_track(&tree.nodes[i as usize], label);
                 let (start, end) = self.children(tree, i);
@@ -759,6 +789,10 @@ impl<'t> Layout<'t> {
                 tree.nodes[c as usize].kind,
                 Kind::Button
                     | Kind::Cycle { .. }
+                    | Kind::Select { .. }
+                    | Kind::MenuButton
+                    | Kind::Popover { .. }
+                    | Kind::Confirm { open: false }
                     | Kind::Browse
                     | Kind::Link
                     | Kind::Swatch { .. }

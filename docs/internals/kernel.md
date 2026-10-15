@@ -350,6 +350,16 @@ A number field edits a whole number and a tag field adds to a list of words, not
 
 Leaving means the focus moving: Tab, a click in another field, automation focusing something else. Drafts are settled after every key, pointer event and accessibility action. Pressing a button or a link does not move the focus, and does not commit a draft either: committing it then would make one click two undo steps, the draft and the button's command, and an undo would take back only the second. A draft whose field is no longer in the tree, because the page it was on is gone, is dropped.
 
+### 11.5 What is open
+
+A select's options, a popover's controls and a confirm row's question are open or not, and that is the window's state, not a fact: opening one is no edit and no undo step, and a reopened app shows everything closed. The runner keeps one `opened` id, so at most one thing is open, and copies it into the tree before the view runs, as it does the focus; the view builds what is inside only while `tree.opened` names it, so a closed select costs one node. Opening one moves the focus to its chosen option or first control. It closes on Escape, on a press or accessibility action outside it, and when the focus moves out of it after any key; a select of one closes when an option is taken, and a confirm row when its command runs. When it closes with the focus inside, the focus goes back to what opened it.
+
+A combo box's completions use the focus instead of `opened`: the view builds them while the field or one of them has the focus, read from `tree.focus`, so leaving the field is all it takes to close them.
+
+Controls in a list row are not tab stops of their own, since the list's keys reach them (§10.3). An overlay and an open question each start a scope of their own: `row_of` stops at them, so their controls take the focus even when what opened them sits in a row, as everything in Specimen's pages does.
+
+A menu button's entries are its children, laid out with no area, as an overflow's hidden ones are; pressing it opens them in the drawn menu (§7.3) with their keys and reasons, and Tab passes over them.
+
 ## 12. Effects
 
 `cx.save_as("To do.md", Todo::as_markdown, Cmd::Exported)` pushes `Effect::SaveAs { name, write, reply }` into `Cx`. `write` is a `fn(&F) -> String` that makes the file's contents, and `reply` is a `fn(Result<Path, Failure>) -> C`, which `Cmd::Exported` is.

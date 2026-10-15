@@ -40,6 +40,11 @@ pub trait App: Facts + Send {
     fn translations() -> crate::language::Translations {
         &[]
     }
+
+    /// Whether undo and redo may change the facts now, and if not, why: a document open only for reading says no, since undo would otherwise change what is meant to stay as it is.
+    fn undoable(&self) -> Available {
+        Available::Yes
+    }
 }
 
 /// Named sets of facts, so Specimen can show every screen in every state that matters.

@@ -1,0 +1,66 @@
+window		0 0 138 22	
+  page	Plotter	0 0 138 16	
+    group		2 3 134 1	
+      group		2 3 54 1	
+        toggle button	Choose	2 3 9 1	unavailable (Choosing already)
+        toggle button	Rectangle	11 3 12 1	unavailable (The board is read-only)
+        toggle button	Ellipse	23 3 10 1	unavailable (The board is read-only)
+        toggle button	Arrow	33 3 8 1	unavailable (The board is read-only)
+        toggle button	Draw	41 3 7 1	unavailable (The board is read-only)
+        toggle button	Frame	48 3 8 1	unavailable (The board is read-only)
+      group		58 3 16 1	
+        text	Ink	58 3 3 1	
+        select	Ink	63 3 11 1	
+      menu button	Page 1	76 3 11 1	
+      button	Remove	89 3 9 1	unavailable (The board is read-only)
+      button	Show everything	100 3 18 1	
+      button	Allow editing	120 3 16 1	
+    split		2 5 134 8	
+      pane	Board	2 5 105 8	
+        canvas	Board, 9 shapes	2 5 105 8	
+      divider	Between “Board” and “Map”	109 5 1 8	
+      pane	Map	112 5 24 8	
+        canvas	Map of the board	112 5 24 8	
+    group		2 14 134 1	
+      group		2 14 116 1	
+        text field	File	2 14 104 1	
+        button	Choose…	108 14 10 1	
+      button	Open	120 14 7 1	unavailable (The board is read-only)
+      button	Save	129 14 7 1	unavailable (Choose a file first)
+  alert		2 16 134 1	
+  status		2 17 134 1	
+  toolbar		2 18 134 4	
+    button	Choose	2 18 10 1	unavailable (Choosing already)
+    button	Rectangle	14 18 12 1	unavailable (The board is read-only)
+    button	Ellipse	28 18 9 1	unavailable (The board is read-only)
+    button	Arrow	39 18 9 1	unavailable (The board is read-only)
+    button	Draw	50 18 8 1	unavailable (The board is read-only)
+    button	Frame	60 18 9 1	unavailable (The board is read-only)
+    button	Write…	71 18 10 1	
+    button	Remove	83 18 16 1	unavailable (The board is read-only)
+    button	Move left	101 18 11 1	unavailable (The board is read-only)
+    button	Move right	114 18 12 1	unavailable (The board is read-only)
+    button	Move up	2 19 11 1	unavailable (The board is read-only)
+    button	Move down	15 19 13 1	unavailable (The board is read-only)
+    button	Copy	30 19 13 1	unavailable (Choose a shape first)
+    button	Paste	45 19 14 1	unavailable (The board is read-only)
+    button	Import…	61 19 9 1	
+    button	Lock	72 19 6 1	unavailable (The board is read-only)
+    button	Unlock	80 19 8 1	unavailable (The board is read-only)
+    button	Group	90 19 14 1	unavailable (The board is read-only)
+    button	Ungroup	106 19 22 1	unavailable (The board is read-only)
+    button	Add a page	2 20 11 1	unavailable (The board is read-only)
+    button	Rename page…	15 20 14 1	
+    button	Remove the page	31 20 15 1	unavailable (The board is read-only)
+    button	Read only	48 20 10 1	unavailable (Read-only already)
+    button	Allow editing	60 20 12 1	
+    button	Choose everything	74 20 23 1	
+    button	Bring to front	99 20 12 1	unavailable (The board is read-only)
+    button	Send to back	113 20 12 1	unavailable (The board is read-only)
+    button	Show everything	2 21 15 1	
+    button	Open	19 21 6 1	unavailable (The board is read-only)
+    button	Save	27 21 6 1	unavailable (Choose a file first)
+    button	Export a picture	35 21 14 1	unavailable (Choose a file first)
+    button	Undo	51 21 13 1	unavailable (The board is read-only)
+    button	Redo	66 21 19 1	unavailable (The board is read-only)
+    button	Open the palette	87 21 28 1	

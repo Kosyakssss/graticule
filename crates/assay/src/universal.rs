@@ -314,6 +314,9 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
 }
 
 fn returns<A: App>(runner: &mut Runner<A>, before: &ledger::Value, done: &mut Vec<String>) -> Option<(Law, String)> {
+    if !runner.facts.undoable().is_yes() {
+        return None;
+    }
     let after = runner.facts.value();
     let undone = catch_unwind(AssertUnwindSafe(|| {
         runner.run_named("undo");

@@ -24,6 +24,8 @@ struct Whiteboard {
     file: Text,
     #[session]
     page: Key<Page>,
+    #[session]
+    access: Access,
     #[derived(Index::of, from = [board, page])]
     index: Derived<Index>,
     #[derived(Layers::of, from = [board, index, camera])]
@@ -32,6 +34,14 @@ struct Whiteboard {
     overview: Derived<Overview>,
     #[derived(Chosen::of, from = [board, chosen])]
     around: Derived<Chosen>,
+}
+
+/// Whether the board can be changed: read-only, shapes can still be chosen, copied and looked around, but nothing changes, undo included.
+#[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
+enum Access {
+    #[default]
+    Editing,
+    Reading,
 }
 
 /// The ink the chosen shapes are drawn in and the next shape will be.
@@ -211,6 +221,10 @@ enum Cmd {
     RenamePage { name: String },
     #[label("Remove the page")]
     RemovePage,
+    #[label("Read only")]
+    ReadOnly,
+    #[label("Allow editing")]
+    AllowEditing,
     #[label("Choose everything")]
     ChooseAll,
     #[label("Bring to front")]
@@ -239,7 +253,12 @@ impl App for Whiteboard {
     type Cmd = Cmd;
 
     fn available(&self, cmd: &Cmd) -> Available {
+        if self.access == Access::Reading && changes(cmd) {
+            return No(t!("The board is read-only"));
+        }
         match cmd {
+            Cmd::ReadOnly => no_if(self.access == Access::Reading, t!("Read-only already")),
+            Cmd::AllowEditing => no_if(self.access == Access::Editing, t!("Editing already")),
             Cmd::Remove | Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::ToFront | Cmd::ToBack | Cmd::Lock | Cmd::Unlock | Cmd::Copy => {
                 no_if(self.chosen.is_empty(), t!("Choose a shape first"))
             }
@@ -336,6 +355,15 @@ impl App for Whiteboard {
                     changed => changed,
                 }
             }
+            Cmd::ReadOnly => {
+                self.access = Access::Reading;
+                self.tool = Tool::Select;
+                Outcome::Changed
+            }
+            Cmd::AllowEditing => {
+                self.access = Access::Editing;
+                Outcome::Changed
+            }
             Cmd::ChooseAll => self.chosen.choose(&ledger::Choose::All(self.board.on(self.showing()).iter().map(|s| s.id.raw()).collect())),
             Cmd::GoToPage(page) => self.turn_to(page),
             Cmd::AddPage => {
@@ -416,6 +444,9 @@ impl App for Whiteboard {
                         *name = t!("Frame").to_string();
                     }
                 }
+                if self.access == Access::Reading && !matches!(intent, Intent::Choose { .. } | Intent::Brush { .. }) {
+                    return cx.say(t!("The board is read-only"));
+                }
                 let made = matches!(intent, Intent::Create { .. });
                 let outcome = self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw());
                 if made {
@@ -424,7 +455,7 @@ impl App for Whiteboard {
                 outcome
             }
             Cmd::Edit(edit) => {
-                let restyled = edit.touches(Whiteboard::pen);
+                let restyled = edit.touches(Whiteboard::pen) && self.access == Access::Editing;
                 let outcome = edit.apply(self);
                 if restyled {
                     let keys: Vec<_> = self.chosen.iter().collect();
@@ -433,6 +464,10 @@ impl App for Whiteboard {
                 outcome
             }
         }
+    }
+
+    fn undoable(&self) -> Available {
+        no_if(self.access == Access::Reading, t!("The board is read-only"))
     }
 
     fn view(&self, ui: &mut Ui<Cmd>) {
@@ -458,6 +493,10 @@ impl App for Whiteboard {
                 });
                 ui.button(Cmd::Remove);
                 ui.button(Cmd::ShowAll);
+                ui.button(match self.access {
+                    Access::Editing => Cmd::ReadOnly,
+                    Access::Reading => Cmd::AllowEditing,
+                });
             });
             let count = self.page_size();
             ui.on_files(Cmd::Import);
@@ -579,6 +618,11 @@ impl App for Whiteboard {
                 let _ = w.board.add_page(page, "Ideas", "Plan");
                 let _ = w.board.add(Shape { page, ..Shape::new(Key::fixed(9_003), Kind::Ellipse, Bounds::new(60.0, 60.0, 200.0, 100.0)) });
                 w.page = page;
+                w
+            })
+            .add("A read-only board", {
+                let mut w = Whiteboard::diagram();
+                w.access = Access::Reading;
                 w
             })
             .add("Two shapes grouped and chosen", {
@@ -876,6 +920,18 @@ fn outline(canvas: &mut Drawing, b: Bounds, corners: bool) {
         for (fx, fy) in plotter::HANDLES {
             canvas.dot(at(b.x + fx * b.w, b.y + fy * b.h)).ink(Ink::Link);
         }
+    }
+}
+
+/// Whether a command changes the board, so a read-only board turns it down.
+fn changes(cmd: &Cmd) -> bool {
+    match cmd {
+        Cmd::Rect | Cmd::Ellipse | Cmd::Arrow | Cmd::Draw | Cmd::Frame | Cmd::Write { .. } | Cmd::Remove => true,
+        Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::Paste | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) => true,
+        Cmd::Lock | Cmd::Unlock | Cmd::Group | Cmd::Ungroup | Cmd::AddPage | Cmd::RenamePage { .. } | Cmd::RemovePage => true,
+        Cmd::ToFront | Cmd::ToBack | Cmd::Open | Cmd::Opened(_) => true,
+        Cmd::Select | Cmd::Copy | Cmd::Copied(_) | Cmd::GoToPage(_) | Cmd::ReadOnly | Cmd::AllowEditing | Cmd::ChooseAll | Cmd::ShowAll => false,
+        Cmd::Save | Cmd::Saved(_) | Cmd::ExportPicture | Cmd::Drew(_) | Cmd::Edit(_) => false,
     }
 }
 

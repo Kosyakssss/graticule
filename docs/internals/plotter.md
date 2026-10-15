@@ -93,6 +93,12 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **Here.** `Page` is a record with a name and an order key, and a shape's `page` is a link the shapes list follows, so a page's shapes (`Board::on`) cost what is on it. A board with one page needs no record: that page is `Page::FIRST`, `Key::fixed(0)`, which is also the key a shape saved before pages existed reads as, so older boards open with everything on their first page and need no migration. Adding a second page gives the first its record, so a board of several pages has a record for each. The page on screen is a session fact, and `Board::showing` turns a page that has gone, after an undo or a removal, into the first one, so nothing has to keep the session in step with the document. The index is built for one page, so every tool, snap and hit test sees only that page without being told about pages; a new shape takes the index's page in `Index::above`. Everything still lives in one board, so undo, copying, saving and the laws treat it as one document; the SVG draws the page on screen and carries the whole board.
 
+## Read-only
+
+**tldraw.** An editor can be read-only: shapes can be selected and copied and the camera moves, but no tool that changes the document runs.
+
+**Here.** Read-only is the face's, not the board's: a session fact, `Access`, since whether someone may change a board is about who is looking, not about the board. The face turns down every command that changes the board (`changes` names each one, so a new command has to say), a drag does only what choosing does, and an ink chosen doesn't restyle. Undo is the kernel's, so the app tells it through `App::undoable`, which the runner asks before Undo and Redo; otherwise undo would change a board meant to stay as it is. Typing into the face's own fields, such as the file's path, still makes steps, which wait until editing is allowed again.
+
 ## Also in tldraw, later here
 
-A read-only board, which waits on a way for an app to say that undo can't run, since undo would otherwise change a board meant to stay as it is; pasting or dropping images; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; and rotation. Export to SVG comes with the core, since a board must render without a screen.
+Pasting or dropping images; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; and rotation. Export to SVG comes with the core, since a board must render without a screen.

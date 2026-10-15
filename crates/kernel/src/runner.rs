@@ -1551,6 +1551,7 @@ impl<A: App> Runner<A> {
 
     fn builtin_available(&self, b: Builtin) -> Available {
         match b {
+            Builtin::Undo | Builtin::Redo if let Available::No(why) = self.facts.undoable() => Available::No(why),
             Builtin::Undo if self.undo_label().is_none() => Available::No(Message::from("Nothing to undo")),
             Builtin::Copy if self.chosen().is_empty() => Available::No(Message::from("No text is chosen: drag across text to choose some")),
             Builtin::Undo | Builtin::Redo if self.turning.is_some() => Available::No(Message::from("Wait for the change in progress to finish")),

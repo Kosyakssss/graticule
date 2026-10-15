@@ -27,6 +27,18 @@ pub struct Look {
     pub marked: bool,
     /// Whether a row being dragged would land at this node's top or bottom edge.
     pub landing: Landing,
+    /// Whether a cell that glows on change changed a moment ago, and which way.
+    pub glow: Glow,
+}
+
+/// How a cell that just changed glows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Glow {
+    #[default]
+    Not,
+    Up,
+    Down,
+    Changed,
 }
 
 /// Where a dragged row would land against the row under it.
@@ -935,6 +947,15 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             if let Some(g) = tree.graphs.iter().find(|g| g.node == i) {
                 wires(p, g);
             }
+        }
+        (Layer::Under, Kind::Cell { .. }) if look.glow != Glow::Not => {
+            let theme = p.theme;
+            let ink = match look.glow {
+                Glow::Up => theme.ok,
+                Glow::Down => theme.danger,
+                _ => theme.link,
+            };
+            p.fill_area(n.area, tint(ink, 0.2));
         }
         (Layer::Under, Kind::DiffLine { change, digits, .. }) => {
             let (theme, a) = (p.theme, n.area);

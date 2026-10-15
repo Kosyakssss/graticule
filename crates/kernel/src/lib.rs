@@ -64,7 +64,7 @@ pub use ink::Ink;
 pub use live::{Derived, Feed, Live};
 pub use message::Message;
 pub use picture::{Layer, Picture, icons};
-pub use table::{Order, Rows, Sort};
+pub use table::{Decimal, Order, Rows, Sort};
 pub use time::{Clock, TimeView};
 pub use tree::{Fill, Span, cols};
 pub use ui::{Bind, Ui};

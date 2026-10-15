@@ -719,6 +719,8 @@ pub struct Tree<C> {
     pub picks: HashMap<Id, Picking>,
     /// The letters a picker's query matched in its rows' text, as byte ranges, by the text's node.
     pub marks: Vec<(u32, Vec<(u32, u32)>)>,
+    /// The cells that glow when what they show changes, with the number each shows.
+    pub glows: Vec<(u32, Option<f64>)>,
     /// The cursors of an editor's lines: the line's node, the byte in its text the cursor is before, and whether it is the primary one.
     pub carets: Vec<(u32, u32, bool)>,
     /// Where what an editor is asked to find appears on each of its lines, as byte ranges, by the line's node.
@@ -828,6 +830,7 @@ impl<C> Default for Tree<C> {
             declared: Vec::new(),
             picks: HashMap::new(),
             marks: Vec::new(),
+            glows: Vec::new(),
             carets: Vec::new(),
             found: Vec::new(),
             inked: Vec::new(),
@@ -863,6 +866,7 @@ impl<C> Tree<C> {
         self.images.clear();
         self.orders.clear();
         self.marks.clear();
+        self.glows.clear();
         self.carets.clear();
         self.found.clear();
         self.inked.clear();

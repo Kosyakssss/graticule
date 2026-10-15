@@ -22,7 +22,7 @@ ui.table(self.order.of(&self.cities), Atlas::picked, |row, city| {
 .sort(Atlas::sort);
 ```
 
-Every row gives the same cells in the same order; the first row shown names the columns. Words read from the left; numbers, days and times line up on the right in the monospace face, their thousands grouped. `tone_by_sign` draws a number in the ok ink above zero and the danger ink below.
+Every row gives the same cells in the same order; the first row shown names the columns. Words read from the left; numbers, days and times line up on the right in the monospace face, their thousands grouped. `tone_by_sign` draws a number in the ok ink above zero and the danger ink below. `glow_on_change` tints a cell for a moment when what it shows changes: in the ok ink when its number went up, the danger ink when it went down, the link ink for words; it never glows in the row the keyboard is on, and pictures of named states never glow. `Decimal::new(12345, 2)` shows a number kept as whole cents, or any smallest unit, as 123.45.
 
 The order is a derived value, worked out on another thread from the list and the `Sort` whenever either changes; until it arrives the table keeps the order it had:
 

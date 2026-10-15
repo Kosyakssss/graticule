@@ -242,6 +242,10 @@ A node's hash takes in what it draws from the tree's side tables, a color slider
 
 A law (§19) checks that patching the quad list gives the same pixels as building it from scratch. It compares the quads themselves, layer by layer, which is enough because boxes on the grid never overlap.
 
+### 7.7 The glow on change
+
+A table cell marked `glow_on_change` puts itself in the tree's list of glowing cells with the number it shows. After each build the runner compares each one's text with what the same cell, by id, showed after the last build; a cell that changed glows for 800 ms, up, down or just changed, by comparing the two numbers. The glow is part of the cell's `Look`, so it costs a repaint of the cell and no new build, and the runner's `changes` asks the shell to wake it once when the soonest glow ends, so it never asks for frames on its own beyond that. The cells it compared last time are kept by id and no others, so the memory follows what is on screen, not the data. Only a live calendar glows: proofs, Assay and the laws see none, so their pictures stay the same however the values arrived. A cell in the row the keyboard is on doesn't glow, as spec §4.5 asks of what is being read.
+
 ## 8. Hit testing
 
 After layout, the kernel fills a grid of the window's size in cells, each cell holding the index of the topmost node with an interaction there (a button, a check, a link, a field, a list row). It is refilled after every layout: at 200 × 60 cells that is 12,000 writes, a few microseconds, so tracking damaged cells isn't worth its code yet. Finding what is under the pointer is one array read, well under the 1 µs budget. Hit targets are at least one cell, which the taste laws require anyway.

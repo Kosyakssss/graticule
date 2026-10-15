@@ -326,6 +326,11 @@ pub trait Cell {
     fn sign(&self) -> i8 {
         0
     }
+
+    /// The number it shows, for a cell that glows when it changes to say whether it went up or down.
+    fn amount(&self) -> Option<f64> {
+        None
+    }
 }
 
 impl Cell for str {
@@ -358,6 +363,10 @@ impl<T: Cell + ?Sized> Cell for &T {
     fn sign(&self) -> i8 {
         (**self).sign()
     }
+
+    fn amount(&self) -> Option<f64> {
+        (**self).amount()
+    }
 }
 
 macro_rules! whole {
@@ -374,8 +383,49 @@ macro_rules! whole {
             fn sign(&self) -> i8 {
                 crate::value::Integer::wide(*self).signum() as i8
             }
+
+            fn amount(&self) -> Option<f64> {
+                Some(crate::value::Integer::wide(*self) as f64)
+            }
         }
     )*};
+}
+
+/// A number with a fixed count of decimal places, kept as a whole number of its smallest unit so it adds up exactly: `Decimal::new(12345, 2)` shows as 123.45, a price in cents. Its whole part is grouped like any number's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Decimal {
+    pub units: i64,
+    pub places: u8,
+}
+
+impl Decimal {
+    pub fn new(units: i64, places: u8) -> Decimal {
+        Decimal { units, places }
+    }
+}
+
+impl Cell for Decimal {
+    fn shown(&self) -> String {
+        let scale = 10i64.pow(u32::from(self.places));
+        let (whole, part) = (self.units / scale, (self.units % scale).abs());
+        let sign = if self.units < 0 && whole == 0 { "-" } else { "" };
+        match self.places {
+            0 => crate::value::grouped(whole),
+            places => format!("{sign}{}.{part:0width$}", crate::value::grouped(whole), width = usize::from(places)),
+        }
+    }
+
+    fn numeric(&self) -> bool {
+        true
+    }
+
+    fn sign(&self) -> i8 {
+        self.units.signum() as i8
+    }
+
+    fn amount(&self) -> Option<f64> {
+        Some(self.units as f64 / 10f64.powi(i32::from(self.places)))
+    }
 }
 
 whole!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, i128);

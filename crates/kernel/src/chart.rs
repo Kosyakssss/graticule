@@ -142,6 +142,7 @@ impl Plot {
         } else {
             self.names.iter().enumerate().filter(|(i, _)| (*i as f64) >= x0 && (*i as f64) <= x1).map(|(i, n)| (place(i as f64, x0, x1), n.clone())).collect()
         };
+        d.stamp();
         self.drawing = Arc::new(d);
         self
     }

@@ -80,7 +80,8 @@ impl<T: Send + Sync + 'static> Moving for Live<T> {
         if !self.slot.fresh.swap(false, Ordering::AcqRel) {
             return false;
         }
-        self.pinned = self.slot.latest.load_full();
+        let old = std::mem::replace(&mut self.pinned, self.slot.latest.load_full());
+        discard(Box::new(old));
         true
     }
 

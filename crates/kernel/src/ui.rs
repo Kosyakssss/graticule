@@ -1993,14 +1993,14 @@ impl<C, T> Row<'_, '_, C, T> {
                 None if value.numeric() => crate::tree::cols(wide.max(10)).min(wide.min(6)),
                 None => crate::tree::Fill.min(wide.min(10)),
             };
-            return Celled { tree, node: i, sign: 0, heads: true };
+            return Celled { tree, node: i, sign: 0, amount: None, heads: true };
         }
         let i = tree.add(parent, Kind::Cell { numeric: value.numeric(), tone: Tone::Ink }, Some(tree.nodes[parent as usize].id.mix(u64::from(column))), at);
         let r = tree.put(&value.shown());
         tree.nodes[i as usize].text = r;
         let r = tree.put(label.as_str());
         tree.nodes[i as usize].name = r;
-        Celled { tree, node: i, sign: value.sign(), heads: false }
+        Celled { tree, node: i, sign: value.sign(), amount: value.amount(), heads: false }
     }
 }
 
@@ -2041,10 +2041,19 @@ pub struct Celled<'t, C> {
     tree: &'t mut Tree<C>,
     node: u32,
     sign: i8,
+    amount: Option<f64>,
     heads: bool,
 }
 
 impl<C> Celled<'_, C> {
+    /// Glows for a moment when what it shows changes, in the ok ink when its number went up, the danger ink when it went down and the link ink otherwise, so a value that just moved catches the eye. It never glows in the row the keyboard is on.
+    pub fn glow_on_change(self) -> Self {
+        if !self.heads {
+            self.tree.glows.push((self.node, self.amount));
+        }
+        self
+    }
+
     /// Its number in the ok ink above zero and the danger ink below.
     pub fn tone_by_sign(self) -> Self {
         if !self.heads

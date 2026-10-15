@@ -12,7 +12,7 @@ pub mod prelude {
     pub use graticule_macros::{Choice, Commands, Facts, Form, t};
     pub use kernel::Available::{self, No, Yes};
     pub use kernel::language::Translations;
-    pub use kernel::{App, Cx, Derived, Failure, Feed, Fill, Ink, Jobs, Live, Message, Moment, Path, Picture, States, Ui, cols, icons, no_if};
+    pub use kernel::{App, Candle, Cx, Decimal, Derived, Failure, Feed, Fill, Ink, Jobs, Live, Message, Moment, Path, Picture, Plot, States, Ui, cols, icons, no_if};
     pub use ledger::{Edit, Key, List, Outcome, Selection, Text};
 }
 

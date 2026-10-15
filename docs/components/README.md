@@ -93,7 +93,7 @@ Several names on either side are the same component. They are merged into one ro
 | Color field | ColorField, ColorInputGroup | | a swatch and the color typed as hex or OKLCH, shown as hex |
 | Color area and slider | ColorArea, ColorSlider | | lightness and chroma as an area at the color's hue, each part as a slider over its colors |
 | Color picker | ColorPicker | | anchored: a color field and an area and hue slider in a popover; swatch sets are not done |
-| Table | Table | Table, HTMLTable | wave 6: a list of cells in named columns, sorted or filtered by an order worked out in the background, columns resized by dragging; grouping, the glow on change and resizing from the keyboard are not done |
+| Table | Table | Table, HTMLTable | wave 6: a list of cells in named columns, sorted or filtered by an order worked out in the background, columns resized by dragging; the glow on change done with Ticker (item 28); grouping and resizing from the keyboard are not done |
 | Tree | | Tree | wave 6: a list whose rows sit inside one another, its open branches a fact and its rows worked out in the background; Right and Left open, close and move between levels |
 | Picker | | Omnibar, QueryList | wave 6: a search field over the items that match it, best first, worked out in the background, with the letters typed marked; Up, Down and Return choose |
 | Typed filter | | | wave 6: `people>1000000 country:spain` against a record's own fields, offering them as they are typed; days and times are not done |

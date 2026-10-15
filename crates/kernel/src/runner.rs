@@ -10,7 +10,7 @@ use winit::event::{Ime, KeyEvent};
 use crate::app::{App, Cx, Effect, Failure, Jobs, Moment, Path, Reply, Said};
 use crate::builtin::Builtin;
 use crate::command::{Available, Commands, Form};
-use crate::components::{Landing, Look};
+use crate::components::{Glow, Landing, Look};
 use crate::field::{self, Action, Caret};
 use crate::hit::Hits;
 use crate::kept::Kept;
@@ -206,6 +206,7 @@ pub enum Slice {
 }
 
 const SLICE: Duration = Duration::from_micros(300);
+const GLOW_MS: i64 = 800;
 
 /// Background work an effect started: its name for the status line, and what turns its result into the app's command. A result of `None` means it ended with nothing to say, such as when the user called off a save.
 struct Errand {
@@ -299,6 +300,8 @@ pub struct Runner<A: App> {
     only_changed: bool,
     palette: Option<Palette>,
     marked: std::collections::HashSet<u128>,
+    shown: HashMap<Id, (u64, Option<f64>)>,
+    glowing: HashMap<Id, (Glow, Moment)>,
     unwatched: bool,
     menu: Option<Menu>,
     clipboard: Option<arboard::Clipboard>,
@@ -406,6 +409,8 @@ impl<A: App> Runner<A> {
             only_changed: false,
             palette: None,
             marked: std::collections::HashSet::new(),
+            shown: HashMap::new(),
+            glowing: HashMap::new(),
             unwatched: false,
             menu: None,
             clipboard: None,
@@ -538,8 +543,36 @@ impl<A: App> Runner<A> {
         self.resolve();
         self.status();
         self.composed = if self.composing.is_empty() { Range32::default() } else { self.tree.put(&self.composing) };
+        self.glow();
         self.stale = false;
         self.laid = false;
+    }
+
+    fn glow(&mut self) {
+        if !self.calendar.live {
+            return;
+        }
+        let now = self.calendar.now;
+        self.glowing.retain(|_, (_, until)| until.0 > now.0);
+        let mut shown = HashMap::with_capacity(self.tree.glows.len());
+        for &(i, amount) in &self.tree.glows {
+            let n = &self.tree.nodes[i as usize];
+            let seen = (crate::search::hashed(self.tree.str(n.text)), amount);
+            let reading = self.tree.ancestor(i, |r| matches!(r.kind, Kind::ListRow { focused: true, .. })).is_some();
+            if let Some(&(was, before)) = self.shown.get(&n.id)
+                && was != seen.0
+                && !reading
+            {
+                let glow = match (before, amount) {
+                    (Some(a), Some(b)) if b > a => Glow::Up,
+                    (Some(a), Some(b)) if b < a => Glow::Down,
+                    _ => Glow::Changed,
+                };
+                self.glowing.insert(n.id, (glow, Moment(now.0 + GLOW_MS)));
+            }
+            shown.insert(n.id, seen);
+        }
+        self.shown = shown;
     }
 
     fn build_menu(&mut self, root: u32) {
@@ -1508,6 +1541,7 @@ impl<A: App> Runner<A> {
         let focus = if self.palette.is_some() { Some(PALETTE) } else { self.focus };
         let composed = self.composed;
         let landing = self.landing();
+        let glowing = self.glowing.clone();
         let marked: std::collections::HashSet<Id> = if self.marked.is_empty() {
             Default::default()
         } else {
@@ -1533,6 +1567,7 @@ impl<A: App> Runner<A> {
                 composing: if focus == Some(id) || editing.contains(&id) { composed } else { Range32::default() },
                 chosen: chosen.get(&id).copied().unwrap_or_default(),
                 marked: marked.contains(&id),
+                glow: glowing.get(&id).map_or(Glow::Not, |g| g.0),
                 landing: landing.filter(|(l, _)| *l == id).map_or(Landing::Not, |(_, l)| l),
             }
         }
@@ -5074,7 +5109,8 @@ impl<A: App> Face for Runner<A> {
     }
 
     fn changes(&self) -> Option<Moment> {
-        self.tree.changes.filter(|_| self.calendar.live)
+        let glow = self.glowing.values().map(|g| g.1).min_by_key(|m| m.0);
+        self.tree.changes.into_iter().chain(glow).filter(|_| self.calendar.live).min_by_key(|m| m.0)
     }
 
     fn access(&mut self, m: Metrics, title: &str) -> Option<accesskit::TreeUpdate> {

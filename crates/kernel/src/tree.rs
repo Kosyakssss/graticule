@@ -337,11 +337,12 @@ pub enum Kind {
     },
 }
 
-/// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
+/// What an anchored overlay hangs from: the node that opened it, the cell the pointer was on, or a box inside a canvas, in whole points from its top left, which the overlay covers from the column it starts in, on the rows nearest its middle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Anchor {
     Node(u32),
     Cell { col: i32, row: i32 },
+    Over { node: u32, x: i32, y: i32, w: i32, h: i32 },
 }
 
 impl Kind {

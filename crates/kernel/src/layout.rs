@@ -731,6 +731,19 @@ impl<'t> Layout<'t> {
                 let at = match anchor {
                     Anchor::Node(n) => tree.nodes.get(n as usize).map_or(Area::default(), |n| n.area),
                     Anchor::Cell { col, row } => Area::new(col, row, 1, 1),
+                    Anchor::Over { node, x, y, w, h } => {
+                        let area = tree.nodes.get(node as usize).map_or(Area::default(), |n| n.area);
+                        let cells = |p: i32, cell: f32| (p as f32 * self.m.scale / cell).floor() as i32;
+                        let col = area.col + cells(x, self.m.cell_w);
+                        let cols = (cells(x + w, self.m.cell_w) + area.col - col + 1).max(self.size(tree, i).1).min(screen.cols);
+                        let rows = self.rows(tree, i, cols).min(screen.rows);
+                        let middle = (y as f32 + h as f32 / 2.0) * self.m.scale / self.m.cell_h;
+                        let row = area.row + (middle - rows as f32 / 2.0).round() as i32;
+                        let col = col.min(screen.right() - cols).max(screen.col);
+                        let row = row.min(screen.bottom() - rows).max(screen.row);
+                        self.place(tree, i, Area::new(col, row, cols, rows));
+                        continue;
+                    }
                 };
                 let area = self.anchored(tree, i, at, screen);
                 self.place(tree, i, area);

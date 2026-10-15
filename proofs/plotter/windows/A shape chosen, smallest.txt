@@ -1,4 +1,4 @@
-window		0 0 134 22	
+window		0 0 134 23	
   page	Plotter	0 0 134 16	
     group		2 3 130 1	
       group		2 3 54 1	
@@ -29,7 +29,7 @@ window		0 0 134 22
       button	Save	125 14 7 1	unavailable (Choose a file first)
   alert		2 16 130 1	
   status		2 17 130 1	
-  toolbar		2 18 130 4	
+  toolbar		2 18 130 5	
     button	Choose	2 18 10 1	unavailable (Choosing already)
     button	Rectangle	14 18 12 1	
     button	Ellipse	28 18 9 1	
@@ -37,30 +37,33 @@ window		0 0 134 22
     button	Draw	50 18 8 1	
     button	Frame	60 18 9 1	
     button	Write…	71 18 10 1	
-    button	Remove	83 18 16 1	
-    button	Move left	101 18 11 1	
-    button	Move right	114 18 12 1	
-    button	Move up	2 19 11 1	
-    button	Move down	15 19 13 1	
-    button	Copy	30 19 13 1	
-    button	Paste	45 19 14 1	
-    button	Import…	61 19 9 1	
-    button	Lock	72 19 6 1	
-    button	Unlock	80 19 8 1	
-    button	Group	90 19 14 1	unavailable (Choose two shapes or more)
-    button	Ungroup	106 19 22 1	unavailable (The board has no groups)
-    button	Add a page	2 20 11 1	
-    button	Rename page…	15 20 14 1	
-    button	Remove the page	31 20 15 1	unavailable (A board keeps its last page)
-    button	Read only	48 20 10 1	
-    button	Allow editing	60 20 12 1	unavailable (Editing already)
-    button	Choose everything	74 20 23 1	
-    button	Bring to front	99 20 12 1	
-    button	Send to back	113 20 12 1	
-    button	Show everything	2 21 15 1	
-    button	Open	19 21 6 1	unavailable (Choose a file first)
-    button	Save	27 21 6 1	unavailable (Choose a file first)
-    button	Export a picture	35 21 14 1	unavailable (Choose a file first)
-    button	Undo	51 21 13 1	unavailable (Nothing to undo)
-    button	Redo	66 21 19 1	unavailable (Nothing to redo)
-    button	Open the palette	87 21 28 1	
+    button	Write on the board	83 18 18 1	unavailable (Only text and frames hold words)
+    button	Keep the words	103 18 14 1	unavailable (Not writing)
+    button	Drop the words	2 19 14 1	unavailable (Not writing)
+    button	Remove	18 19 16 1	
+    button	Move left	36 19 11 1	
+    button	Move right	49 19 12 1	
+    button	Move up	63 19 11 1	
+    button	Move down	76 19 13 1	
+    button	Copy	91 19 13 1	
+    button	Paste	106 19 14 1	
+    button	Import…	122 19 9 1	
+    button	Lock	2 20 6 1	
+    button	Unlock	10 20 8 1	
+    button	Group	20 20 14 1	unavailable (Choose two shapes or more)
+    button	Ungroup	36 20 22 1	unavailable (The board has no groups)
+    button	Add a page	60 20 11 1	
+    button	Rename page…	73 20 14 1	
+    button	Remove the page	89 20 15 1	unavailable (A board keeps its last page)
+    button	Read only	106 20 10 1	
+    button	Allow editing	118 20 12 1	unavailable (Editing already)
+    button	Choose everything	2 21 23 1	
+    button	Bring to front	27 21 12 1	
+    button	Send to back	41 21 12 1	
+    button	Show everything	55 21 15 1	
+    button	Open	72 21 6 1	unavailable (Choose a file first)
+    button	Save	80 21 6 1	unavailable (Choose a file first)
+    button	Export a picture	88 21 14 1	unavailable (Choose a file first)
+    button	Undo	104 21 13 1	unavailable (Nothing to undo)
+    button	Redo	2 22 19 1	unavailable (Nothing to redo)
+    button	Open the palette	23 22 28 1	

@@ -27,6 +27,10 @@ struct Whiteboard {
     page: Key<Page>,
     #[session]
     access: Access,
+    #[session]
+    writing: Writing,
+    #[session]
+    words: Text,
     #[derived(Index::of, from = [board, page])]
     index: Derived<Index>,
     #[derived(Pictures::of, from = [board, pictures])]
@@ -45,6 +49,14 @@ enum Access {
     #[default]
     Editing,
     Reading,
+}
+
+/// Whether words are being typed into a shape where it is on the board, and which.
+#[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
+enum Writing {
+    #[default]
+    Not,
+    Into(Key<Shape>),
 }
 
 /// The ink the chosen shapes are drawn in and the next shape will be.
@@ -234,6 +246,12 @@ enum Cmd {
     Frame,
     #[label("Write…")]
     Write { words: String },
+    #[label("Write on the board")]
+    WriteHere,
+    #[label("Keep the words")]
+    KeepWords,
+    #[label("Drop the words")]
+    DropWords,
     #[label("Remove")]
     Remove,
     #[label("Move left")]
@@ -341,6 +359,14 @@ impl App for Whiteboard {
             Cmd::Draw => no_if(self.tool == Tool::Draw, t!("Drawing freehand already")),
             Cmd::Frame => no_if(self.tool == Tool::Frame, t!("Drawing frames already")),
             Cmd::Write { .. } => no_if(self.chosen.len() > 1, t!("Choose one shape at most")),
+            Cmd::WriteHere => match self.only_chosen() {
+                _ if self.writing != Writing::Not => No(t!("Writing already")),
+                Some(shape) if shape.locked => No(t!("The shape is locked")),
+                Some(shape) if matches!(shape.kind, Kind::Text(_) | Kind::Frame(_)) => Yes,
+                Some(_) => No(t!("Only text and frames hold words")),
+                None => No(t!("Choose one text or frame first")),
+            },
+            Cmd::KeepWords | Cmd::DropWords => no_if(self.writing == Writing::Not, t!("Not writing")),
             Cmd::Paste | Cmd::Copied(_) | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) | Cmd::Placed(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
         }
     }
@@ -358,6 +384,32 @@ impl App for Whiteboard {
             Cmd::MoveUp => self.nudge(0.0, -STEP, cx),
             Cmd::MoveDown => self.nudge(0.0, STEP, cx),
             Cmd::Write { words } => self.write(words.trim(), cx),
+            Cmd::WriteHere => {
+                let Some(shape) = self.only_chosen() else { return Outcome::Nothing };
+                let (id, held) = (
+                    shape.id,
+                    match &shape.kind {
+                        Kind::Text(words) | Kind::Frame(words) => words.clone(),
+                        _ => String::new(),
+                    },
+                );
+                self.writing = Writing::Into(id);
+                let _ = self.words.set(&held);
+                cx.focus(Whiteboard::words);
+                Outcome::Changed
+            }
+            Cmd::KeepWords => {
+                let Writing::Into(key) = self.writing else { return Outcome::Nothing };
+                self.writing = Writing::Not;
+                let words = self.words.take();
+                let _ = self.board.write(key, words.trim());
+                Outcome::Changed
+            }
+            Cmd::DropWords => {
+                self.writing = Writing::Not;
+                let _ = self.words.take();
+                Outcome::Changed
+            }
             Cmd::Remove => {
                 let keys: Vec<_> = self.chosen.iter().collect();
                 let _ = self.chosen.choose(&ledger::Choose::Clear);
@@ -584,7 +636,16 @@ impl App for Whiteboard {
                         canvas.camera(Whiteboard::camera);
                         canvas.on_drag(Cmd::Drew);
                         let intent = canvas.drag().map(|drag| Intent::of(&self.board, &self.index_now(), &self.chosen, self.tool, &gesture(drag), self.camera.zoom));
-                        let moved = intent.as_ref().map(|i| i.preview(&self.board)).unwrap_or_default();
+                        let mut moved = intent.as_ref().map(|i| i.preview(&self.board)).unwrap_or_default();
+                        if let Writing::Into(key) = self.writing
+                            && let Some(shape) = self.board.shapes.find(key).filter(|_| !moved.iter().any(|m| m.id == key))
+                        {
+                            let kind = match &shape.kind {
+                                Kind::Frame(_) => Kind::Frame(String::new()),
+                                _ => Kind::Text(String::new()),
+                            };
+                            moved.push(Shape { kind, ..shape.clone() });
+                        }
                         let moving: HashSet<Key<Shape>> = moved.iter().map(|m| m.id).collect();
                         let shown = |key: Key<Shape>| moved.iter().find(|m| m.id == key).or(self.board.shapes.find(key));
                         let window = |shape: &Shape| self.board.frames(shape.frame).into_iter().filter_map(shown).map(|f| f.bounds()).reduce(|a, b| a.overlap(&b));
@@ -616,6 +677,15 @@ impl App for Whiteboard {
                         }
                         for key in reached {
                             canvas.press(mark(key), Cmd::ChooseShape(key));
+                        }
+                        if let Writing::Into(key) = self.writing
+                            && let Some(shape) = self.board.shapes.find(key).filter(|s| s.page == self.showing())
+                        {
+                            let b = shape.bounds();
+                            let middle = if matches!(shape.kind, Kind::Frame(_)) { b.y - plotter::LINE / 2.0 - 4.0 } else { b.y + b.h / 2.0 };
+                            canvas.over((b.x, middle), (b.right(), middle), |ui| {
+                                ui.field(Whiteboard::words, t!("Words")).on_submit(Cmd::KeepWords);
+                            });
                         }
                         for shape in moved.iter().filter(|m| !self.board.shapes.has(m.id)) {
                             draw(canvas, shape, window(shape), self.pictures.get());
@@ -715,6 +785,16 @@ impl App for Whiteboard {
                 let _ = w.chosen.choose(&ledger::Choose::All(stacked.iter().map(|k| k.raw()).collect()));
                 w
             })
+            .add("Writing on the board", {
+                let mut w = Whiteboard::diagram();
+                let text = w.board.stacked().iter().find(|s| matches!(&s.kind, Kind::Text(t) if t == "Commands")).map(|s| s.id);
+                if let Some(key) = text {
+                    let _ = w.chosen.choose(&ledger::Choose::Only(key.raw()));
+                    w.writing = Writing::Into(key);
+                    let _ = w.words.set("Commands, each one undoable");
+                }
+                w
+            })
             .add("A picture on the board", {
                 let mut w = Whiteboard::diagram();
                 let mut hills = Drawing::new();
@@ -747,10 +827,7 @@ impl Whiteboard {
         if words.is_empty() {
             return cx.say(t!("There are no words to write"));
         }
-        let one = match self.chosen.len() {
-            1 => self.chosen.iter().next().and_then(|key| self.board.shapes.find(key)).cloned(),
-            _ => None,
-        };
+        let one = self.only_chosen().cloned();
         let at = match &one {
             Some(shape) if matches!(shape.kind, Kind::Text(_) | Kind::Frame(_)) => {
                 let key = shape.id;
@@ -841,6 +918,15 @@ impl Whiteboard {
     }
 
     /// The page on screen: the one last gone to, or the first if that one has gone.
+    /// The chosen shape, when exactly one is chosen.
+    fn only_chosen(&self) -> Option<&Shape> {
+        let mut keys = self.chosen.iter();
+        match (keys.next(), keys.next()) {
+            (Some(key), None) => self.board.shapes.find(key),
+            _ => None,
+        }
+    }
+
     fn showing(&self) -> Key<Page> {
         self.board.showing(self.page)
     }
@@ -1035,11 +1121,11 @@ fn outline(canvas: &mut Drawing, b: Bounds, corners: bool) {
 /// Whether a command changes the board, so a read-only board turns it down.
 fn changes(cmd: &Cmd) -> bool {
     match cmd {
-        Cmd::Rect | Cmd::Ellipse | Cmd::Arrow | Cmd::Draw | Cmd::Frame | Cmd::Write { .. } | Cmd::Remove => true,
+        Cmd::Rect | Cmd::Ellipse | Cmd::Arrow | Cmd::Draw | Cmd::Frame | Cmd::Write { .. } | Cmd::WriteHere | Cmd::KeepWords | Cmd::Remove => true,
         Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::Paste | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) | Cmd::Placed(_) => true,
         Cmd::Lock | Cmd::Unlock | Cmd::Group | Cmd::Ungroup | Cmd::AddPage | Cmd::RenamePage { .. } | Cmd::RemovePage => true,
         Cmd::ToFront | Cmd::ToBack | Cmd::Open | Cmd::Opened(_) => true,
-        Cmd::Select | Cmd::Copy | Cmd::Copied(_) | Cmd::GoToPage(_) | Cmd::ChooseShape(_) | Cmd::ReadOnly | Cmd::AllowEditing | Cmd::ChooseAll | Cmd::ShowAll => false,
+        Cmd::DropWords | Cmd::Select | Cmd::Copy | Cmd::Copied(_) | Cmd::GoToPage(_) | Cmd::ChooseShape(_) | Cmd::ReadOnly | Cmd::AllowEditing | Cmd::ChooseAll | Cmd::ShowAll => false,
         Cmd::Save | Cmd::Saved(_) | Cmd::ExportPicture | Cmd::Drew(_) | Cmd::Edit(_) => false,
     }
 }

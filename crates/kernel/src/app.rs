@@ -264,11 +264,12 @@ pub struct Cx<C> {
     pub(crate) effects: Vec<Effect<C>>,
     pub(crate) said: Vec<Said>,
     pub(crate) handed: Vec<Value>,
+    pub(crate) focus: Option<ledger::ErasedPath>,
 }
 
 impl<C> Cx<C> {
     pub fn new(replica: u64, counter: u64, now: Moment, seed: u64) -> Self {
-        Self { replica, counter, now, seed, effects: Vec::new(), said: Vec::new(), handed: Vec::new() }
+        Self { replica, counter, now, seed, effects: Vec::new(), said: Vec::new(), handed: Vec::new(), focus: None }
     }
 
     /// A new key that no device has handed out before.
@@ -290,6 +291,11 @@ impl<C> Cx<C> {
         self.seed ^= self.seed << 17;
         self.handed.push(Value::UInt(self.seed));
         self.seed
+    }
+
+    /// Puts the keyboard in the field that types into `path` once the view shows it, as a command that opens a field for typing does. Moving the keyboard doesn't change the facts.
+    pub fn focus<F: Field>(&mut self, path: FactPath<F, ledger::Text>) {
+        self.focus = Some(path.erased());
     }
 
     /// Shows a message in the message line. Saying something doesn't change the facts.

@@ -111,6 +111,12 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **Here.** The asset record holds the PNG or JPEG file as it was, in base64, since a Ledger value has strings and no bytes, so a board saved as SVG or copied to the clipboard carries its pictures without a second file. `add_image` and `paste` keep a file once by comparing contents, and `delete` removes an asset when the last shape showing it goes, in the same change, so undo brings both back. Plotter can't decode, since it needs no kernel: the face decodes in `Pictures`, a derived value that reads its own last value (`from = [board, pictures]`) and decodes only assets it hasn't seen, so a drag doesn't decode anything again. The slices of the board then read the pictures as one more input. A picture not decoded yet is drawn as a faint box.
 
+## Typing on the board
+
+**tldraw.** Editing a text shape swaps it for a text area at the same place, over the canvas, and the shape's own text is hidden while it is edited.
+
+**Here.** The face keeps whether words are being written, and into which shape, as a session enum, `Writing`, and the words in a session `Text`, so typing is the kernel's own field with its caret, selection and input methods. The field sits in an overlay over the canvas, on the cells nearest the shape's words, since a field is on the grid and the board isn't; the shape is drawn by the view with its words blank while it is open, as a moving shape is, so the two never show at once. Keeping the words is one `Board::write`, one undo step; the typing before it is session typing, undone as typing is.
+
 ## Also in tldraw, later here
 
 Pasting images from the clipboard; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; and rotation. Export to SVG comes with the core, since a board must render without a screen.

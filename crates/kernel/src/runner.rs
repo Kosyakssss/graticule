@@ -1767,6 +1767,10 @@ impl<A: App> Runner<A> {
     fn conclude(&mut self, label: &str, mut ops: Vec<Op>, mut cx: Cx<A::Cmd>, changed: bool) -> Vec<Op> {
         self.counter = cx.counter;
         self.said = cx.said.pop();
+        if let Some(path) = cx.focus.take() {
+            self.focus = Some(Id::ROOT.mix(path.hash64()));
+            self.stale = true;
+        }
         if self.hold && !cx.effects.is_empty() {
             let asked: Vec<String> = cx.effects.iter().map(|e| format!("{e:?}")).collect();
             self.said = Some(Said::Note(Message::plain(format!("Specimen didn't run what the app asked for: {}", asked.join(", then ")))));

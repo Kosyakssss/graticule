@@ -1825,6 +1825,28 @@ impl<C, S> Canvas<'_, '_, C, S> {
         self.ui.tree.dragging.as_ref().filter(|(at, _)| *at == id).map(|(_, d)| d)
     }
 
+    /// Lays what `f` builds over the canvas, from the column the box between `from` and `to` starts in, on the rows nearest its middle and at least as wide as it, in the canvas's space: a field for typing into a shape where it is. It covers the shapes under it, and goes where the canvas was when it was last laid out.
+    #[track_caller]
+    pub fn over(&mut self, from: (f64, f64), to: (f64, f64), f: impl FnOnce(&mut Ui<'_, C, S>)) {
+        let Some((w, h)) = self.size() else { return };
+        let point = |p: (f64, f64)| match self.board.camera {
+            Some((_, camera)) => camera.to_screen(p),
+            None => {
+                let [x0, x1, y0, y1] = self.drawing.bounds_of_space().map(f64::from);
+                let across = |v: f64, a: f64, b: f64, size: f64| if b == a { 0.0 } else { (v - a) / (b - a) * size };
+                (across(p.0, x0, x1, w), across(p.1, y0, y1, h))
+            }
+        };
+        let (a, b) = (point(from), point(to));
+        let (x, y, right, bottom) = (a.0.min(b.0), a.1.min(b.1), a.0.max(b.0), a.1.max(b.1));
+        let node = self.board.node;
+        let anchor = crate::tree::Anchor::Over { node, x: x.round() as i32, y: y.round() as i32, w: (right - x).round() as i32, h: (bottom - y).round() as i32 };
+        let id = self.ui.tree.nodes[node as usize].id;
+        let o = self.ui.tree.add(node, Kind::Overlay { anchor }, Some(id.mix(2)), Location::caller());
+        let subject = self.ui.subject;
+        f(&mut self.ui.child::<S>(o, subject));
+    }
+
     /// Runs `cmd` when the shape named `key` is pressed: by a click, or by the arrows and Return once the canvas is reached.
     pub fn press<M>(&mut self, key: u64, cmd: impl Bind<C, S, M>) {
         if let Some(cmd) = cmd.bind(self.ui.subject) {

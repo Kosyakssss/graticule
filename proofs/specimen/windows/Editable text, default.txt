@@ -18,7 +18,7 @@ window		0 0 120 30
           column		2 10 14 1	
             text	Live	2 10 14 1	muted
           column		18 10 98 1	
-            editable text	Untitled	18 10 98 1	holds “Groceries”
+            editable text	Untitled	18 10 11 1	holds “Groceries”
       list item		2 11 114 1	
         text	It types into a Text in the facts, an edit a word at a time, like any field. Return finishes the edit and leaves it.	2 11 80 1	
       list item		2 12 114 1	

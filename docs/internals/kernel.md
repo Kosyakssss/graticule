@@ -335,7 +335,7 @@ The kernel changes the app's facts in exactly one way: it sends `Edit` through t
 1. A key reaches the focused field. The field's editing model (Feedreader's `field.rs`, moved in with the macOS key bindings and its law, §18) computes the splice and the new caret from the current text.
 2. The kernel sends `Cmd::Edit(Edit { path: Todo::draft, change: Text(splice), gesture })`.
 3. `available` says `Yes`; `update` calls `edit.apply(self)`; `Text` journals the splice.
-4. The kernel gives an edit the gesture id of the one before it when it is the same field, the same kind (typing or deleting) and no word boundary has passed; moving the caret, pasting, cutting and anything else start a new one. On commit, Ledger merges steps with the same gesture id, so a word is one undo step, and a slider's drag merges the same way.
+4. The kernel gives an edit the gesture id of the one before it when it is the same field, the same kind (typing or deleting) and no word boundary has passed; moving the caret, pasting, cutting and anything else start a new one. On commit, Ledger merges steps with the same gesture id, so a word is one undo step. A slider needs no merging: while it is dragged the kernel only draws where the handle would land, and sets the number once, when it is let go.
 5. The kernel moves the caret to where the field computed, or clamps it if the app didn't apply the edit.
 
 The input method's unfinished text (preedit) is the kernel's, not a fact; only committed text becomes an edit. Return in a single-line field runs the field's `on_submit` command.
@@ -343,6 +343,10 @@ The input method's unfinished text (preedit) is the kernel's, not a fact; only c
 ### 11.3 The caret belongs to the field
 
 The caret and the field's own text selection are state that only the field needs, so they are the kernel's, kept by the field's id, which is its path (§5.2), as spec §3.2 says of component state. When a `Text` changes under a caret (a command's `take()`, an undo, sync), the kernel moves the caret through the splice. Undo steps record the caret with the focus, so undoing typing puts the caret back. `api.md`'s sentence that `Text` is "a value with a caret and a selection" changes accordingly (§16).
+
+### 11.4 A number field's draft
+
+A number field edits a whole number, not a `Text`, so what a person types (`12*4+3`, or half of it) has nowhere to go in the facts. The kernel keeps it as the field's draft, by the field's id, beside the caret, and draws it in place of the number. Nothing in the facts changes while typing, so undo never sees a half-typed sum. Return, an arrow, or leaving the field works the draft out and sets the number by one edit; Escape drops it. A draft is settled after every key, pointer press and accessibility action, whichever moved the focus away, so leaving by Tab, by a click or by automation all count. A draft that doesn't work out to a whole number within the bounds is said and dropped.
 
 ## 12. Effects
 

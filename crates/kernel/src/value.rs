@@ -132,7 +132,7 @@ macro_rules! integer {
     )*};
 }
 
-integer!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
+integer!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, i128);
 
 /// A count with its thousands grouped: 1,284.
 pub fn grouped(n: impl Integer) -> String {

@@ -118,6 +118,8 @@ The first wave of further components is in Specimen, each on its own page: headi
 
 Fields now come in four shapes: one line, a search field with a magnifying glass that Escape empties, a text area of several lines that wraps and grows as you type, and text that reads as text until you click it and then becomes a field, for renaming things where they are.
 
+Numbers have fields of their own. You can type a sum such as 12*4+3 and the field works it out when you press Return or move on; the arrows step it by one, and Escape takes back what you typed. A slider sets a number by dragging a handle along a track, with the number written after it. A code field shows one box per character, for the six digits a sign-in sends.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

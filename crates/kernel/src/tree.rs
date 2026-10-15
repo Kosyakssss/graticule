@@ -96,6 +96,10 @@ pub enum Holds {
     Lines { rows: u16 },
     /// Text that reads as text and becomes a field when it is clicked or reached with Tab.
     Inline,
+    /// A whole number, typed as an expression and stepped with the arrows.
+    Number,
+    /// A code of `length` characters, one to a box.
+    Code { length: u8 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -149,6 +153,7 @@ pub enum Kind {
     PageLink { on: bool },
     Overflow,
     Places,
+    Slider { at: u16, label: u8 },
     More,
 }
 
@@ -180,6 +185,7 @@ impl Kind {
                 | Kind::Opener { .. }
                 | Kind::PageLink { .. }
                 | Kind::More
+                | Kind::Slider { .. }
         )
     }
 
@@ -219,6 +225,8 @@ impl Kind {
             Kind::Field { holds: Holds::Lines { .. } } => "text area",
             Kind::Field { holds: Holds::Search } => "search field",
             Kind::Field { holds: Holds::Inline } => "editable text",
+            Kind::Field { holds: Holds::Number } => "number field",
+            Kind::Field { holds: Holds::Code { .. } } => "code field",
             Kind::Field { .. } => "text field",
             Kind::Check { .. } => "checkbox",
             Kind::Link => "link",
@@ -263,6 +271,7 @@ impl Kind {
             Kind::PageLink { .. } => "page link",
             Kind::Overflow => "overflow",
             Kind::Places => "navigation",
+            Kind::Slider { .. } => "slider",
             Kind::More => "more",
         }
     }
@@ -396,6 +405,8 @@ pub struct Tree<C> {
     pub files: Vec<(u32, Takes<C>)>,
     /// The lists whose rows can be dragged to a new place, each with the command a move makes from the row's key and the place it goes.
     pub moves: Vec<(u32, Mover<C>)>,
+    /// The number fields and sliders, each with the least and most its number can be.
+    pub numbers: Vec<(u32, i128, i128)>,
 }
 
 impl<C> Default for Tree<C> {
@@ -413,6 +424,7 @@ impl<C> Default for Tree<C> {
             only_changed: false,
             files: Vec::new(),
             moves: Vec::new(),
+            numbers: Vec::new(),
         }
     }
 }
@@ -426,6 +438,7 @@ impl<C> Tree<C> {
         self.sets.clear();
         self.files.clear();
         self.moves.clear();
+        self.numbers.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;
@@ -435,6 +448,11 @@ impl<C> Tree<C> {
         self.clear();
         self.nodes.push(Node::new(Id::ROOT, NONE, Kind::Root, Location::caller()));
         0
+    }
+
+    /// The least and most the number of a number field or slider can be.
+    pub fn bounds(&self, node: u32) -> Option<(i128, i128)> {
+        self.numbers.iter().find(|(n, ..)| *n == node).map(|&(_, least, most)| (least, most))
     }
 
     pub fn str(&self, r: Range32) -> &str {

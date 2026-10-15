@@ -1,0 +1,55 @@
+window		0 0 120 30	
+  page	Number field	0 0 120 24	
+    list		2 3 116 20	18 items
+      list item		2 3 114 1	
+        text	A whole number in the facts, typed as a number or as a sum and stepped by one with the arrows.	2 3 72 1	
+      list item		2 4 114 1	
+      list item		2 5 114 1	
+        heading	Use it for	2 5 7 1	strong
+      list item		2 6 114 1	
+        text	A count or an amount a person knows or works out: copies to print, a width in pixels, a price in cents.	2 6 75 1	
+      list item		2 7 114 1	
+      list item		2 8 114 1	
+        heading	Code	2 8 4 1	strong
+      list item		2 9 114 1	
+        text	ui.number(Catalog::copies);	2 9 27 1	mono
+      list item		2 10 114 2	
+        group		2 10 114 2	
+          column		2 10 14 1	
+            text	Live	2 10 14 1	muted
+          column		18 10 98 2	
+            labelled	Copies	18 10 98 2	
+              number field		18 11 16 1	holds “1,284”
+      list item		2 12 114 3	
+        text	The fact is a whole number, such as a u32. While a person types, what they typed is the field's own; nothing in the facts changes. Return, leaving the field, or an arrow works it out (12*4+3 comes to 51) and sets the number by one edit, one undo step. A sum that isn't a whole number, or a number past what the type holds, is said in the message line and changes nothing.	2 12 114 3	
+      list item		2 15 114 1	
+      list item		2 16 114 1	
+        heading	Keys	2 16 4 1	strong
+      list item		2 17 114 2	
+        text	The platform's own text editing. Return works out what was typed; Up and Down step the number by one; Escape puts back what was there before typing, and a second Escape leaves the field.	2 17 114 2	
+      list item		2 19 114 1	
+      list item		2 20 114 1	
+        heading	Narrow windows	2 20 14 1	strong
+      list item		2 21 114 1	
+        text	At least ten columns; a long number scrolls inside it.	2 21 39 1	
+      list item		2 22 114 1	
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Bold	46 26 6 1	
+    button	Go one level in	54 26 13 1	
+    button	Say it	69 26 7 1	unavailable (Type something first)
+    button	Back to all components	78 26 20 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

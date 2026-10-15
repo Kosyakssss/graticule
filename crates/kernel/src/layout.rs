@@ -14,6 +14,7 @@ const BUTTON_MIN: i32 = 16;
 pub const CALLOUT: i32 = 4;
 pub const SWITCH: i32 = CHECK;
 pub const CRUMB: i32 = 3;
+pub const CODE: i32 = 4;
 pub const HIDDEN: i32 = 7;
 const GAUGE: i32 = 20;
 const GAUGE_MIN: i32 = 8;
@@ -216,6 +217,12 @@ impl<'t> Layout<'t> {
                 let c = self.cols(if tree.str(n.text).is_empty() { tree.str(n.name) } else { tree.str(n.text) }, true) + 2;
                 (c.min(8), c)
             }
+            Kind::Field { holds: Holds::Number } => (10, 16),
+            Kind::Field { holds: Holds::Code { length } } => {
+                let c = (length as i32 * CODE - 1).max(1);
+                (c, c)
+            }
+            Kind::Slider { label, .. } => (13 + label as i32, 33 + label as i32),
             Kind::Field { .. } => (16, 32),
             Kind::Rule | Kind::Placeholder { .. } => (0, 0),
             Kind::Keys | Kind::Tag | Kind::Avatar => {
@@ -421,7 +428,8 @@ impl<'t> Layout<'t> {
             | Kind::Choice { .. }
             | Kind::Entry
             | Kind::Link
-            | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline }
+            | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline | Holds::Number | Holds::Code { .. } }
+            | Kind::Slider { .. }
             | Kind::Status
             | Kind::Note
             | Kind::Swatch { .. } => 1,
@@ -742,6 +750,7 @@ impl<'t> Layout<'t> {
                     | Kind::IconButton { .. }
                     | Kind::Group
                     | Kind::Opener { .. }
+                    | Kind::Field { holds: Holds::Inline | Holds::Number | Holds::Code { .. } }
             ) {
                 self.size(tree, c).1.min(area.cols)
             } else {

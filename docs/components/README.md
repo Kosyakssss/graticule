@@ -65,6 +65,9 @@ Several names on either side are the same component. They are merged into one ro
 | Text area | TextArea | TextArea | several lines, wrapped, growing with the text |
 | Search field | SearchField | InputGroup (search) | the app filters by its text (§7.4); Escape empties it |
 | Editable text | | EditableText | text that becomes a field when you act on it |
+| Number field | NumberField | NumericInput | whole numbers, typed as sums and stepped with the keys; units are not done |
+| Slider | Slider | Slider | one whole number in a range |
+| Code field | InputOTP | | one character per box |
 
 ## Wave 2: fields in full
 
@@ -72,11 +75,9 @@ These need the full field (spec §7.2, build-plan item 11): input methods, selec
 
 | Graticule | HeroUI | Blueprint | Notes |
 |---|---|---|---|
-| Number field | NumberField | NumericInput | evaluates expressions; steps with the keys |
-| Code field | InputOTP | | one character per box |
 | File field | | FileInput | opens the system's file panel |
 | Tag field | TagGroup (removable) | TagInput | |
-| Slider | Slider | Slider, RangeSlider, MultiSlider | one value, a range, or several handles |
+| Range slider | Slider (range) | RangeSlider, MultiSlider | a range, or several handles; one value is done |
 | Choice | Select (native) | HTMLSelect | grounded: a cycling value |
 
 ## Wave 3: choices that open

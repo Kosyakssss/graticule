@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::grid::Area;
 use crate::ink::{Color, Ink};
-use crate::layout::{CHECK, CRUMB, MARGIN, SWITCH};
+use crate::layout::{CHECK, CODE, CRUMB, MARGIN, SWITCH};
 use crate::look::CheckMark;
 use crate::paint::Painter;
 use crate::picture::Picture;
@@ -331,6 +331,9 @@ pub fn field_width(n: &Node) -> usize {
 }
 
 fn field(p: &mut Painter, n: &Node, holds: Holds, value: &str, placeholder: &str, composing: &str, look: Look) {
+    if let Holds::Code { length } = holds {
+        return code_boxes(p, n, length, value, composing, look);
+    }
     let r = p.rect(n.area);
     let theme = p.theme;
     if holds != Holds::Inline || look.focused {
@@ -418,6 +421,61 @@ fn field(p: &mut Painter, n: &Node, holds: Holds, value: &str, placeholder: &str
         theme.rule
     };
     p.fill(Rect::new(r.x, r.bottom() - t, r.w, t), line);
+}
+
+fn code_boxes(p: &mut Painter, n: &Node, length: u8, value: &str, composing: &str, look: Look) {
+    let (theme, t, mono) = (p.theme, p.style.line(p.m), p.m.mono());
+    let ink = if n.enabled { theme.ink } else { theme.faint };
+    let caret = value[..crate::field::boundary(value, look.caret as usize)].chars().count();
+    let mut chars = value.chars().chain(composing.chars());
+    for k in 0..length as usize {
+        let r = p.rect(Area::new(n.area.col + k as i32 * CODE, n.area.row, CODE - 1, 1));
+        p.fill(r, theme.field);
+        let here = look.focused && k == caret.min(length as usize - 1);
+        let (edge, weight) = if here {
+            (theme.ink, 2.0)
+        } else if look.hovered {
+            (theme.muted, 1.0)
+        } else {
+            (theme.rule, 1.0)
+        };
+        p.fill(Rect::new(r.x, r.bottom() - t * weight, r.w, t * weight), edge);
+        if let Some(c) = chars.next() {
+            let mut buf = [0u8; 4];
+            let s = c.encode_utf8(&mut buf);
+            let w = p.advance(s, mono);
+            p.text(s, mono, ((r.x + (r.w - w) / 2.0).round(), r.y), None, ink);
+        }
+    }
+}
+
+/// Where a slider's track is: its width less the number after it.
+pub fn slider_track(n: &Node, label: u8) -> Area {
+    Area::new(n.area.col, n.area.row, (n.area.cols - 1 - label as i32).max(1), 1)
+}
+
+fn slider(p: &mut Painter, n: &Node, value: &str, at: u16, label: u8, look: Look) {
+    let cell = p.rect(slider_track(n, label));
+    let (theme, t, w) = (p.theme, p.style.line(p.m), p.m.cell_w);
+    let ink = if n.enabled { theme.ink } else { theme.faint };
+    let mid = (cell.y + p.m.cell_h / 2.0).round();
+    let x = (cell.x + (cell.w - w) * f32::from(at.min(1000)) / 1000.0).round();
+    p.fill(Rect::new(cell.x, mid - t, x - cell.x, t * 2.0), ink);
+    p.fill(Rect::new(x + w, mid - t, cell.right() - x - w, t * 2.0), theme.rule);
+    let knob = Rect::new(x, cell.y + p.m.cell_h * 0.15, w, (p.m.cell_h * 0.7).round());
+    p.fill(
+        knob,
+        if look.pressed || look.focused {
+            theme.selection
+        } else if look.hovered {
+            theme.hover
+        } else {
+            theme.bg
+        },
+    );
+    border(p, knob, if look.focused { t * 2.0 } else { t }, ink);
+    let mono = p.m.mono();
+    p.text(value, mono, (cell.right() + w, cell.y), None, theme.muted);
 }
 
 fn scrollbar(p: &mut Painter, track: Rect, first: u32, shown: u32, count: u32) {
@@ -706,6 +764,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             pick(p, &n, text, CHECK, style, ink, look);
         }
         (Layer::Over, Kind::Crumbs) => crumbs(p, tree, &n),
+        (Layer::Over, Kind::Slider { at, label }) => slider(p, &n, text, at, label, look),
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);

@@ -134,6 +134,12 @@ pub struct Catalog {
     query: Text,
     #[session]
     title: Text,
+    #[session]
+    copies: u32,
+    #[session]
+    volume: u8,
+    #[session]
+    pin: Text,
 }
 
 #[derive(Facts)]
@@ -253,10 +259,13 @@ pub enum Component {
     TextArea,
     Search,
     Editable,
+    Number,
+    Slider,
+    CodeField,
 }
 
 impl Component {
-    const ALL: [Component; 45] = [
+    const ALL: [Component; 48] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -302,6 +311,9 @@ impl Component {
         Component::TextArea,
         Component::Search,
         Component::Editable,
+        Component::Number,
+        Component::Slider,
+        Component::CodeField,
     ];
 
     fn name(self) -> &'static str {
@@ -351,6 +363,9 @@ impl Component {
             Component::TextArea => "Text area",
             Component::Search => "Search field",
             Component::Editable => "Editable text",
+            Component::Number => "Number field",
+            Component::Slider => "Slider",
+            Component::CodeField => "Code field",
         }
     }
 
@@ -401,6 +416,9 @@ impl Component {
             Component::TextArea => include_str!("../../../docs/components/text-area.md"),
             Component::Search => include_str!("../../../docs/components/search-field.md"),
             Component::Editable => include_str!("../../../docs/components/editable-text.md"),
+            Component::Number => include_str!("../../../docs/components/number-field.md"),
+            Component::Slider => include_str!("../../../docs/components/slider.md"),
+            Component::CodeField => include_str!("../../../docs/components/code-field.md"),
         }
     }
 
@@ -511,6 +529,9 @@ impl Default for Catalog {
             notes: Text::from("Milk, eggs and bread.\nAsk about the long weekend before Friday, since the office closes early that week."),
             query: Text::default(),
             title: Text::from("Groceries"),
+            copies: 1284,
+            volume: 40,
+            pin: Text::from("40"),
         }
     }
 }
@@ -904,6 +925,11 @@ impl Catalog {
             Component::Editable => {
                 ui.editable(Catalog::title, Message::from("Untitled"));
             }
+            Component::Number => ui.labelled("Copies", |ui| ui.number(Catalog::copies)),
+            Component::Slider => ui.labelled("Volume", |ui| ui.slider(Catalog::volume, 0..=100)),
+            Component::CodeField => ui.labelled("Code", |ui| {
+                ui.code_field(Catalog::pin, 6);
+            }),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);

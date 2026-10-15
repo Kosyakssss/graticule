@@ -12,6 +12,8 @@ fn role(kind: Kind) -> Role {
         Kind::ListRow { .. } => Role::ListItem,
         Kind::Field { holds: Holds::Lines { .. } } => Role::MultilineTextInput,
         Kind::Field { holds: Holds::Search } => Role::SearchInput,
+        Kind::Field { holds: Holds::Number } => Role::SpinButton,
+        Kind::Slider { .. } => Role::Slider,
         Kind::Field { .. } => Role::TextInput,
         Kind::Check { .. } => Role::CheckBox,
         Kind::Link => Role::Link,
@@ -49,7 +51,7 @@ fn role(kind: Kind) -> Role {
 /// The accessibility tree, made from the tree itself: every node with its role, its full label, its state and why it is unavailable.
 pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> TreeUpdate {
     let mut nodes = Vec::with_capacity(tree.nodes.len());
-    for n in &tree.nodes {
+    for (i, n) in tree.nodes.iter().enumerate() {
         let mut node = Node::new(role(n.kind));
         let r = m.rect(n.area);
         node.set_bounds(Bounds { x0: r.x as f64, y0: r.y as f64, x1: r.right() as f64, y1: r.bottom() as f64 });
@@ -57,6 +59,16 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
         let name = tree.str(n.name);
         match n.kind {
             Kind::Root => node.set_label(title),
+            Kind::Slider { .. } | Kind::Field { holds: Holds::Number } => {
+                node.set_value(text);
+                if let Ok(value) = crate::field::evaluate(text) {
+                    node.set_numeric_value(value);
+                }
+                if let Some((least, most)) = tree.bounds(i as u32) {
+                    node.set_min_numeric_value(least as f64);
+                    node.set_max_numeric_value(most as f64);
+                }
+            }
             Kind::Field { .. } => {
                 node.set_value(text);
                 node.set_placeholder(name);

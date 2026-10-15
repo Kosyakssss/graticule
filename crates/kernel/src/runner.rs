@@ -227,6 +227,8 @@ pub struct Runner<A: App> {
     gesture: u64,
     minimum: Option<(i32, i32)>,
     carets: HashMap<Id, Caret>,
+    drafts: HashMap<Id, String>,
+    sliding: Option<(Id, i128)>,
     kill: String,
     typing: Option<(Id, field::Kind, bool)>,
     composing: String,
@@ -306,6 +308,8 @@ impl<A: App> Runner<A> {
             gesture: 0,
             minimum: None,
             carets: HashMap::new(),
+            drafts: HashMap::new(),
+            sliding: None,
             kill: String::new(),
             typing: None,
             composing: String::new(),
@@ -869,6 +873,19 @@ impl<A: App> Runner<A> {
     fn resolve(&mut self) {
         for i in 0..self.tree.nodes.len() {
             let n = self.tree.nodes[i];
+            if n.kind == (Kind::Field { holds: Holds::Number })
+                && let Some(draft) = self.drafts.get(&n.id)
+            {
+                self.tree.nodes[i].text = self.tree.put(draft);
+            }
+            if let Kind::Slider { label, .. } = n.kind
+                && let Some((id, now)) = self.sliding
+                && id == n.id
+                && let Some((least, most)) = self.tree.bounds(i as u32)
+            {
+                self.tree.nodes[i].text = self.tree.put(&crate::value::grouped(now));
+                self.tree.nodes[i].kind = Kind::Slider { at: ((now - least) * 1000 / (most - least)) as u16, label };
+            }
             if let Some(b) = n.builtin {
                 let label = match (b, self.undo_label(), self.history.redo_label()) {
                     (Builtin::Undo, Some(step), _) => format!("Undo {step}"),
@@ -2193,6 +2210,88 @@ impl<A: App> Runner<A> {
         fired
     }
 
+    fn set_value(&mut self, path: ErasedPath, value: Value, said: String) -> bool {
+        self.gesture += 1;
+        let Some(cmd) = <A::Cmd as Commands<A>>::edit(Edit::new(path, Change::Set(value), self.gesture)) else { return false };
+        self.naming = Some(said);
+        let ran = self.run(cmd);
+        self.naming = None;
+        ran
+    }
+
+    fn set_number(&mut self, i: u32, whole: i128) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let (Some(path), Some((least, most))) = (n.path, self.tree.bounds(i)) else { return false };
+        if whole < least {
+            return self.say(Message::plain(format!("The least it can be is {}", crate::value::grouped(least))));
+        }
+        if whole > most {
+            return self.say(Message::plain(format!("The most it can be is {}", crate::value::grouped(most))));
+        }
+        if crate::field::evaluate(self.tree.str(n.text)).ok() == Some(whole as f64) && !self.drafts.contains_key(&n.id) {
+            return true;
+        }
+        self.drafts.remove(&n.id);
+        self.carets.remove(&n.id);
+        let value = if least < 0 { Value::Int(whole as i64) } else { Value::UInt(whole as u64) };
+        self.set_value(path, value, format!("Set to {}", crate::value::grouped(whole)))
+    }
+
+    fn work_out(&mut self, i: u32) -> Option<i128> {
+        let n = self.tree.nodes[i as usize];
+        let text = self.drafts.get(&n.id).cloned().unwrap_or_else(|| self.tree.str(n.text).to_string());
+        match field::evaluate(&text) {
+            Ok(value) if (value - value.round()).abs() < 1e-9 => Some(value.round() as i128),
+            Ok(_) => {
+                self.say(Message::from("That isn't a whole number"));
+                None
+            }
+            Err(why) => {
+                self.say(Message::from(why));
+                None
+            }
+        }
+    }
+
+    fn settle_drafts(&mut self) -> bool {
+        let left: Vec<Id> = self.drafts.keys().filter(|&&id| Some(id) != self.focus).copied().collect();
+        for id in &left {
+            if let Some(i) = self.tree.find(*id)
+                && let Some(whole) = self.work_out(i)
+            {
+                self.set_number(i, whole);
+            }
+            self.drafts.remove(id);
+            self.stale = true;
+        }
+        !left.is_empty()
+    }
+
+    fn slide_key(&mut self, i: u32, key: Key) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let (Some((least, most)), Ok(now)) = (self.tree.bounds(i), field::evaluate(self.tree.str(n.text))) else { return false };
+        let (now, page) = (now.round() as i128, ((most - least) / 10).max(1));
+        let to = match key {
+            Key::Left | Key::Down => now - 1,
+            Key::Right | Key::Up => now + 1,
+            Key::PageDown => now - page,
+            Key::PageUp => now + page,
+            Key::Home => least,
+            Key::End => most,
+            _ => return false,
+        };
+        self.set_number(i, to.clamp(least, most))
+    }
+
+    fn slid_to(&self, frame: &Frame, i: u32) -> Option<i128> {
+        let n = self.tree.nodes[i as usize];
+        let (Kind::Slider { label, .. }, Some((least, most)), Some((x, _))) = (n.kind, self.tree.bounds(i), frame.pointer) else { return None };
+        let (m, track) = (frame.metrics, crate::components::slider_track(&n, label));
+        let r = m.rect(track);
+        let share = ((x - r.x - m.cell_w / 2.0) / (r.w - m.cell_w).max(1.0)).clamp(0.0, 1.0) as f64;
+        Some(least + ((most - least) as f64 * share).round() as i128)
+    }
+
     fn fire_once(&mut self, i: u32) -> bool {
         let n = self.tree.nodes[i as usize];
         let why = self.tree.str(n.reason).to_string();
@@ -2212,12 +2311,7 @@ impl<A: App> Runner<A> {
             && let Some(path) = n.path
         {
             let (value, said) = self.tree.sets[n.set as usize].clone();
-            self.gesture += 1;
-            let Some(cmd) = <A::Cmd as Commands<A>>::edit(Edit::new(path, Change::Set(value), self.gesture)) else { return false };
-            self.naming = Some(said);
-            let ran = self.run(cmd);
-            self.naming = None;
-            return ran;
+            return self.set_value(path, value, said);
         }
         if n.kind == Kind::More {
             return self.open_more(i);
@@ -2438,6 +2532,11 @@ impl<A: App> Runner<A> {
 
     /// Handles a key and the text it types: the palette when it is open, then the focused field, then a focused control's own keys, then the keymap, then the platform's conventions.
     pub fn press(&mut self, chord: Chord, text: Option<&str>) -> bool {
+        let pressed = self.key_down(chord, text);
+        self.settle_drafts() || pressed
+    }
+
+    fn key_down(&mut self, chord: Chord, text: Option<&str>) -> bool {
         if self.stale {
             self.build();
         }
@@ -2484,6 +2583,27 @@ impl<A: App> Runner<A> {
             let n = self.tree.nodes[i as usize];
             let holds = if let Kind::Field { holds } = n.kind { holds } else { Holds::Line };
             let several = matches!(holds, Holds::Lines { .. });
+            if holds == Holds::Number && chord.mods == Mods::default() {
+                match chord.key {
+                    Key::Enter | Key::Up | Key::Down => {
+                        let by = match chord.key {
+                            Key::Up => 1,
+                            Key::Down => -1,
+                            _ => 0,
+                        };
+                        if let Some(whole) = self.work_out(i) {
+                            self.set_number(i, whole + by);
+                        }
+                        return true;
+                    }
+                    Key::Escape if self.drafts.remove(&n.id).is_some() => {
+                        self.carets.remove(&n.id);
+                        self.stale = true;
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
             if holds == Holds::Search && chord.key == Key::Escape && chord.mods == Mods::default() && !n.text.is_empty() {
                 let len = self.tree.str(n.text).len();
                 return self.splice(i, 0..len, String::new(), 0, field::Kind::Alone);
@@ -2503,6 +2623,15 @@ impl<A: App> Runner<A> {
                 }
                 return done;
             }
+        }
+        if self.pending.is_empty()
+            && typing
+            && chord.mods == Mods::default()
+            && let Some(i) = self.focused_control()
+            && matches!(self.tree.nodes[i as usize].kind, Kind::Slider { .. })
+            && matches!(chord.key, Key::Left | Key::Right | Key::Up | Key::Down | Key::PageUp | Key::PageDown | Key::Home | Key::End)
+        {
+            return self.slide_key(i, chord.key);
         }
         let control = if self.pending.is_empty() && self.count == 0 && chord.mods == Mods::default() && matches!(chord.key, Key::Enter | Key::Char(' ')) { self.focused_control() } else { None };
         if typing && let Some(i) = control {
@@ -2657,8 +2786,25 @@ impl<A: App> Runner<A> {
         }
     }
 
-    fn splice(&mut self, i: u32, range: std::ops::Range<usize>, text: String, caret: usize, kind: field::Kind) -> bool {
+    fn splice(&mut self, i: u32, range: std::ops::Range<usize>, mut text: String, mut caret: usize, kind: field::Kind) -> bool {
         let n = self.tree.nodes[i as usize];
+        if n.kind == (Kind::Field { holds: Holds::Number }) {
+            let mut draft = self.tree.str(n.text).to_string();
+            draft.replace_range(range, &text);
+            self.drafts.insert(n.id, draft);
+            self.carets.insert(n.id, Caret::at(caret));
+            self.stale = true;
+            return true;
+        }
+        if let Kind::Field { holds: Holds::Code { length } } = n.kind {
+            let now = self.tree.str(n.text);
+            let room = (length as usize).saturating_sub(now.chars().count() - now[range.clone()].chars().count());
+            text = text.chars().take(room).collect();
+            if text.is_empty() && range.is_empty() {
+                return true;
+            }
+            caret = range.start + text.len();
+        }
         let Some(path) = n.path else { return false };
         let space = text.starts_with(char::is_whitespace);
         let continues = kind != field::Kind::Alone && matches!(self.typing, Some((id, k, after_space)) if id == n.id && k == kind && (after_space || !space));
@@ -2991,6 +3137,10 @@ impl<A: App> Runner<A> {
         let r = m.rect(n.area);
         let mono = m.mono();
         let holds = if let Kind::Field { holds } = n.kind { holds } else { Holds::Line };
+        if let Holds::Code { .. } = holds {
+            let k = ((x - r.x) / (m.cell_w * crate::layout::CODE as f32)).max(0.0) as usize;
+            return value.char_indices().nth(k).map_or(value.len(), |(at, _)| at);
+        }
         let tx = r.x + m.cell_w * crate::components::field_inset(holds);
         let several = matches!(holds, Holds::Lines { .. });
         let row = if several {
@@ -3193,17 +3343,25 @@ impl<A: App> Face for Runner<A> {
 
     fn act(&mut self, node: u64, action: accesskit::Action) -> bool {
         let Some(i) = self.tree.find(Id(node)) else { return false };
-        match action {
+        let acted = match action {
             accesskit::Action::Click => self.activate(i, Mods::default()),
             accesskit::Action::Focus => {
                 self.focus_on(Id(node), false);
                 true
             }
             _ => false,
-        }
+        };
+        self.settle_drafts() || acted
     }
 
     fn input(&mut self, input: Input, frame: &mut Frame) -> bool {
+        let handled = self.handle(input, frame);
+        self.settle_drafts() || handled
+    }
+}
+
+impl<A: App> Runner<A> {
+    fn handle(&mut self, input: Input, frame: &mut Frame) -> bool {
         if !self.marked.is_empty() && matches!(input, Input::Key(_) | Input::Press { .. } | Input::Wheel { .. } | Input::Ime(_)) {
             self.marked.clear();
             self.stale = true;
@@ -3221,6 +3379,14 @@ impl<A: App> Face for Runner<A> {
                     let moved = reading.head != head;
                     reading.head = head;
                     return moved;
+                }
+                if let Some((id, was)) = self.sliding
+                    && let Some(i) = self.tree.find(id)
+                {
+                    let now = self.slid_to(frame, i).unwrap_or(was);
+                    self.sliding = Some((id, now));
+                    self.stale |= now != was;
+                    return now != was;
                 }
                 if let Some(id) = self.drag
                     && let Some(i) = self.tree.find(id)
@@ -3274,6 +3440,14 @@ impl<A: App> Face for Runner<A> {
                 }
                 let Some(i) = self.pressed.and_then(|id| self.tree.find(id)) else { return false };
                 let n = self.tree.nodes[i as usize];
+                if matches!(n.kind, Kind::Slider { .. })
+                    && let Some(now) = self.slid_to(frame, i)
+                {
+                    self.focus_on(n.id, false);
+                    self.sliding = Some((n.id, now));
+                    self.stale = true;
+                    return true;
+                }
                 if matches!(n.kind, Kind::Field { .. }) && n.path.is_some() {
                     self.reading = None;
                     let at = self.caret_at(frame.text, frame.metrics, i, frame.pointer.unwrap_or_default());
@@ -3294,6 +3468,13 @@ impl<A: App> Face for Runner<A> {
             }
             Input::Release { button: Button::Left } => {
                 self.drag = None;
+                if let Some((id, now)) = self.sliding.take() {
+                    self.stale = true;
+                    if let Some(i) = self.tree.find(id) {
+                        self.set_number(i, now);
+                    }
+                    return true;
+                }
                 if self.put_down() {
                     return true;
                 }

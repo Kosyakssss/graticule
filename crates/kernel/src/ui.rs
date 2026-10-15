@@ -722,6 +722,52 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.field_as(path, placeholder, Holds::Inline, Location::caller())
     }
 
+    /// A whole number at `path`, typed as a sum such as `12*4+3` and stepped by one with the arrows up and down. What is typed is worked out when Return is pressed or the field is left, and the number is set by one `Edit`; Escape puts back what was there.
+    #[track_caller]
+    pub fn number<F: Field, T: Setting>(&mut self, path: FactPath<F, T>) {
+        let Some((now, least, most)) = self.whole(path) else { return };
+        let erased = path.erased();
+        let i = self.tree.add(self.parent, Kind::Field { holds: Holds::Number }, Some(Id::ROOT.mix(erased.hash64())), Location::caller());
+        let r = self.tree.put(&grouped(now));
+        let node = &mut self.tree.nodes[i as usize];
+        (node.subject, node.path, node.text) = (self.subject, Some(erased), r);
+        self.tree.numbers.push((i, least, most));
+    }
+
+    /// A whole number at `path` within `range`, as a handle on a track with the number after it. Dragging the handle sets the number when it is let go, one `Edit`; the arrows step it by one, Page Up and Page Down by a tenth of the range, and Home and End go to its ends.
+    #[track_caller]
+    pub fn slider<F: Field, T: Setting>(&mut self, path: FactPath<F, T>, range: std::ops::RangeInclusive<i64>) {
+        let Some((now, least, most)) = self.whole(path) else { return };
+        let (least, most) = (least.max(*range.start() as i128), most.min(*range.end() as i128));
+        if least >= most {
+            return;
+        }
+        let at = ((now.clamp(least, most) - least) * 1000 / (most - least)) as u16;
+        let label = grouped(least).chars().count().max(grouped(most).chars().count()) as u8;
+        let erased = path.erased();
+        let i = self.tree.add(self.parent, Kind::Slider { at, label }, Some(Id::ROOT.mix(erased.hash64())), Location::caller());
+        let r = self.tree.put(&grouped(now));
+        let node = &mut self.tree.nodes[i as usize];
+        (node.subject, node.path, node.text, node.span) = (self.subject, Some(erased), r, crate::tree::Fill.min(13 + label as i32));
+        self.tree.numbers.push((i, least, most));
+    }
+
+    /// A code of `length` characters that types into the `Text` at `path`, one character to a box, such as the six digits a sign-in sends. Typing past the last box does nothing.
+    #[track_caller]
+    pub fn code_field<F: Field>(&mut self, path: FactPath<F, Text>, length: u8) -> Placed<'_, 'a, C, S> {
+        self.field_as(path, Message::plain(format!("A code of {} characters", length.max(1))), Holds::Code { length: length.max(1) }, Location::caller())
+    }
+
+    fn whole<F: Field, T: Setting>(&self, path: FactPath<F, T>) -> Option<(i128, i128, i128)> {
+        let Control::Whole { least, most } = T::control() else { return None };
+        let now = match self.facts::<F>().and_then(|f| path.get(f)).map(Field::value)? {
+            ledger::Value::Int(n) => n as i128,
+            ledger::Value::UInt(n) => n as i128,
+            _ => return None,
+        };
+        Some((now, least, most))
+    }
+
     fn field_as<F: Field>(&mut self, path: FactPath<F, Text>, placeholder: Message, holds: Holds, at: &'static Location<'static>) -> Placed<'_, 'a, C, S> {
         let erased = path.erased();
         let id = Id::ROOT.mix(erased.hash64());
@@ -734,7 +780,7 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.tree.nodes[i as usize].text = r;
         let r = self.tree.put(placeholder.as_str());
         self.tree.nodes[i as usize].name = r;
-        if holds != Holds::Inline {
+        if !matches!(holds, Holds::Inline | Holds::Code { .. }) {
             self.tree.nodes[i as usize].span = crate::tree::Fill.min(16);
         }
         Placed { ui: self, node: i }

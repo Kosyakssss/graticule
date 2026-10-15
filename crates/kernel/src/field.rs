@@ -338,3 +338,66 @@ pub fn key_rows(text: &str, at: Caret, key: Key, m: Mods, kill: &mut String, wid
         _ => self::key(text, at, key, m, kill),
     }
 }
+
+/// What an expression a person typed comes to: whole and decimal numbers with `+`, `-`, `*`, `/` and brackets, the usual way round. Spaces, commas and underscores between digits are ignored, so a number as it is shown reads back.
+pub fn evaluate(text: &str) -> Result<f64, &'static str> {
+    let tokens: Vec<char> = text.chars().filter(|c| !matches!(c, ' ' | ',' | '_' | '\u{2009}' | '\u{202f}')).collect();
+    if tokens.is_empty() {
+        return Err("There is no number");
+    }
+    let mut at = 0;
+    let value = sum(&tokens, &mut at)?;
+    if at < tokens.len() {
+        return Err("That isn't a number or a sum");
+    }
+    if value.is_finite() { Ok(value) } else { Err("That comes to no number, as dividing by zero does") }
+}
+
+fn sum(t: &[char], at: &mut usize) -> Result<f64, &'static str> {
+    let mut value = product(t, at)?;
+    while let Some(&op @ ('+' | '-')) = t.get(*at) {
+        *at += 1;
+        let next = product(t, at)?;
+        value = if op == '+' { value + next } else { value - next };
+    }
+    Ok(value)
+}
+
+fn product(t: &[char], at: &mut usize) -> Result<f64, &'static str> {
+    let mut value = unary(t, at)?;
+    while let Some(&op @ ('*' | '×' | '/' | '÷')) = t.get(*at) {
+        *at += 1;
+        let next = unary(t, at)?;
+        value = if matches!(op, '*' | '×') { value * next } else { value / next };
+    }
+    Ok(value)
+}
+
+fn unary(t: &[char], at: &mut usize) -> Result<f64, &'static str> {
+    match t.get(*at) {
+        Some('-' | '−') => {
+            *at += 1;
+            Ok(-unary(t, at)?)
+        }
+        Some('+') => {
+            *at += 1;
+            unary(t, at)
+        }
+        Some('(') => {
+            *at += 1;
+            let value = sum(t, at)?;
+            if t.get(*at) != Some(&')') {
+                return Err("A bracket is left open");
+            }
+            *at += 1;
+            Ok(value)
+        }
+        _ => {
+            let start = *at;
+            while t.get(*at).is_some_and(|c| c.is_ascii_digit() || *c == '.') {
+                *at += 1;
+            }
+            t[start..*at].iter().collect::<String>().parse().map_err(|_| "That isn't a number or a sum")
+        }
+    }
+}

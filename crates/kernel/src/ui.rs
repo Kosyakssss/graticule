@@ -918,7 +918,19 @@ impl<'a, C, S> Ui<'a, C, S> {
     /// Every setting of the form at `path`, each with the control its type asks for: a switch, a row of options, a stepper or a field. Each change arrives in `update` as an `Edit` and is one undo step.
     #[track_caller]
     pub fn form<F: Field, T: Settings>(&mut self, path: FactPath<F, T>) {
+        self.form_at(path, "", Location::caller());
+    }
+
+    /// A form, as [`form`](Self::form) draws it, under a search field over the `Text` at `find`: only the settings whose labels have the letters typed, in order, show. For a form too long to look through.
+    #[track_caller]
+    pub fn form_with_search<F: Field, T: Settings>(&mut self, path: FactPath<F, T>, find: FactPath<F, Text>) {
         let at = Location::caller();
+        let words = self.facts::<F>().and_then(|f| find.get(f)).map(|t| t.as_str().to_string()).unwrap_or_default();
+        self.field_as(find, Message::from("Find a setting"), Holds::Search, at);
+        self.form_at(path, &words, at);
+    }
+
+    fn form_at<F: Field, T: Settings>(&mut self, path: FactPath<F, T>, words: &str, at: &'static Location<'static>) {
         let Some(form) = self.facts::<F>().and_then(|f| path.get(f)) else { return };
         let mut items = Vec::new();
         form.items(&mut items);
@@ -928,8 +940,10 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.tree.nodes[column as usize].span = crate::tree::Fill;
         let subject = self.subject;
         let mut ui = self.child::<S>(column, subject);
-        let shown: Vec<Item> = items.into_iter().filter(|item| !only || item.changed()).collect();
-        if shown.is_empty() {
+        let shown: Vec<Item> = items.into_iter().filter(|item| (!only || item.changed()) && crate::search::fuzzy(words, item.label).is_some()).collect();
+        if shown.is_empty() && !words.trim().is_empty() {
+            ui.muted(format!("No setting matches “{}”", words.trim()));
+        } else if shown.is_empty() {
             ui.muted("Every setting is as it was at first");
         }
         for item in shown {

@@ -173,6 +173,8 @@ pub struct Catalog {
     #[session]
     printing: Printing,
     #[session]
+    finding: Text,
+    #[session]
     attachment: Text,
     #[session]
     labels: Vec<String>,
@@ -891,6 +893,7 @@ impl Default for Catalog {
             volume: 40,
             pin: Text::from("40"),
             printing: Printing::default(),
+            finding: Text::default(),
             attachment: Text::default(),
             labels: vec!["groceries".to_string(), "weekend".to_string()],
             hours: (9, 17),
@@ -1327,7 +1330,7 @@ impl Catalog {
             Component::CodeField => ui.labelled("Code", |ui| {
                 ui.code_field(Catalog::pin, 6);
             }),
-            Component::Form => ui.form(Catalog::printing),
+            Component::Form => ui.form_with_search(Catalog::printing, Catalog::finding),
             Component::Choice => ui.choice("Show as", Catalog::shape),
             Component::FileField => ui.file_field("Attachment", Catalog::attachment),
             Component::TagField => ui.tag_field("Tags", Catalog::labels),

@@ -9,10 +9,10 @@ A page of settings or options, such as a print dialog's, where every field is so
 ## Code
 
 ```rust
-ui.form(Catalog::printing);
+ui.form_with_search(Catalog::printing, Catalog::finding);
 ```
 
-`printing` is a struct with `derive(Facts, Form)`, and each field marked `#[label("…")]` is one setting. A `bool` is a switch, an enum with `derive(Choice)` is joined toggles, a `Text` is a field, and a whole number is a number field between a lower and a raise button. Every change is one edit and one undo step, named for what it set ("Copies: 3"). The built-in commands "Show only the changed settings" and "Show every setting" narrow every form to what differs from the struct's `Default`.
+`printing` is a struct with `derive(Facts, Form)`, and each field marked `#[label("…")]` is one setting. A `bool` is a switch, an enum with `derive(Choice)` is joined toggles, a `Text` is a field, and a whole number is a number field between a lower and a raise button. Every change is one edit and one undo step, named for what it set ("Copies: 3"). The built-in commands "Show only the changed settings" and "Show every setting" narrow every form to what differs from the struct's `Default`. `ui.form(path)` draws the form alone; `ui.form_with_search` puts a search field over it, typing into the `Text` at its second path, and shows only the settings whose labels have the letters typed, in order, as the picker matches them.
 
 ## Keys
 
@@ -24,4 +24,4 @@ Each setting keeps its row; the controls inside it wrap like any row.
 
 ## Screen reader
 
-Each control is named by its setting's label.
+Each control is named by its setting's label. The search field is named "Find a setting", and when nothing matches the form says so in words.

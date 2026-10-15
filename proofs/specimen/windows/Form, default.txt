@@ -4,43 +4,40 @@ window		0 0 120 30
       list item		2 3 114 1	
         text	Settings drawn from a struct of facts: one control for each labelled field, chosen by its type.	2 3 68 1	
       list item		2 4 114 1	
-      list item		2 5 114 5	
-        group		2 5 114 5	
+      list item		2 5 114 6	
+        group		2 5 114 6	
           column		2 5 14 1	
             text	Live	2 5 14 1	muted
-          column		18 5 98 5	
-            column		18 5 98 5	
-              group		18 5 98 1	
-                text	Copies	18 5 6 1	
-                number field	Copies	26 5 16 1	holds “1”
-                button	−	44 5 4 1	
-                button	+	50 5 4 1	
+          column		18 5 98 6	
+            search field	Find a setting	18 5 98 1	
+            column		18 6 98 5	
               group		18 6 98 1	
-                text	Paper	18 6 5 1	
-                group		25 6 22 1	
-                  toggle button	A4	25 6 5 1	
-                  toggle button	Letter	30 6 9 1	
-                  toggle button	Legal	39 6 8 1	
-              switch	Print on both sides	18 7 98 1	
-              labelled	Header	18 8 98 2	
-                text field		18 9 98 1	
-      list item		2 10 114 1	
+                text	Copies	18 6 6 1	
+                number field	Copies	26 6 16 1	holds “1”
+                button	−	44 6 4 1	
+                button	+	50 6 4 1	
+              group		18 7 98 1	
+                text	Paper	18 7 5 1	
+                group		25 7 22 1	
+                  toggle button	A4	25 7 5 1	
+                  toggle button	Letter	30 7 9 1	
+                  toggle button	Legal	39 7 8 1	
+              switch	Print on both sides	18 8 98 1	
+              labelled	Header	18 9 98 2	
+                text field		18 10 98 1	
       list item		2 11 114 1	
-        heading	Use it for	2 11 7 1	strong
       list item		2 12 114 1	
-        text	A page of settings or options, such as a print dialog's, where every field is something a person sets.	2 12 74 1	
+        heading	Use it for	2 12 7 1	strong
       list item		2 13 114 1	
+        text	A page of settings or options, such as a print dialog's, where every field is something a person sets.	2 13 74 1	
       list item		2 14 114 1	
-        heading	Code	2 14 4 1	strong
       list item		2 15 114 1	
-        text	ui.form(Catalog::printing);	2 15 27 1	mono
-      list item		2 16 114 4	
-        text	printing is a struct with derive(Facts, Form), and each field marked #[label("…")] is one setting. A bool is a switch, an enum with derive(Choice) is joined toggles, a Text is a field, and a whole number is a number field between a lower and a raise button. Every change is one edit and one undo step, named for what it set ("Copies: 3"). The built-in commands "Show only the changed settings" and "Show every setting" narrow every form to what differs from the struct's Default.	2 16 114 4	
-      list item		2 20 114 1	
-      list item		2 21 114 1	
-        heading	Keys	2 21 4 1	strong
+        heading	Code	2 15 4 1	strong
+      list item		2 16 114 1	
+        text	ui.form_with_search(Catalog::printing, Catalog::finding);	2 16 57 1	mono
+      list item		2 17 114 5	
+        text	printing is a struct with derive(Facts, Form), and each field marked #[label("…")] is one setting. A bool is a switch, an enum with derive(Choice) is joined toggles, a Text is a field, and a whole number is a number field between a lower and a raise button. Every change is one edit and one undo step, named for what it set ("Copies: 3"). The built-in commands "Show only the changed settings" and "Show every setting" narrow every form to what differs from the struct's Default. ui.form(path) draws the form alone; ui.form_with_search puts a search field over it, typing into the Text at its second path, and shows only the settings whose labels have the letters typed, in order, as the picker matches them.	2 17 114 5	
       list item		2 22 114 1	
-        text	Each control's own: Tab moves between them.	2 22 35 1	
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

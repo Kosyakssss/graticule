@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
 
+mod fonts;
+mod sha256;
+
 const USAGE: &str = "BD-01 Bindery: starts Graticule apps and runs the development loop
 
   bindery new FOLDER
@@ -23,6 +26,12 @@ const USAGE: &str = "BD-01 Bindery: starts Graticule apps and runs the developme
       in English to locales/en.ftl for translators, and says, for each
       translation beside it, which texts it lacks and which of its ids
       no longer have a source
+
+  bindery fonts [--from FOLDER]
+      fetches the Plex fonts too large for the repository (Japanese,
+      Korean, Simplified and Traditional Chinese) into the folder every
+      Graticule app reads them from, each checked against its pinned
+      checksum; --from takes them from a folder instead of the internet
 ";
 
 const RELOAD: &str = "GRATICULE_RELOAD";
@@ -41,7 +50,7 @@ fn main() {
     for a in &args {
         if skip {
             skip = false;
-        } else if a == "-p" || a == "--bin" {
+        } else if a == "-p" || a == "--bin" || a == "--from" {
             skip = true;
         } else {
             positional.push(a.as_str());
@@ -52,6 +61,7 @@ fn main() {
             Some(folder) => new(Path::new(folder)),
             None => Err("where? bindery new FOLDER".into()),
         },
+        Some("fonts") => fonts::fetch(flag("--from").as_deref().map(Path::new)),
         Some("messages") => messages(Path::new(positional.first().copied().unwrap_or("."))),
         Some("dev") => dev(Path::new(positional.first().copied().unwrap_or(".")), flag("-p").as_deref(), flag("--bin").as_deref(), &app_args),
         _ => {

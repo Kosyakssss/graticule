@@ -11,3 +11,4 @@ workspace = true
 
 [dependencies]
 messages.workspace = true
+dirs = "7.0.0"

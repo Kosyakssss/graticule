@@ -12,7 +12,7 @@ mod tool;
 #[cfg(test)]
 mod laws;
 
-pub use board::{Binding, Board, End, Group, Ink, Kind, LINE, Shape, text_width};
+pub use board::{Binding, Board, End, Group, Ink, Kind, LINE, Page, Shape, text_width};
 pub use geometry::{Bounds, Geometry, Point};
 pub use index::{Entry, Index};
 pub use snap::{Gap, Guide, Snapped, snap};

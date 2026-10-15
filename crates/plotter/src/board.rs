@@ -6,12 +6,27 @@ use ledger::{Key, List, Outcome};
 use crate::geometry::{Bounds, Geometry, Point};
 use crate::order;
 
-/// A board: its shapes, the bindings between them and the groups that hold them together. Every change goes through its methods, which keep bound arrows on what they point at and groups whole within the same change, so one undo takes back all of it.
+/// A board: its shapes, the bindings between them, the groups that hold them together and the pages they are on. Every change goes through its methods, which keep bound arrows on what they point at and groups whole within the same change, so one undo takes back all of it.
 #[derive(Facts, Default)]
 pub struct Board {
     pub shapes: List<Shape>,
     pub bindings: List<Binding>,
     pub groups: List<Group>,
+    pub pages: List<Page>,
+}
+
+/// One page of a board: its name and its place among the pages, a key from [`order::between`]. A board with one page needs no record for it; that page is [`Page::FIRST`], which is also where shapes saved before there were pages are.
+#[derive(Facts, Debug)]
+pub struct Page {
+    #[key]
+    pub id: Key<Page>,
+    pub name: String,
+    pub index: String,
+}
+
+impl Page {
+    /// The page every board starts with.
+    pub const FIRST: Key<Page> = Key::fixed(0);
 }
 
 /// One shape on the board. Its box is `x`, `y`, `w` and `h` in page units; an arrow runs from (`x`, `y`) to (`x + w`, `y + h`), so its width and height may be negative.
@@ -32,6 +47,8 @@ pub struct Shape {
     pub group: Option<Key<Group>>,
     /// The frame it is in, if any.
     pub frame: Option<Key<Shape>>,
+    /// The page it is on.
+    pub page: Key<Page>,
 }
 
 /// Shapes held together, so choosing, moving, copying or deleting one does it to them all. A group may sit in another, and always holds at least two things: shapes, groups or both.
@@ -106,12 +123,12 @@ pub enum End {
 
 impl Shape {
     pub fn new(id: Key<Shape>, kind: Kind, bounds: Bounds) -> Self {
-        Shape { id, index: String::new(), x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, kind, ink: Ink::default(), locked: false, group: None, frame: None }
+        Shape { id, index: String::new(), x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, kind, ink: Ink::default(), locked: false, group: None, frame: None, page: Page::FIRST }
     }
 
     /// An arrow from `from` to `to`.
     pub fn arrow(id: Key<Shape>, from: Point, to: Point) -> Self {
-        Shape { id, index: String::new(), x: from.x, y: from.y, w: to.x - from.x, h: to.y - from.y, kind: Kind::Arrow, ink: Ink::default(), locked: false, group: None, frame: None }
+        Shape { id, index: String::new(), x: from.x, y: from.y, w: to.x - from.x, h: to.y - from.y, kind: Kind::Arrow, ink: Ink::default(), locked: false, group: None, frame: None, page: Page::FIRST }
     }
 
     pub fn bounds(&self) -> Bounds {
@@ -169,8 +186,93 @@ impl Board {
         shapes
     }
 
-    /// Puts a shape on top of the stack.
+    /// The shapes on `page`, from the bottom of the stack to the top, found through the list's links.
+    pub fn on(&self, page: Key<Page>) -> Vec<&Shape> {
+        let mut shapes: Vec<&Shape> = self.shapes.linked(Shape::page, page).collect();
+        shapes.sort_by(|a, b| a.index.cmp(&b.index));
+        shapes
+    }
+
+    /// Whether nothing is on `page`.
+    pub fn blank(&self, page: Key<Page>) -> bool {
+        self.shapes.linked(Shape::page, page).next().is_none()
+    }
+
+    /// The pages in their order. A board with no records has one page, [`Page::FIRST`], and this is empty.
+    pub fn pages_in_order(&self) -> Vec<&Page> {
+        let mut pages: Vec<&Page> = self.pages.iter().collect();
+        pages.sort_by(|a, b| a.index.cmp(&b.index));
+        pages
+    }
+
+    /// `page` if the board has it, or else its first page: what to show when the page someone was on has gone.
+    pub fn showing(&self, page: Key<Page>) -> Key<Page> {
+        match self.pages.has(page) || (self.pages.is_empty() && page == Page::FIRST) {
+            true => page,
+            false => self.pages_in_order().first().map_or(Page::FIRST, |p| p.id),
+        }
+    }
+
+    /// Adds a page named `name` after the others. The first page gets its record then too, named `first`, since a board of several pages has a record for each.
+    pub fn add_page(&mut self, id: Key<Page>, name: &str, first: &str) -> Outcome {
+        if self.pages.is_empty() {
+            let _ = self.pages.push(Page { id: Page::FIRST, name: first.to_string(), index: order::between(None, None) });
+        }
+        let last = self.pages_in_order().last().map(|p| p.index.clone());
+        self.pages.push(Page { id, name: name.to_string(), index: order::between(last.as_deref(), None) })
+    }
+
+    /// Gives a page a new name.
+    pub fn rename_page(&mut self, id: Key<Page>, name: &str) -> Outcome {
+        if self.pages.is_empty() && id == Page::FIRST {
+            return self.pages.push(Page { id, name: name.to_string(), index: order::between(None, None) });
+        }
+        match self.pages.find(id).is_some_and(|p| p.name != name) {
+            true => self.pages.change(id, |p| p.name = name.to_string()),
+            false => Outcome::Nothing,
+        }
+    }
+
+    /// Takes a page off the board with everything on it. The last page stays.
+    pub fn remove_page(&mut self, id: Key<Page>) -> Outcome {
+        if self.pages.len() < 2 || !self.pages.has(id) {
+            return Outcome::Nothing;
+        }
+        let on: Vec<Key<Shape>> = self.shapes.linked(Shape::page, id).map(|s| s.id).collect();
+        let _ = self.delete(&on);
+        self.pages.remove(id)
+    }
+
+    /// Makes it what `other` is, every shape, binding, group and page, as one change: what opening a board does.
+    pub fn replace(&mut self, other: &Board) -> Outcome {
+        let keys: Vec<Key<Shape>> = self.shapes.keys().collect();
+        let _ = self.delete(&keys);
+        let groups: Vec<Key<Group>> = self.groups.keys().collect();
+        for g in groups {
+            let _ = self.groups.remove(g);
+        }
+        let pages: Vec<Key<Page>> = self.pages.keys().collect();
+        for p in pages {
+            let _ = self.pages.remove(p);
+        }
+        for shape in other.shapes.iter() {
+            let _ = self.shapes.push(shape.clone());
+        }
+        for binding in other.bindings.iter() {
+            let _ = self.bindings.push(binding.clone());
+        }
+        for group in other.groups.iter() {
+            let _ = self.groups.push(group.clone());
+        }
+        for page in other.pages.iter() {
+            let _ = self.pages.push(page.clone());
+        }
+        Outcome::Changed
+    }
+
+    /// Puts a shape on top of the stack, on its page, or on the first page if the board has no such page.
     pub fn add(&mut self, mut shape: Shape) -> Outcome {
+        shape.page = self.showing(shape.page);
         let top = self.shapes.iter().map(|s| s.index.as_str()).max().map(str::to_string);
         shape.index = order::between(top.as_deref(), None);
         self.shapes.push(shape)
@@ -211,7 +313,7 @@ impl Board {
         self.carried(keys, |_| true)
     }
 
-    /// Puts shapes in the frame `into`, or on the board itself, leaving those whose frame is among `keys`, since they go with it. A frame can't go inside itself or what it holds, and only a frame holds shapes.
+    /// Puts shapes in the frame `into`, or on the board itself, leaving those whose frame is among `keys`, since they go with it, and those on another page. A frame can't go inside itself or what it holds, and only a frame holds shapes.
     pub fn reframe(&mut self, keys: &[Key<Shape>], into: Option<Key<Shape>>) -> Outcome {
         let mine: HashSet<Key<Shape>> = keys.iter().copied().collect();
         if let Some(f) = into
@@ -219,9 +321,10 @@ impl Board {
         {
             return Outcome::Nothing;
         }
+        let page = into.and_then(|f| self.shapes.find(f)).map(|f| f.page);
         let mut outcome = Outcome::Nothing;
         for &key in keys {
-            let loose = self.shapes.find(key).is_some_and(|s| !s.locked && s.frame != into && !s.frame.is_some_and(|f| mine.contains(&f)));
+            let loose = self.shapes.find(key).is_some_and(|s| !s.locked && page.is_none_or(|p| p == s.page) && s.frame != into && !s.frame.is_some_and(|f| mine.contains(&f)));
             if loose {
                 outcome = self.shapes.change(key, |s| s.frame = into);
             }
@@ -266,8 +369,8 @@ impl Board {
         part
     }
 
-    /// Puts every shape of `other` on top of the stack, in its own order, moved by `dx` and `dy`, with new keys from `key`, its bindings between them and its groups, and says what the new shapes' keys are.
-    pub fn paste(&mut self, other: &Board, dx: f64, dy: f64, mut key: impl FnMut() -> u128) -> Vec<Key<Shape>> {
+    /// Puts every shape of `other` on top of the stack on `page`, in its own order, moved by `dx` and `dy`, with new keys from `key`, its bindings between them and its groups, and says what the new shapes' keys are.
+    pub fn paste(&mut self, other: &Board, dx: f64, dy: f64, page: Key<Page>, mut key: impl FnMut() -> u128) -> Vec<Key<Shape>> {
         let regrouped: Vec<(Key<Group>, Key<Group>)> = other.groups.iter().map(|g| (g.id, Key::from_raw(key()))).collect();
         let group = |old: Option<Key<Group>>| old.and_then(|o| regrouped.iter().find(|(g, _)| *g == o)).map(|(_, n)| *n);
         for g in other.groups.iter() {
@@ -276,7 +379,7 @@ impl Board {
         let made: Vec<(Key<Shape>, Key<Shape>)> = other.stacked().into_iter().map(|s| (s.id, Key::from_raw(key()))).collect();
         let renamed = |old: Key<Shape>| made.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
         for (shape, &(_, id)) in other.stacked().into_iter().zip(&made) {
-            let _ = self.add(Shape { id, x: shape.x + dx, y: shape.y + dy, group: group(shape.group), frame: shape.frame.and_then(renamed), ..shape.clone() });
+            let _ = self.add(Shape { id, x: shape.x + dx, y: shape.y + dy, group: group(shape.group), frame: shape.frame.and_then(renamed), page, ..shape.clone() });
         }
         let new = |old: Key<Shape>| made.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
         for b in other.bindings.iter() {

@@ -1,5 +1,5 @@
 window		0 0 120 30	
-  page	Plotter	0 0 120 24	
+  page	Plotter	0 0 120 23	
     group		2 3 116 1	
       group		2 3 54 1	
         toggle button	Choose	2 3 9 1	unavailable (Choosing already)
@@ -11,49 +11,53 @@ window		0 0 120 30
       group		58 3 16 1	
         text	Ink	58 3 3 1	
         select	Ink	63 3 11 1	
-      button	Remove	76 3 9 1	
-      button	Show everything	87 3 18 1	
-    split		2 5 116 16	
-      pane	Board	2 5 87 16	
-        canvas	Board, 9 shapes	2 5 87 16	
-      divider	Between “Board” and “Map”	91 5 1 16	
-      pane	Map	94 5 24 16	
+      menu button	Page 1	76 3 11 1	
+      button	Remove	89 3 9 1	
+      button	Show everything	100 3 18 1	
+    split		2 5 116 15	
+      pane	Board	2 5 87 15	
+        canvas	Board, 9 shapes	2 5 87 15	
+      divider	Between “Board” and “Map”	91 5 1 15	
+      pane	Map	94 5 24 15	
         canvas	Map of the board	94 5 24 8	
-    group		2 22 116 1	
-      group		2 22 98 1	
-        text field	File	2 22 86 1	
-        button	Choose…	90 22 10 1	
-      button	Open	102 22 7 1	unavailable (Choose a file first)
-      button	Save	111 22 7 1	unavailable (Choose a file first)
-  alert		2 24 116 1	
-  status		2 25 116 1	
-  toolbar		2 26 116 4	
-    button	Choose	2 26 10 1	unavailable (Choosing already)
-    button	Rectangle	14 26 12 1	
-    button	Ellipse	28 26 9 1	
-    button	Arrow	39 26 9 1	
-    button	Draw	50 26 8 1	
-    button	Frame	60 26 9 1	
-    button	Write…	71 26 10 1	
-    button	Remove	83 26 16 1	
-    button	Move left	101 26 11 1	
-    button	Move right	2 27 12 1	
-    button	Move up	16 27 11 1	
-    button	Move down	29 27 13 1	
-    button	Copy	44 27 13 1	
-    button	Paste	59 27 14 1	
-    button	Import…	75 27 9 1	
-    button	Lock	86 27 6 1	
-    button	Unlock	94 27 8 1	
-    button	Group	104 27 14 1	
-    button	Ungroup	2 28 22 1	
-    button	Choose everything	26 28 23 1	
-    button	Bring to front	51 28 12 1	
-    button	Send to back	65 28 12 1	
-    button	Show everything	79 28 15 1	
-    button	Open	96 28 6 1	unavailable (Choose a file first)
-    button	Save	104 28 6 1	unavailable (Choose a file first)
-    button	Export a picture	2 29 14 1	unavailable (Choose a file first)
-    button	Undo	18 29 13 1	unavailable (Nothing to undo)
-    button	Redo	33 29 19 1	unavailable (Nothing to redo)
-    button	Open the palette	54 29 28 1	
+    group		2 21 116 1	
+      group		2 21 98 1	
+        text field	File	2 21 86 1	
+        button	Choose…	90 21 10 1	
+      button	Open	102 21 7 1	unavailable (Choose a file first)
+      button	Save	111 21 7 1	unavailable (Choose a file first)
+  alert		2 23 116 1	
+  status		2 24 116 1	
+  toolbar		2 25 116 5	
+    button	Choose	2 25 10 1	unavailable (Choosing already)
+    button	Rectangle	14 25 12 1	
+    button	Ellipse	28 25 9 1	
+    button	Arrow	39 25 9 1	
+    button	Draw	50 25 8 1	
+    button	Frame	60 25 9 1	
+    button	Write…	71 25 10 1	
+    button	Remove	83 25 16 1	
+    button	Move left	101 25 11 1	
+    button	Move right	2 26 12 1	
+    button	Move up	16 26 11 1	
+    button	Move down	29 26 13 1	
+    button	Copy	44 26 13 1	
+    button	Paste	59 26 14 1	
+    button	Import…	75 26 9 1	
+    button	Lock	86 26 6 1	
+    button	Unlock	94 26 8 1	
+    button	Group	104 26 14 1	
+    button	Ungroup	2 27 22 1	
+    button	Add a page	26 27 11 1	
+    button	Rename page…	39 27 14 1	
+    button	Remove the page	55 27 15 1	unavailable (A board keeps its last page)
+    button	Choose everything	72 27 23 1	
+    button	Bring to front	97 27 12 1	
+    button	Send to back	2 28 12 1	
+    button	Show everything	16 28 15 1	
+    button	Open	33 28 6 1	unavailable (Choose a file first)
+    button	Save	41 28 6 1	unavailable (Choose a file first)
+    button	Export a picture	49 28 14 1	unavailable (Choose a file first)
+    button	Undo	65 28 13 1	unavailable (Nothing to undo)
+    button	Redo	80 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 28 1	

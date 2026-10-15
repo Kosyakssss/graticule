@@ -1,7 +1,7 @@
 use ledger::{ErasedPath, Field, Key, Op, Selection, Transaction};
 use proptest::prelude::*;
 
-use crate::{Board, Bounds, End, Gesture, Index, Intent, Kind, Point, Shape, Tool, order};
+use crate::{Board, Bounds, End, Gesture, Index, Intent, Kind, Page, Point, Shape, Tool, order};
 
 #[derive(Clone, Debug)]
 enum Act {
@@ -15,6 +15,8 @@ enum Act {
     Back(u8),
     Group(u8, u8),
     Ungroup(u8),
+    AddPage,
+    RemovePage(u8),
     Gesture(u8, f64, f64, f64, f64, bool),
 }
 
@@ -34,6 +36,8 @@ fn act() -> impl Strategy<Value = Act> {
         any::<u8>().prop_map(Act::Back),
         (any::<u8>(), any::<u8>()).prop_map(|(a, b)| Act::Group(a, b)),
         any::<u8>().prop_map(Act::Ungroup),
+        Just(Act::AddPage),
+        any::<u8>().prop_map(Act::RemovePage),
         (any::<u8>(), coord(), coord(), coord(), coord(), any::<bool>()).prop_map(|(t, a, b, c, d, s)| Act::Gesture(t, a, b, c, d, s)),
     ]
 }
@@ -50,7 +54,7 @@ fn run(board: &mut Board, chosen: &mut Selection<Shape>, act: &Act, next: &mut u
             let tool = [Tool::Select, Tool::Rect, Tool::Ellipse, Tool::Arrow, Tool::Draw, Tool::Frame][t as usize % 6];
             let (from, to) = (Point::new(a, b), Point::new(c, d));
             let gesture = Gesture { from, to, trail: vec![from, to], moved: from.distance(to) > 3.0, shift };
-            let intent = Intent::of(board, &Index::of(board), chosen, tool, &gesture, 1.0);
+            let intent = Intent::of(board, &Index::of(board, &Page::FIRST), chosen, tool, &gesture, 1.0);
             let _ = board.perform(chosen, intent, || {
                 *next += 1;
                 Key::<Shape>::fixed(*next).raw()
@@ -58,7 +62,18 @@ fn run(board: &mut Board, chosen: &mut Selection<Shape>, act: &Act, next: &mut u
         }
         Act::Add(k, x, y, w, h) => {
             let kind = if k % 2 == 0 { Kind::Rect } else { Kind::Ellipse };
-            let _ = board.add(Shape::new(Key::fixed(*next), kind, Bounds::new(x, y, w, h)));
+            let pages = board.pages_in_order();
+            let page = if pages.is_empty() { Page::FIRST } else { pages[k as usize % pages.len()].id };
+            let _ = board.add(Shape { page, ..Shape::new(Key::fixed(*next), kind, Bounds::new(x, y, w, h)) });
+        }
+        Act::AddPage => {
+            let _ = board.add_page(Key::fixed(*next), "Next", "First");
+        }
+        Act::RemovePage(k) => {
+            let pages: Vec<_> = board.pages_in_order().iter().map(|p| p.id).collect();
+            if !pages.is_empty() {
+                let _ = board.remove_page(pages[k as usize % pages.len()]);
+            }
         }
         Act::Arrow(a, b, c, d) => {
             let _ = board.add(Shape::arrow(Key::fixed(*next), Point::new(a, b), Point::new(c, d)));
@@ -121,6 +136,12 @@ fn bound(board: &Board) -> Result<(), String> {
         }
     }
     for s in board.shapes.iter() {
+        if !(board.pages.has(s.page) || (board.pages.is_empty() && s.page == Page::FIRST)) {
+            return Err(format!("{:?} is on a page the board doesn't have", s.id));
+        }
+        if let Some(f) = s.frame.and_then(|f| board.shapes.find(f)).filter(|f| f.page != s.page) {
+            return Err(format!("{:?} is in a frame on another page, {:?}", s.id, f.id));
+        }
         let Some(f) = s.frame else { continue };
         if !board.shapes.find(f).is_some_and(|f| matches!(f.kind, Kind::Frame(_))) {
             return Err(format!("{:?} is in {f:?}, which is not a frame on the board", s.id));
@@ -139,7 +160,7 @@ fn bound(board: &Board) -> Result<(), String> {
 }
 
 fn picture(board: &Board) -> Vec<(u128, String, String)> {
-    board.stacked().iter().map(|s| (s.id.raw(), format!("{:?} {} {} {} {} {:?} {:?} {:?}", s.kind, s.x, s.y, s.w, s.h, s.ink, s.group, s.frame), s.index.clone())).collect()
+    board.stacked().iter().map(|s| (s.id.raw(), format!("{:?} {} {} {} {} {:?} {:?} {:?} {:?}", s.kind, s.x, s.y, s.w, s.h, s.ink, s.group, s.frame, s.page), s.index.clone())).collect()
 }
 
 proptest! {
@@ -162,13 +183,14 @@ proptest! {
         for act in &acts {
             run(&mut board, &mut chosen, act, &mut next);
         }
-        let index = Index::of(&board);
+        let page = board.showing(Page::FIRST);
+        let index = Index::of(&board, &page);
         for (x, y, w, h) in probes {
             let p = Point::new(x, y);
-            let drawn = board.stacked().into_iter().rev().find(|s| s.geometry().hit(p, 4.0)).map(|s| s.id);
+            let drawn = board.on(page).into_iter().rev().find(|s| s.geometry().hit(p, 4.0)).map(|s| s.id);
             prop_assert_eq!(index.hit(&board, p, 4.0), drawn, "at {:?}", p);
             let area = Bounds::new(x, y, w, h);
-            let inside: Vec<_> = board.stacked().into_iter().filter(|s| s.bounds().intersects(&area)).map(|s| s.id).collect();
+            let inside: Vec<_> = board.on(page).into_iter().filter(|s| s.bounds().intersects(&area)).map(|s| s.id).collect();
             let found: Vec<_> = index.query(area).into_iter().map(|e| e.key).filter(|k| inside.contains(k)).collect();
             prop_assert_eq!(found, inside, "in {:?}", area);
         }
@@ -183,7 +205,7 @@ proptest! {
         for act in &acts {
             run(&mut board, &mut chosen, act, &mut next);
         }
-        let reopened = Board::from_svg(&crate::svg(&board));
+        let reopened = Board::from_svg(&crate::svg(&board, Page::FIRST));
         prop_assert!(reopened.as_ref().is_some_and(|r| r.same(&board)), "the board didn't come back from its picture");
     }
 

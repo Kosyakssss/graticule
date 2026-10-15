@@ -1,0 +1,63 @@
+window		0 0 119 23	
+  page	Plotter	0 0 119 16	
+    group		2 3 115 1	
+      group		2 3 54 1	
+        toggle button	Choose	2 3 9 1	unavailable (Choosing already)
+        toggle button	Rectangle	11 3 12 1	
+        toggle button	Ellipse	23 3 10 1	
+        toggle button	Arrow	33 3 8 1	
+        toggle button	Draw	41 3 7 1	
+        toggle button	Frame	48 3 8 1	
+      group		58 3 16 1	
+        text	Ink	58 3 3 1	
+        select	Ink	63 3 11 1	
+      menu button	Ideas	76 3 10 1	
+      button	Remove	88 3 9 1	unavailable (Choose a shape first)
+      button	Show everything	99 3 18 1	
+    split		2 5 115 8	
+      pane	Board	2 5 86 8	
+        canvas	Board, 1 shapes	2 5 86 8	
+      divider	Between “Board” and “Map”	90 5 1 8	
+      pane	Map	93 5 24 8	
+        canvas	Map of the board	93 5 24 8	
+    group		2 14 115 1	
+      group		2 14 97 1	
+        text field	File	2 14 85 1	
+        button	Choose…	89 14 10 1	
+      button	Open	101 14 7 1	unavailable (Choose a file first)
+      button	Save	110 14 7 1	unavailable (Choose a file first)
+  alert		2 16 115 1	
+  status		2 17 115 1	
+  toolbar		2 18 115 5	
+    button	Choose	2 18 10 1	unavailable (Choosing already)
+    button	Rectangle	14 18 12 1	
+    button	Ellipse	28 18 9 1	
+    button	Arrow	39 18 9 1	
+    button	Draw	50 18 8 1	
+    button	Frame	60 18 9 1	
+    button	Write…	71 18 10 1	
+    button	Remove	83 18 16 1	unavailable (Choose a shape first)
+    button	Move left	101 18 11 1	unavailable (Choose a shape first)
+    button	Move right	2 19 12 1	unavailable (Choose a shape first)
+    button	Move up	16 19 11 1	unavailable (Choose a shape first)
+    button	Move down	29 19 13 1	unavailable (Choose a shape first)
+    button	Copy	44 19 13 1	unavailable (Choose a shape first)
+    button	Paste	59 19 14 1	
+    button	Import…	75 19 9 1	
+    button	Lock	86 19 6 1	unavailable (Choose a shape first)
+    button	Unlock	94 19 8 1	unavailable (Choose a shape first)
+    button	Group	2 20 14 1	unavailable (Choose two shapes or more)
+    button	Ungroup	18 20 22 1	unavailable (The board has no groups)
+    button	Add a page	42 20 11 1	
+    button	Rename page…	55 20 14 1	
+    button	Remove the page	71 20 15 1	
+    button	Choose everything	88 20 23 1	
+    button	Bring to front	2 21 12 1	unavailable (Choose a shape first)
+    button	Send to back	16 21 12 1	unavailable (Choose a shape first)
+    button	Show everything	30 21 15 1	
+    button	Open	47 21 6 1	unavailable (Choose a file first)
+    button	Save	55 21 6 1	unavailable (Choose a file first)
+    button	Export a picture	63 21 14 1	unavailable (Choose a file first)
+    button	Undo	79 21 13 1	unavailable (Nothing to undo)
+    button	Redo	94 21 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 22 28 1	

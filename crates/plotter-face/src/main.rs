@@ -7,7 +7,7 @@ use graticule::kernel::canvas::{self, Raster, Scale, Weight};
 use graticule::kernel::ink::{Appearance, Theme};
 use graticule::kernel::{Camera, Drag, Drawing};
 use graticule::prelude::*;
-use plotter::{Board, Bounds, End, Gesture, Index, Intent, Kind, Point, Shape, Tool};
+use plotter::{Board, Bounds, End, Gesture, Index, Intent, Kind, Page, Point, Shape, Tool};
 
 #[derive(Facts, Default)]
 struct Whiteboard {
@@ -22,11 +22,13 @@ struct Whiteboard {
     camera: Camera,
     #[session]
     file: Text,
-    #[derived(Index::of, from = [board])]
+    #[session]
+    page: Key<Page>,
+    #[derived(Index::of, from = [board, page])]
     index: Derived<Index>,
     #[derived(Layers::of, from = [board, index, camera])]
     layers: Derived<Layers>,
-    #[derived(Overview::of, from = [board])]
+    #[derived(Overview::of, from = [board, page])]
     overview: Derived<Overview>,
     #[derived(Chosen::of, from = [board, chosen])]
     around: Derived<Chosen>,
@@ -92,15 +94,16 @@ const MAP_ROWS: i32 = 8;
 const MAP_COLS: i32 = 24;
 
 impl Overview {
-    fn of(board: &Board) -> Overview {
-        let area = board.shapes.iter().map(Shape::bounds).reduce(|a, b| a.union(&b));
+    fn of(board: &Board, page: &Key<Page>) -> Overview {
+        let shapes = board.on(board.showing(*page));
+        let area = shapes.iter().map(|s| s.bounds()).reduce(|a, b| a.union(&b));
         let mut drawing = Drawing::new();
         match area {
-            Some(area) if board.shapes.len() > MAP_EACH => {
+            Some(area) if shapes.len() > MAP_EACH => {
                 let (across, down) = MAP_PLACES;
                 let (w, h) = (area.w.max(1.0) / across as f64, area.h.max(1.0) / down as f64);
                 let mut held = vec![false; across * down];
-                for shape in board.shapes.iter() {
+                for shape in &shapes {
                     let c = shape.bounds().center();
                     let (i, j) = ((((c.x - area.x) / w) as usize).min(across - 1), (((c.y - area.y) / h) as usize).min(down - 1));
                     held[j * across + i] = true;
@@ -111,7 +114,7 @@ impl Overview {
                 }
             }
             Some(_) => {
-                for shape in board.shapes.iter() {
+                for shape in &shapes {
                     corners(&mut drawing, shape.bounds(), Ink::Muted);
                 }
             }
@@ -204,6 +207,14 @@ enum Cmd {
     Group,
     #[label("Ungroup")]
     Ungroup,
+    #[label("Go to “{name}”", short: "Go")]
+    GoToPage(#[subject] Key<Page>),
+    #[label("Add a page")]
+    AddPage,
+    #[label("Rename the page…")]
+    RenamePage { name: String },
+    #[label("Remove the page")]
+    RemovePage,
     #[label("Choose everything")]
     ChooseAll,
     #[label("Bring to front")]
@@ -239,9 +250,14 @@ impl App for Whiteboard {
             Cmd::Group => no_if(self.chosen.len() < 2, t!("Choose two shapes or more")),
             Cmd::Ungroup if self.board.groups.is_empty() => No(t!("The board has no groups")),
             Cmd::Ungroup => no_if(self.chosen.is_empty(), t!("Choose a group first")),
-            Cmd::ChooseAll if self.chosen.len() == self.board.shapes.len() && !self.board.shapes.is_empty() => No(t!("Everything is chosen already")),
-            Cmd::ChooseAll | Cmd::ShowAll => no_if(self.board.shapes.is_empty(), t!("The board is empty")),
-            Cmd::ExportPicture if self.board.shapes.is_empty() => No(t!("The board is empty")),
+            Cmd::GoToPage(page) if !self.board.pages.has(*page) => No(t!("There is no such page")),
+            Cmd::GoToPage(page) => no_if(self.showing() == *page, t!("On this page already")),
+            Cmd::AddPage | Cmd::RenamePage { .. } => Yes,
+            Cmd::RemovePage => no_if(self.board.pages.len() < 2, t!("A board keeps its last page")),
+            Cmd::ChooseAll if self.board.blank(self.showing()) => No(t!("The page is empty")),
+            Cmd::ChooseAll => no_if(self.chosen.len() == self.page_size(), t!("Everything is chosen already")),
+            Cmd::ShowAll | Cmd::ExportPicture if self.board.blank(self.showing()) => No(t!("The page is empty")),
+            Cmd::ShowAll => Yes,
             Cmd::Open | Cmd::Save | Cmd::ExportPicture => no_if(self.file.is_empty(), t!("Choose a file first")),
             Cmd::Select => no_if(self.tool == Tool::Select, t!("Choosing already")),
             Cmd::Rect => no_if(self.tool == Tool::Rect, t!("Drawing rectangles already")),
@@ -274,8 +290,8 @@ impl App for Whiteboard {
             }
             Cmd::Copy => {
                 let keys: Vec<_> = self.chosen.iter().collect();
-                let (board, count) = (self.board.clone(), keys.len());
-                cx.job(t!("Copying {count} shapes"), move || plotter::svg(&board.excerpt(&keys)), Cmd::Copied);
+                let (board, count, page) = (self.board.clone(), keys.len(), self.showing());
+                cx.job(t!("Copying {count} shapes"), move || plotter::svg(&board.excerpt(&keys), page), Cmd::Copied);
                 Outcome::Nothing
             }
             Cmd::Copied(svg) => {
@@ -324,7 +340,30 @@ impl App for Whiteboard {
                     changed => changed,
                 }
             }
-            Cmd::ChooseAll => self.chosen.choose(&ledger::Choose::All(self.board.shapes.keys().map(Key::raw).collect())),
+            Cmd::ChooseAll => self.chosen.choose(&ledger::Choose::All(self.board.on(self.showing()).iter().map(|s| s.id.raw()).collect())),
+            Cmd::GoToPage(page) => self.turn_to(page),
+            Cmd::AddPage => {
+                let page = cx.key::<Page>();
+                let n = self.board.pages.len().max(1) + 1;
+                let _ = self.board.add_page(page, t!("Page {n}").as_ref(), t!("Page 1").as_ref());
+                self.turn_to(page)
+            }
+            Cmd::RenamePage { name } => {
+                let name = name.trim();
+                if name.is_empty() {
+                    return cx.say(t!("A page needs a name"));
+                }
+                match self.board.rename_page(self.showing(), name) {
+                    Outcome::Nothing => cx.say(t!("The page is called that already")),
+                    renamed => renamed,
+                }
+            }
+            Cmd::RemovePage => {
+                let _ = self.board.remove_page(self.showing());
+                let next = self.showing();
+                let _ = self.turn_to(next);
+                Outcome::Changed
+            }
             Cmd::ToFront => {
                 let keys: Vec<_> = self.chosen.iter().collect();
                 match self.board.to_front(&keys) {
@@ -357,27 +396,20 @@ impl App for Whiteboard {
             Cmd::Opened(Ok(svg)) => match Board::from_svg(&svg) {
                 Some(board) => {
                     let _ = self.chosen.choose(&ledger::Choose::Clear);
-                    let keys: Vec<_> = self.board.shapes.keys().collect();
-                    let _ = self.board.delete(&keys);
-                    for shape in board.shapes.iter() {
-                        let _ = self.board.shapes.push(shape.clone());
-                    }
-                    for binding in board.bindings.iter() {
-                        let _ = self.board.bindings.push(binding.clone());
-                    }
-                    Outcome::Changed
+                    self.page = Page::FIRST;
+                    self.board.replace(&board)
                 }
                 None => cx.say(t!("That file holds no board")),
             },
             Cmd::Opened(Err(failure)) | Cmd::Saved(Err(failure)) => cx.say_failure(failure),
             Cmd::Save => {
-                cx.write(Path(self.file.to_string().into()), |facts: &Whiteboard| plotter::svg(&facts.board), Cmd::Saved);
+                cx.write(Path(self.file.to_string().into()), |facts: &Whiteboard| plotter::svg(&facts.board, facts.showing()), Cmd::Saved);
                 Outcome::Nothing
             }
             Cmd::Saved(Ok(path)) => cx.say(t!("Saved to {path}")),
             Cmd::ExportPicture => {
                 let path = std::path::Path::new(self.file.to_string().as_str()).with_extension("png");
-                cx.write(Path(path), |facts: &Whiteboard| picture(&facts.board), Cmd::Saved);
+                cx.write(Path(path), |facts: &Whiteboard| picture(&facts.board, facts.showing()), Cmd::Saved);
                 Outcome::Nothing
             }
             Cmd::Drew(drag) => {
@@ -419,10 +451,19 @@ impl App for Whiteboard {
                     ui.toggle(self.tool == Tool::Frame, Cmd::Frame);
                 });
                 ui.select(t!("Ink"), Whiteboard::pen);
+                let name = self.board.pages.find(self.showing()).map_or_else(|| t!("Page 1").to_string(), |p| p.name.clone());
+                ui.menu(name, |ui| {
+                    for page in self.board.pages_in_order() {
+                        ui.button(Cmd::GoToPage(page.id));
+                    }
+                    ui.button(Cmd::AddPage);
+                    ui.button(Cmd::RenamePage { name: String::new() });
+                    ui.button(Cmd::RemovePage);
+                });
                 ui.button(Cmd::Remove);
                 ui.button(Cmd::ShowAll);
             });
-            let count = self.board.shapes.len();
+            let count = self.page_size();
             ui.on_files(Cmd::Import);
             let seen = Cell::new(None);
             ui.split(|ui| {
@@ -451,7 +492,7 @@ impl App for Whiteboard {
                                 }
                             }
                             None if small => {
-                                for shape in self.board.stacked() {
+                                for shape in self.board.on(self.showing()) {
                                     let shape = shown(shape.id).unwrap_or(shape);
                                     draw(canvas, shape, window(shape));
                                 }
@@ -529,6 +570,14 @@ impl App for Whiteboard {
                 let _ = w.board.reframe(&held, Some(frame));
                 w
             })
+            .add("The second of two pages", {
+                let mut w = Whiteboard::diagram();
+                let page = Key::fixed(9_002);
+                let _ = w.board.add_page(page, "Ideas", "Plan");
+                let _ = w.board.add(Shape { page, ..Shape::new(Key::fixed(9_003), Kind::Ellipse, Bounds::new(60.0, 60.0, 200.0, 100.0)) });
+                w.page = page;
+                w
+            })
             .add("Two shapes grouped and chosen", {
                 let mut w = Whiteboard::diagram();
                 let stacked: Vec<_> = w.board.stacked().iter().take(2).map(|s| s.id).collect();
@@ -546,7 +595,7 @@ impl Whiteboard {
         let fresh = !self.index.coming() || self.board.shapes.len() > SMALL;
         match self.index.get().filter(|_| fresh) {
             Some(index) => Cow::Borrowed(index),
-            None if self.board.shapes.len() <= SMALL => Cow::Owned(Index::of(&self.board)),
+            None if self.board.shapes.len() <= SMALL => Cow::Owned(Index::of(&self.board, &self.page)),
             None => Cow::Owned(Index::default()),
         }
     }
@@ -586,7 +635,7 @@ impl Whiteboard {
             let overview = match self.overview.get().filter(|_| !(self.overview.coming() && self.board.shapes.len() <= SMALL)) {
                 Some(overview) => overview,
                 None if self.board.shapes.len() <= SMALL => {
-                    now = Overview::of(&self.board);
+                    now = Overview::of(&self.board, &self.page);
                     &now
                 }
                 None => return,
@@ -627,7 +676,7 @@ impl Whiteboard {
 
     /// Lays a pasted or imported board on top, a little down and to the right of where it was, so it doesn't hide what it came from, and chooses it.
     fn lay(&mut self, board: &Board, cx: &mut Cx<Cmd>) -> Outcome {
-        let made = self.board.paste(board, PASTED, PASTED, || cx.key::<Shape>().raw());
+        let made = self.board.paste(board, PASTED, PASTED, self.showing(), || cx.key::<Shape>().raw());
         let count = made.len();
         let _ = self.chosen.choose(&ledger::Choose::All(made.into_iter().map(Key::raw).collect()));
         let _ = cx.say(t!("Added {count} shapes"));
@@ -640,6 +689,25 @@ impl Whiteboard {
             Outcome::Nothing => cx.say(t!("The chosen shapes are locked")),
             moved => moved,
         }
+    }
+
+    /// The page on screen: the one last gone to, or the first if that one has gone.
+    fn showing(&self) -> Key<Page> {
+        self.board.showing(self.page)
+    }
+
+    /// How many shapes are on the page on screen. With one page it is every shape; with more, the index counts them, so this never looks at the board.
+    fn page_size(&self) -> usize {
+        match self.board.pages.is_empty() {
+            true => self.board.shapes.len(),
+            false => self.index_now().len(),
+        }
+    }
+
+    fn turn_to(&mut self, page: Key<Page>) -> Outcome {
+        let _ = self.chosen.choose(&ledger::Choose::Clear);
+        self.page = page;
+        Outcome::Changed
     }
 
     fn hold(&mut self, tool: Tool) -> Outcome {
@@ -673,7 +741,7 @@ impl Whiteboard {
             let below_label = |s: &Shape| s.bounds().center() + Point::new(0.0, 20.0);
             let (Some(a), Some(b)) = (w.board.shapes.find(from).map(below_label), w.board.shapes.find(to).map(below_label)) else { continue };
             let drawn = Gesture { from: a, to: b, trail: vec![a, b], moved: true, shift: false };
-            let intent = Intent::of(&w.board, &Index::of(&w.board), &w.chosen, Tool::Arrow, &drawn, 1.0);
+            let intent = Intent::of(&w.board, &Index::of(&w.board, &Page::FIRST), &w.chosen, Tool::Arrow, &drawn, 1.0);
             let _ = w.board.perform(&mut w.chosen, intent, &mut next);
         }
         let _ = w.chosen.choose(&ledger::Choose::Clear);
@@ -725,12 +793,13 @@ const PICTURE_SCALE: f64 = 2.0;
 const PICTURE_MOST: f64 = 8_192.0;
 const PICTURE_MARGIN: f64 = 24.0;
 
-fn picture(board: &Board) -> Vec<u8> {
-    let Some(area) = board.shapes.iter().map(Shape::bounds).reduce(|a, b| a.union(&b)) else { return Vec::new() };
+fn picture(board: &Board, page: Key<Page>) -> Vec<u8> {
+    let shapes = board.on(page);
+    let Some(area) = shapes.iter().map(|s| s.bounds()).reduce(|a, b| a.union(&b)) else { return Vec::new() };
     let area = area.expand(PICTURE_MARGIN);
     let fit = PICTURE_SCALE.min(PICTURE_MOST / area.w.max(area.h));
     let mut drawing = Drawing::new();
-    for shape in board.stacked() {
+    for shape in shapes {
         draw(&mut drawing, shape, board.window(shape));
     }
     let space = [area.x as f32, (area.x + area.w) as f32, area.y as f32, (area.y + area.h) as f32];
@@ -804,6 +873,12 @@ fn outline(canvas: &mut Drawing, b: Bounds, corners: bool) {
         for (fx, fy) in plotter::HANDLES {
             canvas.dot(at(b.x + fx * b.w, b.y + fy * b.h)).ink(Ink::Link);
         }
+    }
+}
+
+impl ledger::Find<Page> for Whiteboard {
+    fn find(&self, key: Key<Page>) -> Option<&Page> {
+        self.board.pages.find(key)
     }
 }
 

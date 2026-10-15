@@ -1,14 +1,15 @@
 use ledger::Key;
 
-use crate::board::{Board, Kind, Shape};
+use crate::board::{Board, Kind, Page, Shape};
 use crate::geometry::{Bounds, Point};
 
-/// Where every shape on a board is, for finding the ones in a box without looking at the rest: a tree of boxes packed from the bottom up, sixteen to a box, by sort-tile-recursive packing. Build it off the main thread, as a derived value of the board; a query then costs what it finds, so a board of a million shapes is drawn, hit and snapped to at the cost of the shapes near the pointer or on screen.
+/// Where every shape on a page of a board is, for finding the ones in a box without looking at the rest: a tree of boxes packed from the bottom up, sixteen to a box, by sort-tile-recursive packing. Build it off the main thread, as a derived value of the board; a query then costs what it finds, so a board of a million shapes is drawn, hit and snapped to at the cost of the shapes near the pointer or on screen.
 #[derive(Clone, Debug, Default)]
 pub struct Index {
     entries: Vec<Entry>,
     levels: Vec<Vec<Node>>,
     top: Option<String>,
+    page: Key<Page>,
 }
 
 /// One shape in an index: its box, its key, where it is in the stack counting from the bottom, and whether it is an arrow.
@@ -30,9 +31,10 @@ struct Node {
 const FANOUT: usize = 16;
 
 impl Index {
-    /// The index of every shape on `board`.
-    pub fn of(board: &Board) -> Index {
-        let stacked = board.stacked();
+    /// The index of every shape on the page of `board` that [`Board::showing`] gives for `page`.
+    pub fn of(board: &Board, page: &Key<Page>) -> Index {
+        let page = board.showing(*page);
+        let stacked = board.on(page);
         let top = stacked.last().map(|s| s.index.clone());
         let mut entries: Vec<Entry> = stacked.into_iter().zip(0..).map(|(s, rank)| Entry { bounds: s.bounds(), key: s.id, rank, arrow: s.kind == Kind::Arrow }).collect();
         let mut levels = Vec::new();
@@ -43,13 +45,19 @@ impl Index {
             below = above;
         }
         levels.push(below);
-        Index { entries, levels, top }
+        Index { entries, levels, top, page }
     }
 
-    /// `shape` placed on top of the stack.
+    /// `shape` placed on top of the stack of its page.
     pub fn above(&self, mut shape: Shape) -> Shape {
         shape.index = crate::order::between(self.top(), None);
+        shape.page = self.page;
         shape
+    }
+
+    /// The page it is of.
+    pub fn page(&self) -> Key<Page> {
+        self.page
     }
 
     /// Where the top of the stack is, for putting a new shape above it without looking at every shape.

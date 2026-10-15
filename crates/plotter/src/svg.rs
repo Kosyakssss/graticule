@@ -1,13 +1,13 @@
 use std::fmt::Write;
 
-use ledger::{Field, Value};
+use ledger::{Field, Key, Value};
 
-use crate::board::{Board, End, Ink, Kind};
+use crate::board::{Board, End, Ink, Kind, Page};
 use crate::geometry::Bounds;
 
-/// The board as an SVG picture, every shape in its stacking order, in the light theme's inks, what frames hold clipped to their edges, carrying the board itself in its metadata so [`Board::from_svg`] opens it again. An empty board is an empty picture.
-pub fn svg(board: &Board) -> String {
-    let stacked = board.stacked();
+/// The board as an SVG picture of `page`, every shape on it in its stacking order, in the light theme's inks, what frames hold clipped to their edges, carrying the board itself in its metadata so [`Board::from_svg`] opens it again. An empty board is an empty picture.
+pub fn svg(board: &Board, page: Key<Page>) -> String {
+    let stacked = board.on(page);
     let area = stacked.iter().map(|s| s.bounds()).reduce(|a, b| a.union(&b)).unwrap_or_default().expand(16.0);
     let mut out = String::new();
     let _ = writeln!(out, r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{} {} {} {}" width="{}" height="{}">"#, num(area.x), num(area.y), num(area.w), num(area.h), num(area.w), num(area.h));

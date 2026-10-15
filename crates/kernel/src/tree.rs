@@ -100,6 +100,8 @@ pub enum Holds {
     Number,
     /// A code of `length` characters, one to a box.
     Code { length: u8 },
+    /// A tag to add to the tags before it in its row.
+    Tags,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -155,6 +157,9 @@ pub enum Kind {
     Places,
     Slider { at: u16, label: u8 },
     More,
+    Cycle { widest: u8 },
+    Browse,
+    Chip,
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -186,6 +191,9 @@ impl Kind {
                 | Kind::PageLink { .. }
                 | Kind::More
                 | Kind::Slider { .. }
+                | Kind::Cycle { .. }
+                | Kind::Browse
+                | Kind::Chip
         )
     }
 
@@ -226,6 +234,7 @@ impl Kind {
             Kind::Field { holds: Holds::Search } => "search field",
             Kind::Field { holds: Holds::Inline } => "editable text",
             Kind::Field { holds: Holds::Number } => "number field",
+            Kind::Field { holds: Holds::Tags } => "tag field",
             Kind::Field { holds: Holds::Code { .. } } => "code field",
             Kind::Field { .. } => "text field",
             Kind::Check { .. } => "checkbox",
@@ -272,6 +281,9 @@ impl Kind {
             Kind::Overflow => "overflow",
             Kind::Places => "navigation",
             Kind::Slider { .. } => "slider",
+            Kind::Cycle { .. } => "cycling choice",
+            Kind::Browse => "button",
+            Kind::Chip => "removable tag",
             Kind::More => "more",
         }
     }

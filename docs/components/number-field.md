@@ -12,7 +12,7 @@ A count or an amount a person knows or works out: copies to print, a width in pi
 ui.labelled("Copies", |ui| ui.number(Catalog::copies));
 ```
 
-The fact is a whole number, such as a `u32`. While a person types, what they typed is the field's own; nothing in the facts changes. Return, leaving the field, or an arrow works it out (`12*4+3` comes to 51) and sets the number by one edit, one undo step. A sum that isn't a whole number, or a number past what the type holds, is said in the message line and changes nothing.
+The fact is a whole number, such as a `u32`. While a person types, what they typed is the field's own; nothing in the facts changes. Return, moving to another field, or an arrow works it out (`12*4+3` comes to 51) and sets the number by one edit, one undo step. A sum that isn't a whole number, or a number past what the type holds, is said in the message line and changes nothing.
 
 ## Keys
 

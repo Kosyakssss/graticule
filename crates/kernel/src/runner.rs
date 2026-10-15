@@ -229,6 +229,8 @@ pub struct Runner<A: App> {
     carets: HashMap<Id, Caret>,
     drafts: HashMap<Id, String>,
     sliding: Option<(Id, i128)>,
+    browse: Option<Id>,
+    browsing: Option<(ErasedPath, String, mpsc::Receiver<Option<std::path::PathBuf>>)>,
     kill: String,
     typing: Option<(Id, field::Kind, bool)>,
     composing: String,
@@ -310,6 +312,8 @@ impl<A: App> Runner<A> {
             carets: HashMap::new(),
             drafts: HashMap::new(),
             sliding: None,
+            browse: None,
+            browsing: None,
             kill: String::new(),
             typing: None,
             composing: String::new(),
@@ -873,7 +877,7 @@ impl<A: App> Runner<A> {
     fn resolve(&mut self) {
         for i in 0..self.tree.nodes.len() {
             let n = self.tree.nodes[i];
-            if n.kind == (Kind::Field { holds: Holds::Number })
+            if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags })
                 && let Some(draft) = self.drafts.get(&n.id)
             {
                 self.tree.nodes[i].text = self.tree.put(draft);
@@ -2049,6 +2053,37 @@ impl<A: App> Runner<A> {
         self.stale = true;
     }
 
+    fn open_panel(&mut self, i: u32, window: &winit::window::Window) {
+        let n = self.tree.nodes[i as usize];
+        let Some(path) = n.path else { return };
+        let label = self.tree.str(self.tree.nodes[self.tree.nodes[n.parent as usize].first as usize].name).to_string();
+        let dialog = rfd::AsyncFileDialog::new().set_title(format!("Choose a file for {label}")).set_parent(window).pick_file();
+        let (send, receive) = mpsc::channel();
+        let waker = self.waker.clone();
+        let started = std::thread::Builder::new().name("graticule file panel".into()).spawn(move || {
+            let _ = send.send(pollster::block_on(dialog).map(|chosen| chosen.path().to_path_buf()));
+            if let Some(waker) = waker {
+                waker.wake();
+            }
+        });
+        match started {
+            Ok(_) => self.browsing = Some((path, label, receive)),
+            Err(e) => self.said = Some(Said::Failure(format!("The file panel couldn't open: {e}"))),
+        }
+    }
+
+    fn file_chosen(&mut self) {
+        let Some((path, label, receive)) = &self.browsing else { return };
+        let Ok(chosen) = receive.try_recv().map_err(|e| e == mpsc::TryRecvError::Disconnected).or_else(|gone| if gone { Ok(None) } else { Err(()) }) else { return };
+        let (path, label) = (*path, label.clone());
+        self.browsing = None;
+        self.stale = true;
+        if let Some(chosen) = chosen {
+            let name = chosen.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            self.set_value(path, Value::Str(chosen.display().to_string()), format!("{label}: {name}"));
+        }
+    }
+
     fn saving(&mut self, name: String, reply: fn(Result<Path, Failure>) -> A::Cmd, work: impl FnOnce() -> Option<Result<Path, Failure>> + Send + 'static) {
         let lost = reply(Err(Failure::new(format!("{name} stopped before it finished"))));
         let back: Reply<A::Cmd> = Box::new(move |done| done.downcast::<Result<Path, Failure>>().ok().map(|done| reply(*done)));
@@ -2072,6 +2107,7 @@ impl<A: App> Runner<A> {
 
     fn collect(&mut self) {
         self.arrive();
+        self.file_chosen();
         if self.keys_watch.as_ref().is_some_and(|(_, changed)| changed.try_iter().count() > 0) {
             self.read_keys();
         }
@@ -2258,17 +2294,59 @@ impl<A: App> Runner<A> {
     }
 
     fn settle_drafts(&mut self) -> bool {
-        let left: Vec<Id> = self.drafts.keys().filter(|&&id| Some(id) != self.focus).copied().collect();
+        let left: Vec<Id> = self.drafts.keys().filter(|&&id| Some(id) != self.focus || self.tree.find(id).is_none()).copied().collect();
         for id in &left {
-            if let Some(i) = self.tree.find(*id)
-                && let Some(whole) = self.work_out(i)
-            {
-                self.set_number(i, whole);
+            match self.tree.find(*id) {
+                Some(i) if self.tree.nodes[i as usize].kind == (Kind::Field { holds: Holds::Tags }) => {
+                    self.add_tag(i);
+                }
+                Some(i) => {
+                    if let Some(whole) = self.work_out(i) {
+                        self.set_number(i, whole);
+                    }
+                }
+                None => {}
             }
             self.drafts.remove(id);
             self.stale = true;
         }
         !left.is_empty()
+    }
+
+    fn tags(&self, i: u32) -> Vec<String> {
+        let mut tags = Vec::new();
+        let mut c = self.tree.nodes[self.tree.nodes[i as usize].parent as usize].first;
+        while c != NONE {
+            let n = self.tree.nodes[c as usize];
+            if n.kind == Kind::Chip {
+                tags.push(self.tree.str(n.text).to_string());
+            }
+            c = n.next;
+        }
+        tags
+    }
+
+    fn set_tags(&mut self, i: u32, tags: Vec<String>, said: String) -> bool {
+        let Some(path) = self.tree.nodes[i as usize].path else { return false };
+        self.set_value(path, Value::List(tags.into_iter().map(Value::Str).collect()), said)
+    }
+
+    fn add_tag(&mut self, i: u32) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let Some(tag) = self.drafts.get(&n.id).map(|draft| draft.trim().to_string()) else { return true };
+        let mut tags = self.tags(i);
+        if tags.contains(&tag) {
+            return self.say(Message::plain(format!("“{tag}” is there already")));
+        }
+        self.drafts.remove(&n.id);
+        self.carets.remove(&n.id);
+        self.stale = true;
+        if tag.is_empty() {
+            return true;
+        }
+        let said = format!("{}: add “{tag}”", self.tree.str(n.name));
+        tags.push(tag);
+        self.set_tags(i, tags, said)
     }
 
     fn slide_key(&mut self, i: u32, key: Key) -> bool {
@@ -2319,6 +2397,13 @@ impl<A: App> Runner<A> {
         }
         if n.kind == Kind::More {
             return self.open_more(i);
+        }
+        if n.kind == Kind::Browse {
+            if self.browsing.is_some() {
+                return self.say(Message::from("A file panel is open already"));
+            }
+            self.browse = Some(n.id);
+            return true;
         }
         if n.cmd == NONE {
             return false;
@@ -2521,8 +2606,9 @@ impl<A: App> Runner<A> {
     fn follow(&mut self) {
         let Some(i) = self.focused_field() else { return };
         let n = self.tree.nodes[i as usize];
+        let text = self.drafts.get(&n.id).map_or(self.tree.str(n.text), String::as_str);
         if let Some(c) = self.carets.get_mut(&n.id) {
-            c.follow(self.tree.str(n.text), None);
+            c.follow(text, None);
         }
     }
 
@@ -2587,6 +2673,23 @@ impl<A: App> Runner<A> {
             let n = self.tree.nodes[i as usize];
             let holds = if let Kind::Field { holds } = n.kind { holds } else { Holds::Line };
             let several = matches!(holds, Holds::Lines { .. });
+            if holds == Holds::Tags && chord.mods == Mods::default() {
+                match chord.key {
+                    Key::Enter => return self.add_tag(i),
+                    Key::Backspace if self.tree.str(n.text).is_empty() => {
+                        let mut tags = self.tags(i);
+                        let Some(last) = tags.pop() else { return true };
+                        let said = format!("{}: remove “{last}”", self.tree.str(n.name));
+                        return self.set_tags(i, tags, said);
+                    }
+                    Key::Escape if self.drafts.remove(&n.id).is_some() => {
+                        self.carets.remove(&n.id);
+                        self.stale = true;
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
             if holds == Holds::Number && chord.mods == Mods::default() {
                 match chord.key {
                     Key::Enter | Key::Up | Key::Down => {
@@ -2792,7 +2895,7 @@ impl<A: App> Runner<A> {
 
     fn splice(&mut self, i: u32, range: std::ops::Range<usize>, mut text: String, mut caret: usize, kind: field::Kind) -> bool {
         let n = self.tree.nodes[i as usize];
-        if n.kind == (Kind::Field { holds: Holds::Number }) {
+        if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags }) {
             let mut draft = self.tree.str(n.text).to_string();
             draft.replace_range(range, &text);
             self.drafts.insert(n.id, draft);
@@ -3257,6 +3360,9 @@ impl<A: App> Face for Runner<A> {
     fn painted(&mut self, frame: &mut Frame) {
         for effect in std::mem::take(&mut self.effects) {
             self.start(effect, frame.window);
+        }
+        if let Some(i) = self.browse.take().and_then(|id| self.tree.find(id)) {
+            self.open_panel(i, frame.window);
         }
         if (self.turning.is_some()
             || self.background.front().is_some_and(|b| !b.rest.is_empty())

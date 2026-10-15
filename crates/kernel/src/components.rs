@@ -184,7 +184,7 @@ fn button(p: &mut Painter, n: &Node, label: &str, joined: Joined, look: Look) {
     pressable(p, n, label, None, false, joined, look);
 }
 
-fn pressable(p: &mut Painter, n: &Node, label: &str, picture: Option<&'static Picture>, on: bool, joined: Joined, look: Look) {
+fn pressable(p: &mut Painter, n: &Node, label: &str, picture: Option<&'static Picture>, on: bool, joined: Joined, look: Look) -> Rect {
     let outer = p.rect(n.area);
     let d = shadow(p);
     let alone = joined == Joined::Alone;
@@ -210,7 +210,7 @@ fn pressable(p: &mut Painter, n: &Node, label: &str, picture: Option<&'static Pi
     if let Some(picture) = picture {
         let inset = (p.m.cell_h * 0.12).round();
         draw_picture(p, Rect::new(r.x + inset, r.y + inset, r.w - inset * 2.0, r.h - inset * 2.0), picture, Some(ink));
-        return;
+        return r;
     }
     let mono = p.m.mono();
     let w = p.measure(label, mono);
@@ -218,6 +218,19 @@ fn pressable(p: &mut Painter, n: &Node, label: &str, picture: Option<&'static Pi
     let x = if w > room { r.x + p.m.cell_w } else { (r.x + (r.w - w) / 2.0).round() };
     let y = (r.y + (r.h - p.m.cell_h) / 2.0).floor();
     p.text(label, mono, (x, y), Some(room.max(0.0)), ink);
+    r
+}
+
+fn cycle(p: &mut Painter, n: &Node, label: &str, look: Look) {
+    let r = pressable(p, n, "", None, false, Joined::Alone, look);
+    let (theme, w, h) = (p.theme, p.m.cell_w, p.m.cell_h);
+    let ink = if n.enabled { theme.ink } else { theme.faint };
+    let y = (r.y + (r.h - h) / 2.0).floor();
+    let mono = p.m.mono();
+    p.text(label, mono, (r.x + w, y), Some((r.w - w * 3.0).max(0.0)), ink);
+    let side = (h * 0.6).round();
+    let mark = Rect::new((r.right() - w * 1.5 - side / 2.0).round(), (y + (h - side) / 2.0).round(), side, side);
+    draw_picture(p, mark, &crate::picture::icons::CHEVRON_RIGHT, Some(if n.enabled { theme.muted } else { theme.faint }));
 }
 
 fn keycap(p: &mut Painter, at: (f32, f32), keys: &str, enabled: bool) -> f32 {
@@ -512,7 +525,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let color = tone(p, t);
             wrapped(p, n.area, text, mono, if strong { 600.0 } else { 400.0 }, color);
         }
-        (Layer::Over, Kind::Button) => button(p, &n, text, joined(tree, i), look),
+        (Layer::Over, Kind::Button | Kind::Browse) => button(p, &n, text, joined(tree, i), look),
         (Layer::Under, Kind::Group) => {
             let r = p.rect(n.area);
             let d = shadow(p);
@@ -550,8 +563,12 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let ink = p.theme.link;
             link(p, &n, text, look, ink);
         }
-        (Layer::Over, Kind::Toggle { on }) => pressable(p, &n, text, None, on, joined(tree, i), look),
-        (Layer::Over, Kind::IconButton { picture }) => pressable(p, &n, text, Some(picture), false, joined(tree, i), look),
+        (Layer::Over, Kind::Toggle { on }) => {
+            pressable(p, &n, text, None, on, joined(tree, i), look);
+        }
+        (Layer::Over, Kind::IconButton { picture }) => {
+            pressable(p, &n, text, Some(picture), false, joined(tree, i), look);
+        }
         (Layer::Over, Kind::Fieldset | Kind::Labelled) => {
             let (weight, ink) = (if n.kind == Kind::Fieldset { 600.0 } else { 400.0 }, p.theme.ink);
             wrapped(p, n.area, text, false, weight, ink);
@@ -678,6 +695,22 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             let style = p.m.sans(400.0);
             p.text(text, style, ((r.x + p.m.cell_w * 0.5).round(), cell.y), Some(r.w - p.m.cell_w * 0.5), theme.ink);
         }
+        (Layer::Over, Kind::Chip) => {
+            let cell = p.rect(n.area);
+            let (w, h) = (p.m.cell_w, p.m.cell_h);
+            let inset = (h * 0.1).round();
+            let r = Rect::new(cell.x, cell.y + inset, cell.w, h - inset * 2.0);
+            let (t, theme) = (p.style.line(p.m), p.theme);
+            if look.hovered || look.pressed {
+                p.fill(r, theme.hover);
+            }
+            border(p, r, if look.focused { t * 2.0 } else { t }, if look.focused { theme.ink } else { theme.rule });
+            let style = p.m.sans(400.0);
+            p.text(text, style, ((r.x + w * 0.5).round(), cell.y), Some(r.w - w * 2.5), theme.ink);
+            let side = (h * 0.5).round();
+            let mark = Rect::new((r.right() - w * 1.25 - side / 2.0).round(), (cell.y + (h - side) / 2.0).round(), side, side);
+            draw_picture(p, mark, &crate::picture::icons::CLOSE, Some(if look.hovered { theme.ink } else { theme.muted }));
+        }
         (Layer::Over, Kind::Avatar) => {
             let cell = p.rect(n.area);
             let theme = p.theme;
@@ -765,6 +798,7 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         }
         (Layer::Over, Kind::Crumbs) => crumbs(p, tree, &n),
         (Layer::Over, Kind::Slider { at, label }) => slider(p, &n, text, at, label, look),
+        (Layer::Over, Kind::Cycle { .. }) => cycle(p, &n, text, look),
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);

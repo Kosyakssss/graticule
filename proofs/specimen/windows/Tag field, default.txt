@@ -1,0 +1,61 @@
+window		0 0 120 30	
+  page	Tag field	0 0 120 24	
+    list		2 3 116 20	18 items
+      list item		2 3 114 1	
+        text	Words that tag something, each shown as a tag with a × that removes it, followed by a field to type another.	2 3 80 1	
+      list item		2 4 114 1	
+      list item		2 5 114 1	
+        heading	Use it for	2 5 7 1	strong
+      list item		2 6 114 1	
+        text	A few short labels a person makes up as they go: the tags of a note, the people on a message, the keywords of a picture.	2 6 90 1	
+      list item		2 7 114 1	
+      list item		2 8 114 1	
+        heading	Code	2 8 4 1	strong
+      list item		2 9 114 1	
+        text	ui.tag_field("Tags", Catalog::labels);	2 9 38 1	mono
+      list item		2 10 114 1	
+        group		2 10 114 1	
+          column		2 10 14 1	
+            text	Live	2 10 14 1	muted
+          column		18 10 98 1	
+            group		18 10 98 1	
+              removable tag	groceries	18 10 10 1	
+              removable tag	weekend	30 10 10 1	
+              tag field	Tags	42 10 74 1	
+      list item		2 11 114 2	
+        text	The fact is a Vec<String>. What is typed is the field's own until Return adds it as a tag; moving to another field adds it too. A tag that is there already is said and not added twice. Each tag added or removed is one edit and one undo step, named for the tag ("Tags: add “urgent”").	2 11 114 2	
+      list item		2 13 114 1	
+      list item		2 14 114 1	
+        heading	Keys	2 14 4 1	strong
+      list item		2 15 114 2	
+        text	The field's own text editing. Return adds what was typed; Backspace in the empty field removes the last tag; Escape drops what was typed. Tab reaches each tag, and Space or Return removes it.	2 15 114 2	
+      list item		2 17 114 1	
+      list item		2 18 114 1	
+        heading	Narrow windows	2 18 14 1	strong
+      list item		2 19 114 1	
+        text	The tags and the field share the row; the field keeps at least twelve columns.	2 19 57 1	
+      list item		2 20 114 1	
+      list item		2 21 114 1	
+        heading	Screen reader	2 21 11 1	strong
+      list item		2 22 114 1	
+        text	Each tag is a button named "Remove" and the tag; the field is named by the label.	2 22 61 1	
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Bold	46 26 6 1	
+    button	Go one level in	54 26 13 1	
+    button	Say it	69 26 7 1	unavailable (Type something first)
+    button	Back to all components	78 26 20 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

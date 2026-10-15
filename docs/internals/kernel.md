@@ -344,9 +344,11 @@ The input method's unfinished text (preedit) is the kernel's, not a fact; only c
 
 The caret and the field's own text selection are state that only the field needs, so they are the kernel's, kept by the field's id, which is its path (§5.2), as spec §3.2 says of component state. When a `Text` changes under a caret (a command's `take()`, an undo, sync), the kernel moves the caret through the splice. Undo steps record the caret with the focus, so undoing typing puts the caret back. `api.md`'s sentence that `Text` is "a value with a caret and a selection" changes accordingly (§16).
 
-### 11.4 A number field's draft
+### 11.4 Drafts: number and tag fields
 
-A number field edits a whole number, not a `Text`, so what a person types (`12*4+3`, or half of it) has nowhere to go in the facts. The kernel keeps it as the field's draft, by the field's id, beside the caret, and draws it in place of the number. Nothing in the facts changes while typing, so undo never sees a half-typed sum. Return, an arrow, or leaving the field works the draft out and sets the number by one edit; Escape drops it. A draft is settled after every key, pointer press and accessibility action, whichever moved the focus away, so leaving by Tab, by a click or by automation all count. A draft that doesn't work out to a whole number within the bounds is said and dropped.
+A number field edits a whole number and a tag field adds to a list of words, not a `Text`, so what a person types (`12*4+3`, or half a tag) has nowhere to go in the facts. The kernel keeps it as the field's draft, by the field's id, beside the caret, and draws it in place of the field's text. Nothing in the facts changes while typing, so undo never sees a half-typed sum. Return, an arrow in a number field, or leaving the field commits the draft by one edit; Escape drops it. A draft that doesn't work out to a whole number within the bounds, or a tag that is there already, is said and stays for the person to fix.
+
+Leaving means the focus moving: Tab, a click in another field, automation focusing something else. Drafts are settled after every key, pointer event and accessibility action. Pressing a button or a link does not move the focus, and does not commit a draft either: committing it then would make one click two undo steps, the draft and the button's command, and an undo would take back only the second. A draft whose field is no longer in the tree, because the page it was on is gone, is dropped.
 
 ## 12. Effects
 

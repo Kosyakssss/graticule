@@ -1,0 +1,58 @@
+window		0 0 120 30	
+  page	Choice	0 0 120 24	
+    list		2 3 116 20	18 items
+      list item		2 3 114 2	
+        text	One of a few named options, as a button that shows the chosen one. Pressing it moves to the next option, and after the last back to the first, so nothing opens over the page.	2 3 114 2	
+      list item		2 5 114 1	
+      list item		2 6 114 1	
+        heading	Use it for	2 6 7 1	strong
+      list item		2 7 114 2	
+        text	A setting with a few options that a person flips through rather than compares, where segments or radio buttons would take too much room: a sort order, a speed, a layout.	2 7 114 2	
+      list item		2 9 114 1	
+      list item		2 10 114 1	
+        heading	Code	2 10 4 1	strong
+      list item		2 11 114 1	
+        text	ui.choice("Show as", Catalog::shape);	2 11 37 1	mono
+      list item		2 12 114 1	
+        group		2 12 114 1	
+          column		2 12 14 1	
+            text	Live	2 12 14 1	muted
+          column		18 12 98 1	
+            group		18 12 98 1	
+              text	Show as	18 12 7 1	
+              cycling choice	List	27 12 10 1	
+      list item		2 13 114 2	
+        text	The fact is an enum with derive(Choice), whose options are labelled by #[label("…")] or by their names in words. The button is as wide as the longest option, so it doesn't jump as it cycles. Each press is an edit of the fact and one undo step, named for the option it chose ("Show as: Grid").	2 13 114 2	
+      list item		2 15 114 1	
+      list item		2 16 114 1	
+        heading	Keys	2 16 4 1	strong
+      list item		2 17 114 1	
+        text	Space or Return chooses the next option.	2 17 31 1	
+      list item		2 18 114 1	
+      list item		2 19 114 1	
+        heading	Narrow windows	2 19 14 1	strong
+      list item		2 20 114 1	
+        text	The label wraps; the button keeps its width.	2 20 33 1	
+      list item		2 21 114 1	
+      list item		2 22 114 1	
+        heading	Screen reader	2 22 11 1	strong
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Bold	46 26 6 1	
+    button	Go one level in	54 26 13 1	
+    button	Say it	69 26 7 1	unavailable (Type something first)
+    button	Back to all components	78 26 20 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

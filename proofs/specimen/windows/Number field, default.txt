@@ -21,7 +21,7 @@ window		0 0 120 30
             labelled	Copies	18 10 98 2	
               number field		18 11 16 1	holds “1,284”
       list item		2 12 114 3	
-        text	The fact is a whole number, such as a u32. While a person types, what they typed is the field's own; nothing in the facts changes. Return, leaving the field, or an arrow works it out (12*4+3 comes to 51) and sets the number by one edit, one undo step. A sum that isn't a whole number, or a number past what the type holds, is said in the message line and changes nothing.	2 12 114 3	
+        text	The fact is a whole number, such as a u32. While a person types, what they typed is the field's own; nothing in the facts changes. Return, moving to another field, or an arrow works it out (12*4+3 comes to 51) and sets the number by one edit, one undo step. A sum that isn't a whole number, or a number past what the type holds, is said in the message line and changes nothing.	2 12 114 3	
       list item		2 15 114 1	
       list item		2 16 114 1	
         heading	Keys	2 16 4 1	strong

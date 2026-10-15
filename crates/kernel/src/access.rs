@@ -14,6 +14,7 @@ fn role(kind: Kind) -> Role {
         Kind::Field { holds: Holds::Search } => Role::SearchInput,
         Kind::Field { holds: Holds::Number } => Role::SpinButton,
         Kind::Slider { .. } => Role::Slider,
+        Kind::Cycle { .. } | Kind::Browse | Kind::Chip => Role::Button,
         Kind::Field { .. } => Role::TextInput,
         Kind::Check { .. } => Role::CheckBox,
         Kind::Link => Role::Link,

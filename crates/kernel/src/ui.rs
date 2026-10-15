@@ -477,7 +477,7 @@ impl<'a, C, S> Ui<'a, C, S> {
         let value = now.value();
         for (k, (option, v)) in options.iter().enumerate() {
             let c = self.tree.add(strip, Kind::Tab { on: *v == value }, Some(id.mix(3).mix(k as u64)), at);
-            self.choice(c, option, path, v.clone());
+            self.option(c, option, path, v.clone());
         }
         let page = self.tree.add(tabs, Kind::Column, Some(id.mix(2)), at);
         let subject = self.subject;
@@ -494,7 +494,7 @@ impl<'a, C, S> Ui<'a, C, S> {
         let places = self.tree.add(self.parent, Kind::Places, Some(id), at);
         for (k, (option, v)) in options.iter().enumerate() {
             let c = self.tree.add(places, Kind::Place { on: *v == now }, Some(id.mix(3).mix(k as u64)), at);
-            self.choice(c, option, path, v.clone());
+            self.option(c, option, path, v.clone());
         }
         self.more(places, id, at);
     }
@@ -583,7 +583,7 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.more(i, id, at);
     }
 
-    fn choice(&mut self, c: u32, option: &str, path: ledger::ErasedPath, value: ledger::Value) {
+    fn option(&mut self, c: u32, option: &str, path: ledger::ErasedPath, value: ledger::Value) {
         let r = self.tree.put(option);
         self.tree.nodes[c as usize].text = r;
         self.set(c, path, value, option.to_owned());
@@ -601,6 +601,26 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.tree.nodes[i as usize].text = r;
         self.tree.nodes[i as usize].span = crate::tree::Fill.min(CHECK_MIN);
         self.set(i, path, ledger::Value::Bool(!on), format!("{label}: {}", if on { "off" } else { "on" }));
+    }
+
+    /// One of a few named options, as a button that shows the chosen one after `label`: the fact at `path`, an enum with `derive(Choice)`. Pressing it chooses the next option, after the last the first; each choice is an `Edit` and one undo step.
+    #[track_caller]
+    pub fn choice<F: Field, T: Setting>(&mut self, label: impl AsRef<str>, path: FactPath<F, T>) {
+        let (Control::Choice(options), Some(now)) = (T::control(), self.facts::<F>().and_then(|f| path.get(f)).map(Field::value)) else { return };
+        let (label, path, at) = (label.as_ref(), path.erased(), Location::caller());
+        let Some(k) = options.iter().position(|(_, value)| *value == now) else { return };
+        let id = Id::ROOT.mix(path.hash64());
+        let row = self.tree.add(self.parent, Kind::Row, Some(id.mix(1)), at);
+        let l = self.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(2)), at);
+        let r = self.tree.put(label);
+        self.tree.nodes[l as usize].text = r;
+        let widest = options.iter().map(|(option, _)| option.chars().count()).max().unwrap_or(0).min(u8::MAX as usize) as u8;
+        let c = self.tree.add(row, Kind::Cycle { widest }, Some(id), at);
+        let (option, (next, value)) = (options[k].0, &options[(k + 1) % options.len()]);
+        let (r, named) = (self.tree.put(option), self.tree.put(&format!("{label}: {option}")));
+        let n = &mut self.tree.nodes[c as usize];
+        (n.text, n.name, n.subject) = (r, named, self.subject);
+        self.set(c, path, value.clone(), format!("{label}: {next}"));
     }
 
     fn segments_at(&mut self, label: &str, path: ledger::ErasedPath, options: &[(&'static str, ledger::Value)], now: &ledger::Value, at: &'static Location<'static>) {
@@ -724,7 +744,7 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.field_as(path, placeholder, Holds::Inline, Location::caller())
     }
 
-    /// A whole number at `path`, typed as a sum such as `12*4+3` and stepped by one with the arrows up and down. What is typed is worked out when Return is pressed or the field is left, and the number is set by one `Edit`; Escape puts back what was there.
+    /// A whole number at `path`, typed as a sum such as `12*4+3` and stepped by one with the arrows up and down. What is typed is worked out when Return is pressed or another field is reached, and the number is set by one `Edit`; Escape puts back what was there.
     #[track_caller]
     pub fn number<F: Field, T: Setting>(&mut self, path: FactPath<F, T>) {
         let Some((now, least, most)) = self.whole(path) else { return };
@@ -758,6 +778,43 @@ impl<'a, C, S> Ui<'a, C, S> {
     #[track_caller]
     pub fn code_field<F: Field>(&mut self, path: FactPath<F, Text>, length: u8) -> Placed<'_, 'a, C, S> {
         self.field_as(path, Message::plain(format!("A code of {} characters", length.max(1))), Holds::Code { length: length.max(1) }, Location::caller())
+    }
+
+    /// A file's path in the `Text` at `path`: a field to type or paste it into, and a button that opens the system's file panel to choose one. Choosing sets the path by one `Edit`, named after `label`.
+    #[track_caller]
+    pub fn file_field<F: Field>(&mut self, label: impl AsRef<str>, path: FactPath<F, Text>) {
+        let (label, at) = (label.as_ref(), Location::caller());
+        let erased = path.erased();
+        let row = self.tree.add(self.parent, Kind::Row, Some(Id::ROOT.mix(erased.hash64()).mix(1)), at);
+        self.tree.nodes[row as usize].span = crate::tree::Fill;
+        let subject = self.subject;
+        let mut ui = self.child::<S>(row, subject);
+        ui.field_as(path, Message::plain(label.to_string()), Holds::Line, at);
+        let b = ui.tree.add(row, Kind::Browse, Some(Id::ROOT.mix(erased.hash64()).mix(2)), at);
+        let (r, named) = (ui.tree.put("Choose…"), ui.tree.put(&format!("Choose a file for {label}")));
+        let n = &mut ui.tree.nodes[b as usize];
+        (n.text, n.name, n.path, n.subject) = (r, named, Some(erased), subject);
+    }
+
+    /// Words that tag something, in the list at `path`: each a tag that removes itself when pressed, then a field to type another. Return adds what was typed, and so does moving to another field; Backspace in the empty field removes the last tag. Each change is one `Edit`, named after `label`.
+    #[track_caller]
+    pub fn tag_field<F: Field>(&mut self, label: impl AsRef<str>, path: FactPath<F, Vec<String>>) {
+        let Some(tags) = self.facts::<F>().and_then(|f| path.get(f)).cloned() else { return };
+        let (label, at, erased) = (label.as_ref(), Location::caller(), path.erased());
+        let id = Id::ROOT.mix(erased.hash64());
+        let row = self.tree.add(self.parent, Kind::Row, Some(id.mix(1)), at);
+        self.tree.nodes[row as usize].span = crate::tree::Fill;
+        for (k, tag) in tags.iter().enumerate() {
+            let b = self.tree.add(row, Kind::Chip, Some(id.mix(2).mix(k as u64)), at);
+            let (r, named) = (self.tree.put(tag), self.tree.put(&format!("Remove “{tag}”")));
+            (self.tree.nodes[b as usize].text, self.tree.nodes[b as usize].name) = (r, named);
+            let rest = tags.iter().enumerate().filter(|&(j, _)| j != k).map(|(_, t)| ledger::Value::Str(t.clone())).collect();
+            self.set(b, erased, ledger::Value::List(rest), format!("{label}: remove “{tag}”"));
+        }
+        let f = self.tree.add(row, Kind::Field { holds: Holds::Tags }, Some(id), at);
+        let r = self.tree.put(label);
+        let n = &mut self.tree.nodes[f as usize];
+        (n.path, n.name, n.subject, n.span) = (Some(erased), r, self.subject, crate::tree::Fill.min(12));
     }
 
     fn whole<F: Field, T: Setting>(&self, path: FactPath<F, T>) -> Option<(i128, i128, i128)> {

@@ -121,7 +121,7 @@ impl<'t> Layout<'t> {
                 let pref = self.cols_as(tree.str(n.text), style);
                 (pref.min(8), pref)
             }
-            Kind::Button | Kind::Toggle { .. } => {
+            Kind::Button | Kind::Browse | Kind::Toggle { .. } => {
                 let c = self.cols(tree.str(n.text), true) + BUTTON;
                 (c.min(BUTTON_MIN + BUTTON), c)
             }
@@ -223,8 +223,13 @@ impl<'t> Layout<'t> {
                 (c, c)
             }
             Kind::Slider { label, .. } => (13 + label as i32, 33 + label as i32),
+            Kind::Cycle { widest } => (widest as i32 + BUTTON + 2, widest as i32 + BUTTON + 2),
             Kind::Field { .. } => (16, 32),
             Kind::Rule | Kind::Placeholder { .. } => (0, 0),
+            Kind::Chip => {
+                let c = self.cols(tree.str(n.text), false) + 3;
+                (c, c)
+            }
             Kind::Keys | Kind::Tag | Kind::Avatar => {
                 let c = self.cols(tree.str(n.text), matches!(n.kind, Kind::Keys | Kind::Avatar)) + 1;
                 (c, c)
@@ -428,14 +433,16 @@ impl<'t> Layout<'t> {
             | Kind::Choice { .. }
             | Kind::Entry
             | Kind::Link
-            | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline | Holds::Number | Holds::Code { .. } }
+            | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline | Holds::Number | Holds::Code { .. } | Holds::Tags }
             | Kind::Slider { .. }
+            | Kind::Cycle { .. }
+            | Kind::Browse
             | Kind::Status
             | Kind::Note
             | Kind::Swatch { .. } => 1,
             Kind::Picture { rows, .. } => rows,
             Kind::Rule => 2,
-            Kind::Keys | Kind::Gauge { .. } | Kind::Tag | Kind::Avatar => 1,
+            Kind::Keys | Kind::Gauge { .. } | Kind::Tag | Kind::Chip | Kind::Avatar => 1,
             Kind::Placeholder { rows } => rows.max(1),
             Kind::Callout { .. } | Kind::Card => {
                 let (start, end) = self.children(tree, i);
@@ -740,11 +747,14 @@ impl<'t> Layout<'t> {
             let cols = if matches!(
                 tree.nodes[c as usize].kind,
                 Kind::Button
+                    | Kind::Cycle { .. }
+                    | Kind::Browse
                     | Kind::Link
                     | Kind::Swatch { .. }
                     | Kind::Picture { .. }
                     | Kind::Keys
                     | Kind::Tag
+                    | Kind::Chip
                     | Kind::Avatar
                     | Kind::Toggle { .. }
                     | Kind::IconButton { .. }

@@ -170,6 +170,10 @@ pub struct Catalog {
     pin: Text,
     #[session]
     printing: Printing,
+    #[session]
+    attachment: Text,
+    #[session]
+    labels: Vec<String>,
 }
 
 #[derive(Facts)]
@@ -293,10 +297,13 @@ pub enum Component {
     Slider,
     CodeField,
     Form,
+    Choice,
+    FileField,
+    TagField,
 }
 
 impl Component {
-    const ALL: [Component; 49] = [
+    const ALL: [Component; 52] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -346,6 +353,9 @@ impl Component {
         Component::Slider,
         Component::CodeField,
         Component::Form,
+        Component::Choice,
+        Component::FileField,
+        Component::TagField,
     ];
 
     fn name(self) -> &'static str {
@@ -399,6 +409,9 @@ impl Component {
             Component::Slider => "Slider",
             Component::CodeField => "Code field",
             Component::Form => "Form",
+            Component::Choice => "Choice",
+            Component::FileField => "File field",
+            Component::TagField => "Tag field",
         }
     }
 
@@ -453,6 +466,9 @@ impl Component {
             Component::Slider => include_str!("../../../docs/components/slider.md"),
             Component::CodeField => include_str!("../../../docs/components/code-field.md"),
             Component::Form => include_str!("../../../docs/components/form.md"),
+            Component::Choice => include_str!("../../../docs/components/choice.md"),
+            Component::FileField => include_str!("../../../docs/components/file-field.md"),
+            Component::TagField => include_str!("../../../docs/components/tag-field.md"),
         }
     }
 
@@ -567,6 +583,8 @@ impl Default for Catalog {
             volume: 40,
             pin: Text::from("40"),
             printing: Printing::default(),
+            attachment: Text::default(),
+            labels: vec!["groceries".to_string(), "weekend".to_string()],
         }
     }
 }
@@ -966,6 +984,9 @@ impl Catalog {
                 ui.code_field(Catalog::pin, 6);
             }),
             Component::Form => ui.form(Catalog::printing),
+            Component::Choice => ui.choice("Show as", Catalog::shape),
+            Component::FileField => ui.file_field("Attachment", Catalog::attachment),
+            Component::TagField => ui.tag_field("Tags", Catalog::labels),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);

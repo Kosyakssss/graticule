@@ -1,0 +1,26 @@
+window		0 0 48 19	
+  page	Date picker	0 0 48 7	
+    list		2 3 44 3	18 items
+      list item		2 3 42 2	
+        text	A date field with a button after it that opens a calendar under it.	2 3 42 2	
+      list item		2 5 42 1	
+  alert		2 7 44 1	
+  status		2 8 44 1	
+  toolbar		2 9 44 10	
+    button	Press	2 9 7 1	
+    button	Follow the link	11 9 13 1	
+    button	Tick or untick the box	26 9 18 1	
+    button	Bold	2 10 6 1	
+    button	Go one level in	10 10 13 1	
+    button	Say it	25 10 7 1	unavailable (Type something first)
+    button	Back to all components	2 11 20 1	
+    button	Change the light appearance	2 12 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	2 13 24 1	
+    button	Use the next weight of lines	2 14 23 1	
+    button	Deepen the shadow	27 14 17 1	
+    button	Make the shadow shallower	2 15 23 1	
+    button	Use the other check mark	2 16 22 1	
+    button	Save the theme and the style	2 17 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	28 17 13 1	unavailable (Nothing to undo)
+    button	Redo	2 18 19 1	unavailable (Nothing to redo)
+    button	Open the palette	23 18 15 1	

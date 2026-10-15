@@ -1,0 +1,60 @@
+window		0 0 120 30	
+  page	Date picker	0 0 120 24	
+    list		2 3 116 20	18 items
+      list item		2 3 114 1	
+        text	A date field with a button after it that opens a calendar under it.	2 3 48 1	
+      list item		2 4 114 1	
+      list item		2 5 114 1	
+        heading	Use it for	2 5 7 1	strong
+      list item		2 6 114 1	
+        text	A day that is sometimes known and sometimes looked for: type it, or open the month and take it.	2 6 72 1	
+      list item		2 7 114 1	
+      list item		2 8 114 1	
+        heading	Code	2 8 4 1	strong
+      list item		2 9 114 1	
+        text	ui.date_picker("Due", Catalog::due);	2 9 36 1	mono
+      list item		2 10 114 1	
+        group		2 10 114 1	
+          column		2 10 14 1	
+            text	Live	2 10 14 1	muted
+          column		18 10 98 1	
+            group		18 10 98 1	
+              date field		18 10 12 1	holds “2026-06-03”
+              popover button	Choose…	32 10 12 1	
+      list item		2 11 114 2	
+        text	It is a date field and a popover holding a calendar, for the same Day. Taking a day in the calendar sets it by one edit and closes the calendar, and the focus goes back to the button. Both halves behave as they do on their own.	2 11 114 2	
+      list item		2 13 114 1	
+      list item		2 14 114 1	
+        heading	Keys	2 14 4 1	strong
+      list item		2 15 114 1	
+        text	The field's keys, then Tab to the button; Space or Return opens the calendar with the focus on the chosen day, and Escape closes it.	2 15 98 1	
+      list item		2 16 114 1	
+      list item		2 17 114 1	
+        heading	Narrow windows	2 17 14 1	strong
+      list item		2 18 114 1	
+        text	The field and the button go under each other when they don't fit side by side; the calendar opens under the button if it fits, else above.	2 18 100 1	
+      list item		2 19 114 1	
+      list item		2 20 114 1	
+        heading	Screen reader	2 20 11 1	strong
+      list item		2 21 114 1	
+        text	A date field, then a button that says it opens a dialog and whether it is open; the calendar is announced as a calendar is.	2 21 89 1	
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Bold	46 26 6 1	
+    button	Go one level in	54 26 13 1	
+    button	Say it	69 26 7 1	unavailable (Type something first)
+    button	Back to all components	78 26 20 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

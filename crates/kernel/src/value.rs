@@ -63,6 +63,13 @@ impl Calendar {
         Calendar { dates, ..Calendar::default() }
     }
 
+    /// The day it is now, in the calendar's time zone.
+    pub fn today(&self) -> crate::days::Day {
+        let Ok(now) = Timestamp::from_millisecond(self.now.0) else { return crate::days::Day::default() };
+        let date = now.to_zoned(self.zone.clone()).date();
+        crate::days::Day::new(date.year() as i32, date.month() as u32, date.day() as u32).unwrap_or_default()
+    }
+
     /// `at`, written the one way every date is written, and the moment that writing next changes, if it does.
     pub fn write(&self, at: Moment) -> (String, Option<Moment>) {
         let (Ok(when), Ok(now)) = (Timestamp::from_millisecond(at.0), Timestamp::from_millisecond(self.now.0)) else { return ("?".into(), None) };

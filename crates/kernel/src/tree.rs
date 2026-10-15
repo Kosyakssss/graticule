@@ -102,6 +102,10 @@ pub enum Holds {
     Code { length: u8 },
     /// A tag to add to the tags before it in its row.
     Tags,
+    /// A day, typed as a date or in words.
+    Date,
+    /// A time of day.
+    Time,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -167,6 +171,9 @@ pub enum Kind {
     MenuButton,
     Popover { open: bool },
     Confirm { open: bool },
+    Calendar { month: i32 },
+    Day { on: bool, today: bool, outside: bool },
+    Turn { forward: bool },
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -207,6 +214,8 @@ impl Kind {
                 | Kind::MenuButton
                 | Kind::Popover { .. }
                 | Kind::Confirm { open: false }
+                | Kind::Day { .. }
+                | Kind::Turn { .. }
         )
     }
 
@@ -222,6 +231,7 @@ impl Kind {
                 | Kind::ListRow { .. }
                 | Kind::Overlay { .. }
                 | Kind::Confirm { open: true }
+                | Kind::Calendar { .. }
                 | Kind::Callout { .. }
                 | Kind::Card
                 | Kind::Group
@@ -248,6 +258,11 @@ impl Kind {
             Kind::Field { holds: Holds::Search } => "search field",
             Kind::Field { holds: Holds::Inline } => "editable text",
             Kind::Field { holds: Holds::Number } => "number field",
+            Kind::Field { holds: Holds::Date } => "date field",
+            Kind::Field { holds: Holds::Time } => "time field",
+            Kind::Calendar { .. } => "calendar",
+            Kind::Day { .. } => "day",
+            Kind::Turn { .. } => "button",
             Kind::Field { holds: Holds::Tags } => "tag field",
             Kind::Field { holds: Holds::Code { .. } } => "code field",
             Kind::Field { .. } => "text field",
@@ -446,6 +461,8 @@ pub struct Tree<C> {
     pub opened: Option<Id>,
     /// The focused component, for the parts of the view that show only around it, such as a combo box's completions.
     pub focus: Option<Id>,
+    /// The month each calendar that was turned shows, by its id, counted as `Day::month_index` counts; the others show the month of their chosen day.
+    pub months: HashMap<Id, i32>,
 }
 
 impl<C> Default for Tree<C> {
@@ -466,6 +483,7 @@ impl<C> Default for Tree<C> {
             numbers: Vec::new(),
             opened: None,
             focus: None,
+            months: HashMap::new(),
         }
     }
 }

@@ -13,6 +13,11 @@ fn role(kind: Kind) -> Role {
         Kind::Field { holds: Holds::Lines { .. } } => Role::MultilineTextInput,
         Kind::Field { holds: Holds::Search } => Role::SearchInput,
         Kind::Field { holds: Holds::Number } => Role::SpinButton,
+        Kind::Field { holds: Holds::Date } => Role::DateInput,
+        Kind::Field { holds: Holds::Time } => Role::TimeInput,
+        Kind::Calendar { .. } => Role::Grid,
+        Kind::Day { .. } => Role::GridCell,
+        Kind::Turn { .. } => Role::Button,
         Kind::Slider { .. } | Kind::Thumb { .. } => Role::Slider,
         Kind::Range { .. } => Role::Group,
         Kind::Cycle { .. } | Kind::Browse | Kind::Chip => Role::Button,
@@ -91,6 +96,10 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 node.set_label(name);
                 node.set_value(text);
                 node.set_expanded(open);
+            }
+            Kind::Day { on, .. } => {
+                node.set_label(name);
+                node.set_selected(on);
             }
             Kind::Pick { on } => {
                 node.set_label(text);

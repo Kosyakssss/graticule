@@ -1,0 +1,58 @@
+window		0 0 120 30	
+  page	Time zone	0 0 120 24	
+    list		2 3 116 20	18 items
+      list item		2 3 114 1	
+        text	A combo box over the world's time zones, by their names: Europe/Lisbon, America/Sao_Paulo.	2 3 71 1	
+      list item		2 4 114 1	
+      list item		2 5 114 1	
+        heading	Use it for	2 5 7 1	strong
+      list item		2 6 114 1	
+        text	Where a person or a meeting is, when times are shown or scheduled across zones.	2 6 62 1	
+      list item		2 7 114 1	
+      list item		2 8 114 1	
+        heading	Code	2 8 4 1	strong
+      list item		2 9 114 1	
+        text	ui.time_zone(Catalog::zone, Message::from("Time zone"));	2 9 56 1	mono
+      list item		2 10 114 1	
+        group		2 10 114 1	
+          column		2 10 14 1	
+            text	Live	2 10 14 1	muted
+          column		18 10 98 1	
+            text field	Time zone	18 10 98 1	holds “Europe/Lisbon”
+      list item		2 11 114 3	
+        text	The fact is the zone's name as Text. The names come from the time zone database Graticule already writes dates with, read once; the field lists the first eight that contain what is typed, ignoring case, so lisb finds Lisbon and sao finds São Paulo's zone. Like any combo box it takes any text: an app that needs a real zone checks the name where it uses it.	2 11 114 3	
+      list item		2 14 114 1	
+      list item		2 15 114 1	
+        heading	Keys	2 15 4 1	strong
+      list item		2 16 114 1	
+        text	A combo box's: Down to the completions, Return or a click to take one.	2 16 53 1	
+      list item		2 17 114 1	
+      list item		2 18 114 1	
+        heading	Narrow windows	2 18 14 1	strong
+      list item		2 19 114 1	
+        text	A field's, with the completions under it as wide as the longest.	2 19 47 1	
+      list item		2 20 114 1	
+      list item		2 21 114 1	
+        heading	Screen reader	2 21 11 1	strong
+      list item		2 22 114 1	
+        text	A text field named by its placeholder; each completion is an option.	2 22 51 1	
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Bold	46 26 6 1	
+    button	Go one level in	54 26 13 1	
+    button	Say it	69 26 7 1	unavailable (Type something first)
+    button	Back to all components	78 26 20 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

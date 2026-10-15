@@ -82,16 +82,11 @@ Several names on either side are the same component. They are merged into one ro
 | Confirm row | AlertDialog, Modal | Alert, Dialog | grounded: a button that asks in its own place before running its command |
 | Side panel | Drawer | Drawer | grounded: a fact and a column, not a component of its own |
 | Help page | | Hotkeys dialog | the registry as a tree with its keys (§8.3, item 12) |
-
-## Wave 4: time
-
-| Graticule | HeroUI | Blueprint | Notes |
-|---|---|---|---|
-| Calendar | Calendar, RangeCalendar, CalendarYearPicker | DatePicker, DateRangePicker (the month grid) | |
-| Date field | DateField, DateInputGroup | DateInput, DateRangeInput | accepts natural input (`next tue 3pm`) |
-| Date picker | DatePicker, DateRangePicker | DatePicker, DateRangePicker, shortcuts | anchored: field and calendar |
-| Time field | TimeField | TimePicker | |
-| Time zone | | TimezoneSelect | a select over the zones |
+| Calendar | Calendar | DatePicker (the month grid) | a month a week to a row, one tab stop; ranges and a year picker are not done |
+| Date field | DateField, DateInputGroup | DateInput | a day typed as a date or in words (`next tue`, `jun 3`); a day and time together and ranges are not done |
+| Date picker | DatePicker | DatePicker | anchored: a date field and a calendar in a popover; ranges and shortcuts are not done |
+| Time field | TimeField | TimePicker | a time of day (`3pm`), stepped by the hour or minute the caret is in |
+| Time zone | | TimezoneSelect | a combo box over the zones' names |
 
 ## Wave 5: color
 

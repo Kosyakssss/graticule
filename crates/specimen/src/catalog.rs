@@ -2,7 +2,7 @@ use graticule_macros::{Choice, Commands, Facts, Form};
 use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
-use kernel::{App, Available, Cx, Failure, Ink, Message, Path, States, Ui};
+use kernel::{App, Available, Cx, Day, Failure, Ink, Message, Path, States, Time, Ui};
 use ledger::{Edit, Key, List, Outcome, Selection, Text};
 
 use crate::style::{self, Mark, Mix, Nudge, Reach, Reaches, Side, Weight};
@@ -182,6 +182,12 @@ pub struct Catalog {
     city: Text,
     #[session]
     details: bool,
+    #[session]
+    due: Day,
+    #[session]
+    opens: Time,
+    #[session]
+    zone: Text,
 }
 
 const CITIES: [&str; 12] = ["Amsterdam", "Athens", "Berlin", "Lisbon", "London", "Madrid", "Oslo", "Paris", "Prague", "Rome", "Vienna", "Warsaw"];
@@ -318,10 +324,15 @@ pub enum Component {
     Popover,
     ConfirmRow,
     SidePanel,
+    Calendar,
+    DateField,
+    DatePicker,
+    TimeField,
+    TimeZone,
 }
 
 impl Component {
-    const ALL: [Component; 60] = [
+    const ALL: [Component; 65] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -382,6 +393,11 @@ impl Component {
         Component::Popover,
         Component::ConfirmRow,
         Component::SidePanel,
+        Component::Calendar,
+        Component::DateField,
+        Component::DatePicker,
+        Component::TimeField,
+        Component::TimeZone,
     ];
 
     fn name(self) -> &'static str {
@@ -446,6 +462,11 @@ impl Component {
             Component::Popover => "Popover",
             Component::ConfirmRow => "Confirm row",
             Component::SidePanel => "Side panel",
+            Component::Calendar => "Calendar",
+            Component::DateField => "Date field",
+            Component::DatePicker => "Date picker",
+            Component::TimeField => "Time field",
+            Component::TimeZone => "Time zone",
         }
     }
 
@@ -511,6 +532,11 @@ impl Component {
             Component::Popover => include_str!("../../../docs/components/popover.md"),
             Component::ConfirmRow => include_str!("../../../docs/components/confirm-row.md"),
             Component::SidePanel => include_str!("../../../docs/components/side-panel.md"),
+            Component::Calendar => include_str!("../../../docs/components/calendar.md"),
+            Component::DateField => include_str!("../../../docs/components/date-field.md"),
+            Component::DatePicker => include_str!("../../../docs/components/date-picker.md"),
+            Component::TimeField => include_str!("../../../docs/components/time-field.md"),
+            Component::TimeZone => include_str!("../../../docs/components/time-zone.md"),
         }
     }
 
@@ -631,6 +657,9 @@ impl Default for Catalog {
             showing: vec![Folder::Inbox, Folder::Drafts],
             city: Text::default(),
             details: true,
+            due: Day::new(2026, 6, 3).unwrap_or_default(),
+            opens: Time::new(9, 0).unwrap_or_default(),
+            zone: Text::from("Europe/Lisbon"),
         }
     }
 }
@@ -1062,6 +1091,11 @@ impl Catalog {
                     }
                 });
             }
+            Component::Calendar => ui.calendar("Due", Catalog::due),
+            Component::DateField => ui.labelled("Due", |ui| ui.date_field(Catalog::due)),
+            Component::DatePicker => ui.date_picker("Due", Catalog::due),
+            Component::TimeField => ui.labelled("Opens at", |ui| ui.time_field(Catalog::opens)),
+            Component::TimeZone => ui.time_zone(Catalog::zone, Message::from("Time zone")),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);

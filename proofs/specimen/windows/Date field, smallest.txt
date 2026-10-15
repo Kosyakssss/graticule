@@ -1,0 +1,26 @@
+window		0 0 34 23	
+  page	Date field	0 0 34 7	
+    list		2 3 30 3	18 items
+      list item		2 3 28 2	
+        text	A field for a day, typed as a date or in words.	2 3 28 2	
+      list item		2 5 28 1	
+  alert		2 7 30 1	
+  status		2 8 30 1	
+  toolbar		2 9 30 14	
+    button	Press	2 9 7 1	
+    button	Follow the link	11 9 13 1	
+    button	Tick or untick the box	2 10 18 1	
+    button	Bold	22 10 6 1	
+    button	Go one level in	2 11 13 1	
+    button	Say it	17 11 7 1	unavailable (Type something first)
+    button	Back to all components	2 12 20 1	
+    button	Change the light appearance	2 13 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	2 14 24 1	
+    button	Use the next weight of lines	2 15 23 1	
+    button	Deepen the shadow	2 16 17 1	
+    button	Make the shadow shallower	2 17 23 1	
+    button	Use the other check mark	2 18 22 1	
+    button	Save the theme and the style	2 19 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	2 20 13 1	unavailable (Nothing to undo)
+    button	Redo	2 21 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 22 15 1	

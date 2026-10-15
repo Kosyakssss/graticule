@@ -228,6 +228,7 @@ pub struct Runner<A: App> {
     minimum: Option<(i32, i32)>,
     carets: HashMap<Id, Caret>,
     drafts: HashMap<Id, String>,
+    months: HashMap<Id, i32>,
     sliding: Option<(Id, i128)>,
     opened: Option<Id>,
     browse: Option<Id>,
@@ -312,6 +313,7 @@ impl<A: App> Runner<A> {
             minimum: None,
             carets: HashMap::new(),
             drafts: HashMap::new(),
+            months: HashMap::new(),
             sliding: None,
             opened: None,
             browse: None,
@@ -401,6 +403,7 @@ impl<A: App> Runner<A> {
         self.tree.calendar = self.calendar.clone();
         self.tree.only_changed = self.only_changed;
         (self.tree.opened, self.tree.focus) = (self.opened, self.focus);
+        self.tree.months.clone_from(&self.months);
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
@@ -890,7 +893,7 @@ impl<A: App> Runner<A> {
     fn resolve(&mut self) {
         for i in 0..self.tree.nodes.len() {
             let n = self.tree.nodes[i];
-            if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags })
+            if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags | Holds::Date | Holds::Time })
                 && let Some(draft) = self.drafts.get(&n.id)
             {
                 self.tree.nodes[i].text = self.tree.put(draft);
@@ -2287,7 +2290,7 @@ impl<A: App> Runner<A> {
         let mut first = None;
         for j in inside {
             match self.tree.nodes[j].kind {
-                Kind::Pick { on: true } => {
+                Kind::Pick { on: true } | Kind::Day { on: true, .. } => {
                     first = Some(j);
                     break;
                 }
@@ -2418,6 +2421,9 @@ impl<A: App> Runner<A> {
                 Some(i) if self.tree.nodes[i as usize].kind == (Kind::Field { holds: Holds::Tags }) => {
                     self.add_tag(i);
                 }
+                Some(i) if matches!(self.tree.nodes[i as usize].kind, Kind::Field { holds: Holds::Date | Holds::Time }) => {
+                    self.read_when(i);
+                }
                 Some(i) => {
                     if let Some(whole) = self.work_out(i) {
                         self.set_number(i, whole);
@@ -2429,6 +2435,82 @@ impl<A: App> Runner<A> {
             self.stale = true;
         }
         !left.is_empty()
+    }
+
+    fn read_when(&mut self, i: u32) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let Some(path) = n.path else { return false };
+        let Some(draft) = self.drafts.get(&n.id).cloned() else { return true };
+        let read = match n.kind {
+            Kind::Field { holds: Holds::Date } => crate::days::read_day(&draft, self.calendar.today()).map(|d| (Value::Int(d.0 as i64), d.to_string())),
+            _ => crate::days::read_time(&draft).map(|t| (Value::UInt(t.0 as u64), t.to_string())),
+        };
+        let (value, shown) = match read {
+            Ok(read) => read,
+            Err(why) => return self.say(Message::from(why)),
+        };
+        self.drafts.remove(&n.id);
+        self.carets.remove(&n.id);
+        self.stale = true;
+        if shown == self.tree.str(n.text) {
+            return true;
+        }
+        let said = match self.tree.str(n.name) {
+            "" => format!("Set to {shown}"),
+            name => format!("{name}: {shown}"),
+        };
+        self.set_value(path, value, said)
+    }
+
+    fn step_when(&mut self, i: u32, by: i32) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let text = self.drafts.get(&n.id).cloned().unwrap_or_else(|| self.tree.str(n.text).to_string());
+        let caret = self.caret(i);
+        let stepped = match n.kind {
+            Kind::Field { holds: Holds::Date } => crate::days::read_day(&text, self.calendar.today()).map(|d| crate::days::Day(d.0 + by).to_string()),
+            _ => crate::days::read_time(&text).map(|t| t.add_minutes(if caret.caret <= text.find(':').unwrap_or(text.len()) { by * 60 } else { by }).to_string()),
+        };
+        match stepped {
+            Ok(stepped) => {
+                self.drafts.insert(n.id, stepped);
+                let done = self.read_when(i);
+                self.carets.insert(n.id, caret);
+                done
+            }
+            Err(why) => self.say(Message::from(why)),
+        }
+    }
+
+    fn day_key(&mut self, i: u32, key: Key) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let calendar = self.tree.nodes[n.parent as usize];
+        let (Some((Value::Int(raw), _)), Kind::Calendar { month }) = (self.tree.sets.get(n.set as usize), calendar.kind) else { return false };
+        let day = crate::days::Day(*raw as i32);
+        let to = match key {
+            Key::Left => crate::days::Day(day.0 - 1),
+            Key::Right => crate::days::Day(day.0 + 1),
+            Key::Up => crate::days::Day(day.0 - 7),
+            Key::Down => crate::days::Day(day.0 + 7),
+            Key::Home => crate::days::Day(day.0 - day.weekday() as i32),
+            Key::End => crate::days::Day(day.0 + 6 - day.weekday() as i32),
+            Key::PageUp => day.add_months(-1),
+            Key::PageDown => day.add_months(1),
+            _ => return false,
+        };
+        if to.month_index() != month {
+            self.months.insert(calendar.id, to.month_index());
+        }
+        self.focus = Some(crate::ui::day_id(calendar.id, to));
+        self.stale = true;
+        true
+    }
+
+    fn turn_month(&mut self, i: u32, forward: bool) -> bool {
+        let calendar = self.tree.nodes[self.tree.nodes[i as usize].parent as usize];
+        let Kind::Calendar { month } = calendar.kind else { return false };
+        self.months.insert(calendar.id, month + if forward { 1 } else { -1 });
+        self.stale = true;
+        true
     }
 
     fn tags(&self, i: u32) -> Vec<String> {
@@ -2568,6 +2650,9 @@ impl<A: App> Runner<A> {
         if n.asks != NONE {
             return self.ask_for(n.asks as usize);
         }
+        if let Kind::Turn { forward } = n.kind {
+            return self.turn_month(i, forward);
+        }
         if let Kind::Select { .. } | Kind::Popover { .. } | Kind::Confirm { open: false } = n.kind {
             return self.toggle_open(n.id);
         }
@@ -2589,6 +2674,12 @@ impl<A: App> Runner<A> {
         if n.set != NONE
             && let Some(path) = n.path
         {
+            if let Kind::Day { .. } = n.kind {
+                self.months.remove(&self.tree.nodes[n.parent as usize].id);
+                if self.opened.is_some_and(|o| self.tree.within(n.id, o)) {
+                    self.close_opened();
+                }
+            }
             let (value, said) = self.tree.sets[n.set as usize].clone();
             return self.set_value(path, value, said);
         }
@@ -2715,12 +2806,25 @@ impl<A: App> Runner<A> {
 
     fn focusable(&self, i: usize) -> bool {
         match self.tree.nodes[i].kind {
+            Kind::Day { on, outside, .. } => self.focus == Some(self.tree.nodes[i].id) || !self.tree.in_row(i as u32) && self.day_stop(i, on, outside),
             kind if matches!(kind, Kind::Field { .. }) || kind.control() => {
                 !self.tree.in_row(i as u32) && !self.tree.hidden(i as u32) && self.tree.ancestor(i as u32, |n| n.kind == Kind::Palette).is_none()
             }
             Kind::List { .. } => true,
             _ => false,
         }
+    }
+
+    fn day_stop(&self, i: usize, on: bool, outside: bool) -> bool {
+        let days = || self.tree.children(self.tree.nodes[i].parent).map(|c| self.tree.nodes[c as usize]);
+        if days().any(|d| self.focus == Some(d.id)) {
+            return false;
+        }
+        if on && !outside {
+            return true;
+        }
+        let first = days().find(|d| matches!(d.kind, Kind::Day { outside: false, .. })).map(|d| d.id);
+        first == Some(self.tree.nodes[i].id) && !days().any(|d| matches!(d.kind, Kind::Day { on: true, outside: false, .. }))
     }
 
     fn cycle(&mut self, forward: bool) -> bool {
@@ -2917,6 +3021,19 @@ impl<A: App> Runner<A> {
                     _ => {}
                 }
             }
+            if matches!(holds, Holds::Date | Holds::Time) && chord.mods == Mods::default() {
+                match chord.key {
+                    Key::Enter => return self.read_when(i),
+                    Key::Up => return self.step_when(i, 1),
+                    Key::Down => return self.step_when(i, -1),
+                    Key::Escape if self.drafts.remove(&n.id).is_some() => {
+                        self.carets.remove(&n.id);
+                        self.stale = true;
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
             if holds == Holds::Search && chord.key == Key::Escape && chord.mods == Mods::default() && !n.text.is_empty() {
                 let len = self.tree.str(n.text).len();
                 return self.splice(i, 0..len, String::new(), 0, field::Kind::Alone);
@@ -2955,6 +3072,15 @@ impl<A: App> Runner<A> {
         {
             self.focus = Some(self.tree.nodes[f as usize].id);
             return self.field_action(f, field::insert(self.caret(f), t));
+        }
+        if self.pending.is_empty()
+            && typing
+            && chord.mods == Mods::default()
+            && let Some(i) = self.focused_control()
+            && matches!(self.tree.nodes[i as usize].kind, Kind::Day { .. })
+            && matches!(chord.key, Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End | Key::PageUp | Key::PageDown)
+        {
+            return self.day_key(i, chord.key);
         }
         if self.pending.is_empty()
             && typing
@@ -3129,7 +3255,7 @@ impl<A: App> Runner<A> {
 
     fn splice(&mut self, i: u32, range: std::ops::Range<usize>, mut text: String, mut caret: usize, kind: field::Kind) -> bool {
         let n = self.tree.nodes[i as usize];
-        if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags }) {
+        if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags | Holds::Date | Holds::Time }) {
             let mut draft = self.tree.str(n.text).to_string();
             draft.replace_range(range, &text);
             self.drafts.insert(n.id, draft);

@@ -248,6 +248,37 @@ fn option(p: &mut Painter, n: &Node, label: &str, on: bool, look: Look) {
     p.text(label, mono, (r.x + w * 2.0, r.y), Some((r.w - w * 2.5).max(0.0)), ink);
 }
 
+fn day(p: &mut Painter, n: &Node, label: &str, (on, today, outside): (bool, bool, bool), look: Look) {
+    let r = p.rect(n.area);
+    let (theme, w) = (p.theme, p.m.cell_w);
+    if on {
+        p.fill(r, theme.ink);
+    } else if look.focused || look.pressed {
+        p.fill(r, theme.selection);
+    } else if look.hovered {
+        p.fill(r, theme.hover);
+    }
+    let ink = if on {
+        theme.bg
+    } else if outside || !n.enabled {
+        theme.faint
+    } else {
+        theme.ink
+    };
+    let mono = p.m.mono();
+    p.text(&format!("{label:>2}"), mono, (r.x + w * 0.5, r.y), None, ink);
+    if today {
+        let line = (p.m.cell_h * 0.08).round().max(1.0);
+        p.fill(Rect::new((r.x + w * 0.5).round(), (r.bottom() - line * 2.0).round(), (w * 2.0).round(), line), ink);
+    }
+    if on && look.focused {
+        let line = (p.m.cell_h * 0.08).round().max(1.0);
+        let ring = theme.selection;
+        p.fill(Rect::new(r.x, r.y, r.w, line), ring);
+        p.fill(Rect::new(r.x, r.bottom() - line, r.w, line), ring);
+    }
+}
+
 fn opener(p: &mut Painter, n: &Node, label: &str, mark: &'static Picture, look: Look) {
     let r = pressable(p, n, "", None, false, Joined::Alone, look);
     let (theme, w, h) = (p.theme, p.m.cell_w, p.m.cell_h);
@@ -875,6 +906,11 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             border(p, r, t, theme.ink);
         }
         (Layer::Over, Kind::Pick { on }) => option(p, &n, text, on, look),
+        (Layer::Over, Kind::Day { on, today, outside }) => day(p, &n, text, (on, today, outside), look),
+        (Layer::Over, Kind::Turn { forward }) => {
+            let icon = if forward { &crate::picture::icons::CHEVRON_RIGHT } else { &crate::picture::icons::CHEVRON_LEFT };
+            pressable(p, &n, "", Some(icon), false, Joined::Alone, look);
+        }
         (Layer::Over, Kind::Status) => {
             let muted = p.theme.muted;
             let style = p.m.sans(400.0);

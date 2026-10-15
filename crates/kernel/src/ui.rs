@@ -6,6 +6,7 @@ use std::panic::Location;
 use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
 use crate::app::{Moment, Path};
+use crate::days::{Day, Time};
 use crate::form::{Control, Item, Setting, Settings};
 use crate::ink::Ink;
 use crate::message::Message;
@@ -945,11 +946,13 @@ impl<'a, C, S> Ui<'a, C, S> {
         let typed = self.facts::<F>().and_then(|f| path.get(f)).map_or(String::new(), |t| t.as_str().to_string());
         let name = placeholder.as_str().to_string();
         let i = self.field_as(path, placeholder, Holds::Line, at).node;
+        let pick = |k: usize| id.mix(k as u64 + 2);
+        if !self.tree.focus.is_some_and(|f| f == id || (0..COMPLETIONS).any(|k| pick(k) == f)) {
+            return;
+        }
         let wanted = typed.to_lowercase();
         let shown: Vec<&str> = completions.iter().map(AsRef::as_ref).filter(|c| *c != typed && c.to_lowercase().contains(&wanted)).take(COMPLETIONS).collect();
-        let pick = |k: usize| id.mix(k as u64 + 2);
-        let focused = self.tree.focus.is_some_and(|f| f == id || (0..shown.len()).any(|k| pick(k) == f));
-        if shown.is_empty() || !focused {
+        if shown.is_empty() {
             return;
         }
         let o = self.tree.add(i, Kind::Overlay { anchor: crate::tree::Anchor::Node(i) }, Some(id.mix(1)), at);
@@ -959,6 +962,85 @@ impl<'a, C, S> Ui<'a, C, S> {
             self.tree.nodes[p as usize].text = r;
             self.set(p, erased, ledger::Value::Str(c.to_string()), format!("{name}: {c}"));
         }
+    }
+
+    /// A field for the name of a time zone at `path`, such as `Europe/Lisbon`, with the zones whose names contain what is typed listed under it.
+    #[track_caller]
+    pub fn time_zone<F: Field>(&mut self, path: FactPath<F, Text>, placeholder: Message) {
+        static ZONES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+        let zones = ZONES.get_or_init(|| {
+            let mut zones: Vec<String> = jiff::tz::db().available().map(|name| name.to_string()).filter(|name| name.contains('/')).collect();
+            zones.sort();
+            zones
+        });
+        self.combo_box(path, placeholder, zones);
+    }
+
+    /// A month of days for the `Day` at `path`, a week to a row from Monday, with the chosen day filled and today underlined. Clicking a day, or Return or Space on it, sets it by one `Edit` named after `label`. The arrows move between days, Home and End to the ends of the week, Page Up and Page Down between months, and the buttons beside the month's name turn it.
+    #[track_caller]
+    pub fn calendar<F: Field>(&mut self, label: impl AsRef<str>, path: FactPath<F, Day>) {
+        let Some(chosen) = self.facts::<F>().and_then(|f| path.get(f)).copied() else { return };
+        let (label, at, erased) = (label.as_ref(), Location::caller(), path.erased());
+        let id = Id::ROOT.mix(erased.hash64()).mix(7);
+        let month = self.tree.months.get(&id).copied().unwrap_or(chosen.month_index());
+        let today = self.tree.calendar.today();
+        let first = Day::first_of(month);
+        let c = self.tree.add(self.parent, Kind::Calendar { month }, Some(id), at);
+        let named = self.tree.put(label);
+        (self.tree.nodes[c as usize].name, self.tree.nodes[c as usize].subject) = (named, self.subject);
+        let h = self.tree.add(c, Kind::Text { mono: false, tone: Tone::Ink, strong: true }, Some(id.mix(1)), at);
+        let r = self.tree.put(&first.month_name());
+        self.tree.nodes[h as usize].text = r;
+        for (k, (forward, name)) in [(false, "Previous month"), (true, "Next month")].into_iter().enumerate() {
+            let t = self.tree.add(c, Kind::Turn { forward }, Some(id.mix(k as u64 + 2)), at);
+            let r = self.tree.put(name);
+            self.tree.nodes[t as usize].name = r;
+        }
+        for (k, weekday) in ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].into_iter().enumerate() {
+            let w = self.tree.add(c, Kind::Text { mono: true, tone: Tone::Muted, strong: false }, Some(id.mix(4).mix(k as u64)), at);
+            let r = self.tree.put(weekday);
+            self.tree.nodes[w as usize].text = r;
+        }
+        let start = first.0 - first.weekday() as i32;
+        for day in (start..start + 42).map(Day) {
+            let kind = Kind::Day { on: day == chosen, today: day == today, outside: day.month_index() != month };
+            let d = self.tree.add(c, kind, Some(day_id(id, day)), at);
+            let (r, spoken) = (self.tree.put(&day.parts().2.to_string()), self.tree.put(&day.spoken()));
+            (self.tree.nodes[d as usize].text, self.tree.nodes[d as usize].name) = (r, spoken);
+            self.set(d, erased, ledger::Value::Int(day.0 as i64), format!("{label}: {day}"));
+        }
+    }
+
+    /// A day at `path`, typed as `2026-06-03` or in words: `today`, `tomorrow`, `next tue`, `in 3 days`, `jun 3`. What is typed is read when Return is pressed or another field is reached, and the day is set by one `Edit`; the arrows up and down step it by a day, and Escape puts back what was there.
+    #[track_caller]
+    pub fn date_field<F: Field>(&mut self, path: FactPath<F, Day>) {
+        let Some(day) = self.facts::<F>().and_then(|f| path.get(f)).copied() else { return };
+        self.when_field(path.erased(), Holds::Date, &day.to_string(), Location::caller());
+    }
+
+    /// A time of day at `path`, typed as `15:30`, `3pm` or `noon`. What is typed is read when Return is pressed or another field is reached, and the time is set by one `Edit`; the arrows up and down step the hour or the minute the caret is in, and Escape puts back what was there.
+    #[track_caller]
+    pub fn time_field<F: Field>(&mut self, path: FactPath<F, Time>) {
+        let Some(time) = self.facts::<F>().and_then(|f| path.get(f)).copied() else { return };
+        self.when_field(path.erased(), Holds::Time, &time.to_string(), Location::caller());
+    }
+
+    /// A date field for the `Day` at `path`, with a button after it that opens a calendar under it. Taking a day in the calendar sets it by one `Edit`, named after `label`, and closes the calendar.
+    #[track_caller]
+    pub fn date_picker<F: Field>(&mut self, label: impl AsRef<str>, path: FactPath<F, Day>) {
+        let (label, at, erased) = (label.as_ref(), Location::caller(), path.erased());
+        let row = self.tree.add(self.parent, Kind::Row, Some(Id::ROOT.mix(erased.hash64()).mix(8)), at);
+        let subject = self.subject;
+        let mut ui = self.child::<S>(row, subject);
+        ui.date_field(path);
+        ui.popover("Choose…", |ui| ui.calendar(label, path));
+    }
+
+    fn when_field(&mut self, path: ledger::ErasedPath, holds: Holds, now: &str, at: &'static Location<'static>) {
+        let i = self.tree.add(self.parent, Kind::Field { holds }, Some(Id::ROOT.mix(path.hash64())), at);
+        let r = self.tree.put(now);
+        let node = &mut self.tree.nodes[i as usize];
+        (node.subject, node.path, node.text) = (self.subject, Some(path), r);
     }
 
     /// Words that tag something, in the list at `path`: each a tag that removes itself when pressed, then a field to type another. Return adds what was typed, and so does moving to another field; Backspace in the empty field removes the last tag. Each change is one `Edit`, named after `label`.
@@ -1090,6 +1172,11 @@ impl<C> Tree<C> {
 }
 
 const COMPLETIONS: usize = 8;
+
+/// The id of `day`'s cell in the calendar with id `calendar`, so moving between days can name the one to focus before it is built.
+pub(crate) fn day_id(calendar: Id, day: Day) -> Id {
+    calendar.mix(9).mix(day.0 as u32 as u64)
+}
 
 fn keys<F: Field, T: Record>(facts: &dyn Any, items: ledger::ErasedPath, selection: ledger::ErasedPath, span: Option<(u128, u128)>) -> Vec<u128> {
     let Some(facts) = facts.downcast_ref::<F>() else { return Vec::new() };

@@ -12,6 +12,9 @@ pub const BUTTON: i32 = 3;
 pub const SWATCH: i32 = 4;
 const BUTTON_MIN: i32 = 16;
 pub const CALLOUT: i32 = 4;
+const WEEK: i32 = 7;
+const DAY: i32 = 4;
+const CALENDAR: i32 = WEEK * DAY - 1;
 pub const SWITCH: i32 = CHECK;
 pub const CRUMB: i32 = 3;
 pub const CODE: i32 = 4;
@@ -218,6 +221,10 @@ impl<'t> Layout<'t> {
                 (c.min(8), c)
             }
             Kind::Field { holds: Holds::Number } => (10, 16),
+            Kind::Field { holds: Holds::Date } => (12, 12),
+            Kind::Field { holds: Holds::Time } => (7, 7),
+            Kind::Calendar { .. } => (CALENDAR, CALENDAR),
+            Kind::Day { .. } | Kind::Turn { .. } => (DAY - 1, DAY - 1),
             Kind::Field { holds: Holds::Code { length } } => {
                 let c = (length as i32 * CODE - 1).max(1);
                 (c, c)
@@ -442,12 +449,14 @@ impl<'t> Layout<'t> {
             | Kind::Choice { .. }
             | Kind::Entry
             | Kind::Link
-            | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline | Holds::Number | Holds::Code { .. } | Holds::Tags }
+            | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline | Holds::Number | Holds::Code { .. } | Holds::Tags | Holds::Date | Holds::Time }
             | Kind::Slider { .. }
             | Kind::Range { .. }
             | Kind::Thumb { .. }
             | Kind::Cycle { .. }
             | Kind::Pick { .. }
+            | Kind::Day { .. }
+            | Kind::Turn { .. }
             | Kind::MenuButton
             | Kind::Popover { .. }
             | Kind::Confirm { open: false }
@@ -457,6 +466,7 @@ impl<'t> Layout<'t> {
             | Kind::Swatch { .. } => 1,
             Kind::Picture { rows, .. } => rows,
             Kind::Rule => 2,
+            Kind::Calendar { .. } => 2 + 6,
             Kind::Keys | Kind::Gauge { .. } | Kind::Tag | Kind::Chip | Kind::Avatar => 1,
             Kind::Placeholder { rows } => rows.max(1),
             Kind::Callout { .. } | Kind::Card => {
@@ -606,6 +616,20 @@ impl<'t> Layout<'t> {
                 self.stack_down(tree, i, Area::new(area.col, area.row + label, area.cols, area.rows - label), 0);
             }
             Kind::Tabs => self.stack_down(tree, i, area, 1),
+            Kind::Calendar { .. } => {
+                let (start, end) = self.children(tree, i);
+                for (k, s) in (start..end).enumerate() {
+                    let c = self.stack[s];
+                    let at = match k as i32 {
+                        0 => Area::new(area.col, area.row, CALENDAR - 2 * DAY, 1),
+                        1 => Area::new(area.col + CALENDAR - 2 * DAY + 1, area.row, DAY - 1, 1),
+                        2 => Area::new(area.col + CALENDAR - DAY + 1, area.row, DAY - 1, 1),
+                        k => Area::new(area.col + (k - 3) % WEEK * DAY, area.row + 1 + (k - 3) / WEEK, DAY - 1, 1),
+                    };
+                    self.place(tree, c, at);
+                }
+                self.release(start);
+            }
             Kind::MenuButton => {
                 let (start, end) = self.children(tree, i);
                 for k in start..end {
@@ -805,7 +829,8 @@ impl<'t> Layout<'t> {
                     | Kind::IconButton { .. }
                     | Kind::Group
                     | Kind::Opener { .. }
-                    | Kind::Field { holds: Holds::Inline | Holds::Number | Holds::Code { .. } }
+                    | Kind::Field { holds: Holds::Inline | Holds::Number | Holds::Code { .. } | Holds::Date | Holds::Time }
+                    | Kind::Calendar { .. }
             ) {
                 self.size(tree, c).1.min(area.cols)
             } else {

@@ -55,6 +55,12 @@ pub struct Place {
     pub caret: Option<Caret>,
 }
 
+enum Macro<C> {
+    Empty,
+    Recording { from: Option<ErasedPath>, cmds: Vec<C> },
+    Kept { from: Option<ErasedPath>, cmds: Vec<C> },
+}
+
 #[derive(Clone, Debug, Default)]
 struct Palette {
     query: String,
@@ -289,6 +295,7 @@ pub struct Runner<A: App> {
     news: Vec<(String, Vec<String>)>,
     inspecting: bool,
     naming: Option<String>,
+    recorder: Macro<A::Cmd>,
     only_changed: bool,
     palette: Option<Palette>,
     marked: std::collections::HashSet<u128>,
@@ -394,6 +401,7 @@ impl<A: App> Runner<A> {
             news: Vec::new(),
             inspecting: false,
             naming: None,
+            recorder: Macro::Empty,
             only_changed: false,
             palette: None,
             marked: std::collections::HashSet::new(),
@@ -1278,7 +1286,8 @@ impl<A: App> Runner<A> {
                 _ => Range32::default(),
             }
         };
-        let range = match self.progress() {
+        let recording = || matches!(self.recorder, Macro::Recording { .. }).then(|| "Recording a macro".to_string());
+        let range = match self.progress().or_else(recording) {
             Some(progress) => {
                 let start = self.tree.text.len() as u32;
                 let after = self.tree.str(range).to_string();
@@ -1647,6 +1656,10 @@ impl<A: App> Runner<A> {
             Builtin::UseLayout if !self.layout_file().is_some_and(|f| f.exists()) => Available::No(Message::from("No layout has been saved")),
             Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode if !self.keymap.modal => Available::No(Message::from("These keys have no modes")),
             Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode if b.mode() == Some(self.mode) => Available::No(Message::plain(format!("In {} mode already", self.mode.name()))),
+            Builtin::RecordMacro if matches!(self.recorder, Macro::Recording { .. }) => Available::No(Message::from("A macro is being recorded already")),
+            Builtin::StopMacro if !matches!(self.recorder, Macro::Recording { .. }) => Available::No(Message::from("No macro is being recorded")),
+            Builtin::PlayMacro if matches!(self.recorder, Macro::Recording { .. }) => Available::No(Message::from("Stop recording the macro first")),
+            Builtin::PlayMacro if matches!(self.recorder, Macro::Empty) => Available::No(Message::from("No macro has been recorded: Record a macro first")),
             _ => Available::Yes,
         }
     }
@@ -1726,6 +1739,7 @@ impl<A: App> Runner<A> {
         let many = cmds.len() + more;
         let repeated = many > 1 && cmds.windows(2).all(|w| ledger::Field::value(&w[0]) == ledger::Field::value(&w[1]));
         let named = self.naming.take();
+        let stops = repeated || named.is_some();
         let (label, gesture) = match cmds.first().and_then(Commands::as_edit) {
             _ if let Some(named) = named => {
                 self.gesture += 1;
@@ -1747,10 +1761,15 @@ impl<A: App> Runner<A> {
         let mut queue: VecDeque<A::Cmd> = cmds.into();
         let marks = self.marks();
         let place = self.place();
-        let batch = self.batch(&mut queue, &clock, sliced.then_some(Slice::Time(SLICE)), repeated, false);
+        let batch = self.batch(&mut queue, &clock, sliced.then_some(Slice::Time(SLICE)), stops, false);
         if let Some(why) = batch.failed {
             self.said = Some(Said::Failure(format!("{label} failed, and nothing changed: {why}")));
             return;
+        }
+        if let Macro::Recording { cmds, .. } = &mut self.recorder
+            && !self.replaying
+        {
+            cmds.extend(batch.ran.iter().filter_map(<A::Cmd as ledger::Field>::from_value).filter(|c| c.as_edit().is_some() || !c.internal()));
         }
         let left = queue.len() + more;
         let mut entry = vec![("do".into(), Value::Str("command".into())), ("commands".into(), Value::List(batch.ran))];
@@ -1779,6 +1798,44 @@ impl<A: App> Runner<A> {
             self.did(what);
         }
         self.repair(marks);
+    }
+
+    fn record_macro(&mut self) -> bool {
+        let from = self.focused_editor().and_then(|i| self.tree.nodes[i as usize].path);
+        self.recorder = Macro::Recording { from, cmds: Vec::new() };
+        self.stale = true;
+        self.say(Message::from("Recording a macro: what you do now is kept, until Stop recording the macro"))
+    }
+
+    fn stop_macro(&mut self) -> bool {
+        let Macro::Recording { from, cmds } = std::mem::replace(&mut self.recorder, Macro::Empty) else { return false };
+        self.stale = true;
+        if cmds.is_empty() {
+            return self.say(Message::from("Nothing was recorded, so there is no macro"));
+        }
+        let count = cmds.len();
+        self.recorder = Macro::Kept { from, cmds };
+        self.say(Message::plain(format!("The macro keeps {count} {}", if count == 1 { "command" } else { "commands" })))
+    }
+
+    fn play_macro(&mut self) -> bool {
+        let Macro::Kept { from, cmds } = std::mem::replace(&mut self.recorder, Macro::Empty) else { return false };
+        let to = self.focused_editor().and_then(|i| self.tree.nodes[i as usize].path);
+        let gesture = self.gesture;
+        let played = cmds
+            .iter()
+            .map(|cmd| match (cmd.as_edit(), from, to) {
+                (Some(edit), Some(from), Some(to)) if edit.path == from => <A::Cmd as Commands<A>>::edit(Edit::new(to, edit.change.clone(), gesture)).unwrap_or_else(|| cmd.clone()),
+                _ => cmd.clone(),
+            })
+            .collect();
+        self.typing = None;
+        self.reveal = true;
+        self.naming = Some(Builtin::PlayMacro.label().to_string());
+        self.transact(played, None, 0);
+        self.naming = None;
+        self.recorder = Macro::Kept { from, cmds };
+        true
     }
 
     fn clock(&self) -> Clock {
@@ -3399,6 +3456,9 @@ impl<A: App> Runner<A> {
                 true
             }
             Builtin::SaveLayout => self.save_layout(),
+            Builtin::RecordMacro => self.record_macro(),
+            Builtin::StopMacro => self.stop_macro(),
+            Builtin::PlayMacro => self.play_macro(),
             Builtin::UseLayout => self.use_layout(),
             Builtin::Help => {
                 self.sheet = if matches!(self.sheet, Some((Sheet::Help, _))) { None } else { Some((Sheet::Help, 0)) };

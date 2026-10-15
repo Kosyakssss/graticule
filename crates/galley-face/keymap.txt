@@ -19,6 +19,9 @@ primary+shift+g: find-previous
 # [normal]
 # i: insert-mode
 # shift+;: command-line
+# q: record-macro
+# shift+q: stop-macro
+# shift+2: play-macro
 # v: select-mode
 # x: delete
 # d motion: delete

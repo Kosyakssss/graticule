@@ -55,10 +55,13 @@ pub enum Builtin {
     OpenPanes,
     SaveLayout,
     UseLayout,
+    RecordMacro,
+    StopMacro,
+    PlayMacro,
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 49] = [
+    pub const ALL: [Builtin; 52] = [
         Builtin::Palette,
         Builtin::CommandLine,
         Builtin::Undo,
@@ -108,6 +111,9 @@ impl Builtin {
         Builtin::OpenPanes,
         Builtin::SaveLayout,
         Builtin::UseLayout,
+        Builtin::RecordMacro,
+        Builtin::StopMacro,
+        Builtin::PlayMacro,
     ];
 
     pub fn name(self) -> &'static str {
@@ -161,6 +167,9 @@ impl Builtin {
             Builtin::OpenPanes => "open-panes",
             Builtin::SaveLayout => "save-layout",
             Builtin::UseLayout => "use-layout",
+            Builtin::RecordMacro => "record-macro",
+            Builtin::StopMacro => "stop-macro",
+            Builtin::PlayMacro => "play-macro",
         }
     }
 
@@ -215,6 +224,9 @@ impl Builtin {
             Builtin::OpenPanes => "Open the closed panes",
             Builtin::SaveLayout => "Save the layout",
             Builtin::UseLayout => "Use the saved layout",
+            Builtin::RecordMacro => "Record a macro",
+            Builtin::StopMacro => "Stop recording the macro",
+            Builtin::PlayMacro => "Play the macro",
         }
     }
 
@@ -322,7 +334,10 @@ impl Builtin {
             | Builtin::ClosePane
             | Builtin::OpenPanes
             | Builtin::SaveLayout
-            | Builtin::UseLayout => &[],
+            | Builtin::UseLayout
+            | Builtin::RecordMacro
+            | Builtin::StopMacro
+            | Builtin::PlayMacro => &[],
         }
     }
 
@@ -355,12 +370,13 @@ impl Builtin {
                 | Builtin::DeleteText
                 | Builtin::NextTheme
                 | Builtin::NextStyle
+                | Builtin::PlayMacro
         )
     }
 
     /// Commands that move around or change only how everything looks, rather than the facts; they never become undo steps and aren't offered in the action bar.
     pub fn moves(self) -> bool {
-        !matches!(self, Builtin::Palette | Builtin::CommandLine | Builtin::Undo | Builtin::Redo)
+        !matches!(self, Builtin::Palette | Builtin::CommandLine | Builtin::Undo | Builtin::Redo | Builtin::PlayMacro)
     }
 
     /// Where it moves an editor's cursors, if it is a movement through text.

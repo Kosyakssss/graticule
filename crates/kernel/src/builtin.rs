@@ -7,6 +7,7 @@ use crate::value::Dates;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Builtin {
     Palette,
+    CommandLine,
     Undo,
     Redo,
     Next,
@@ -57,8 +58,9 @@ pub enum Builtin {
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 48] = [
+    pub const ALL: [Builtin; 49] = [
         Builtin::Palette,
+        Builtin::CommandLine,
         Builtin::Undo,
         Builtin::Redo,
         Builtin::Next,
@@ -111,6 +113,7 @@ impl Builtin {
     pub fn name(self) -> &'static str {
         match self {
             Builtin::Palette => "palette",
+            Builtin::CommandLine => "command-line",
             Builtin::Undo => "undo",
             Builtin::Redo => "redo",
             Builtin::Next => "next-control",
@@ -164,6 +167,7 @@ impl Builtin {
     pub fn label(self) -> &'static str {
         match self {
             Builtin::Palette => "Open the palette",
+            Builtin::CommandLine => "Type a command by its name",
             Builtin::Undo => "Undo",
             Builtin::Redo => "Redo",
             Builtin::Next => "Go to the next control",
@@ -286,6 +290,7 @@ impl Builtin {
                 K
             }
             Builtin::Palette
+            | Builtin::CommandLine
             | Builtin::Left
             | Builtin::Right
             | Builtin::WordLeft
@@ -355,7 +360,7 @@ impl Builtin {
 
     /// Commands that move around or change only how everything looks, rather than the facts; they never become undo steps and aren't offered in the action bar.
     pub fn moves(self) -> bool {
-        !matches!(self, Builtin::Palette | Builtin::Undo | Builtin::Redo)
+        !matches!(self, Builtin::Palette | Builtin::CommandLine | Builtin::Undo | Builtin::Redo)
     }
 
     /// Where it moves an editor's cursors, if it is a movement through text.

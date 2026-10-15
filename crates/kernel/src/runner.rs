@@ -62,6 +62,8 @@ struct Palette {
     chosen: usize,
     shown: usize,
     asking: Option<Asking>,
+    line: bool,
+    names: Vec<String>,
 }
 
 /// A command the palette is asking the arguments of: its entry and the values read so far.
@@ -1046,8 +1048,9 @@ impl<A: App> Runner<A> {
             self.tree.nodes[t as usize].text = asked;
             return;
         }
-        self.tree.nodes[f as usize].name = self.tree.put("Type to find a command");
+        self.tree.nodes[f as usize].name = self.tree.put(if palette.line { "Type a command’s name, then what it asks for" } else { "Type to find a command" });
         let mut found: Vec<(String, Target<A::Cmd>, String)> = Vec::new();
+        let mut names: Vec<String> = Vec::new();
         for (e, entry) in A::Cmd::entries().iter().enumerate() {
             if entry.internal {
                 continue;
@@ -1061,17 +1064,38 @@ impl<A: App> Runner<A> {
             };
             let keys = self.keymap.keys_for(self.mode, entry.name).unwrap_or_default();
             found.push((label, target, keys));
+            names.push(entry.name.to_string());
         }
         for (e, extra) in self.extras.iter().enumerate() {
             found.push((extra.label.clone(), Target::Host(e), String::new()));
+            names.push(extra.name.clone());
         }
         for b in Builtin::ALL {
-            if b != Builtin::Palette {
+            if !matches!(b, Builtin::Palette | Builtin::CommandLine) {
                 found.push((b.label().to_string(), Target::Builtin(b), self.builtin_keys(b)));
+                names.push(b.name().to_string());
             }
         }
-        found.retain(|(label, ..)| matches(&palette.query, label));
-        found.truncate(CHOICES);
+        if palette.line {
+            let typed = palette.query.split_once(' ').map_or(palette.query.as_str(), |(name, _)| name);
+            let exact = palette.query.contains(' ');
+            let fits = |name: &String| if exact { name == typed } else { name.starts_with(typed) };
+            let keep: Vec<bool> = names.iter().map(fits).collect();
+            let mut k = 0;
+            found.retain(|_| {
+                k += 1;
+                keep[k - 1]
+            });
+            names.retain(fits);
+            found.truncate(CHOICES);
+            names.truncate(CHOICES);
+            for (choice, name) in found.iter_mut().zip(&names) {
+                choice.2.clone_from(name);
+            }
+        } else {
+            found.retain(|(label, ..)| matches(&palette.query, label));
+            found.truncate(CHOICES);
+        }
         let chosen = palette.chosen.min(found.len().saturating_sub(1));
         for (k, (label, target, keys)) in found.into_iter().enumerate() {
             let c = self.tree.add(p, Kind::Choice { chosen: k == chosen }, Some(Id::ROOT.mix(8).mix(k as u64)), std::panic::Location::caller());
@@ -1082,6 +1106,7 @@ impl<A: App> Runner<A> {
         if let Some(open) = &mut self.palette {
             open.shown = self.tree.children(p).count() - 1;
             open.chosen = chosen;
+            open.names = if open.line { names } else { Vec::new() };
         }
     }
 
@@ -3355,8 +3380,8 @@ impl<A: App> Runner<A> {
             return self.say(reason);
         }
         match b {
-            Builtin::Palette => {
-                self.palette = Some(Palette::default());
+            Builtin::Palette | Builtin::CommandLine => {
+                self.palette = Some(Palette { line: b == Builtin::CommandLine, ..Palette::default() });
                 self.pending.clear();
                 self.count = 0;
                 self.stale = true;
@@ -4233,6 +4258,24 @@ impl<A: App> Runner<A> {
         }
     }
 
+    fn command_line(&mut self, palette: Palette) -> bool {
+        let query = palette.query.trim().to_string();
+        let (typed, rest) = query.split_once(' ').map_or((query.as_str(), ""), |(name, rest)| (name, rest.trim()));
+        if typed.is_empty() {
+            return true;
+        }
+        let name = match palette.names.iter().find(|n| *n == typed).or(palette.names.get(palette.chosen)) {
+            Some(name) => name.clone(),
+            None => return self.say(Message::plain(format!("No command is called “{typed}”"))),
+        };
+        let here = self.here();
+        match self.named(&name, &here) {
+            Target::Ask(entry) if !rest.is_empty() => self.answer(Palette { query: rest.to_string(), ..Palette::default() }, Asking { entry, got: Vec::new() }),
+            _ if !rest.is_empty() => self.say(Message::plain(format!("{} asks for nothing, so “{rest}” was left over", title(&name)))),
+            _ => self.run_named(&name),
+        }
+    }
+
     fn palette_key(&mut self, chord: Chord, text: Option<String>) -> bool {
         let Some(mut palette) = self.palette.take() else { return false };
         self.stale = true;
@@ -4243,6 +4286,15 @@ impl<A: App> Runner<A> {
         }
         match chord.key {
             Key::Escape => return true,
+            Key::Tab if palette.line && chord.mods == Mods::default() => {
+                if let Some(name) = palette.names.get(palette.chosen) {
+                    let rest = palette.query.split_once(' ').map_or(String::new(), |(_, rest)| rest.to_string());
+                    palette.query = format!("{name} {rest}");
+                    palette.caret = Caret::at(palette.query.len());
+                    palette.chosen = 0;
+                }
+            }
+            Key::Enter if palette.line => return self.command_line(palette),
             Key::Up => palette.chosen = palette.chosen.saturating_sub(1),
             Key::Down => palette.chosen = (palette.chosen + 1).min(palette.shown.saturating_sub(1)),
             Key::Enter => {

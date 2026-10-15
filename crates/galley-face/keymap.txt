@@ -18,6 +18,7 @@ primary+shift+g: find-previous
 # shift+g: last
 # [normal]
 # i: insert-mode
+# shift+;: command-line
 # v: select-mode
 # x: delete
 # d motion: delete

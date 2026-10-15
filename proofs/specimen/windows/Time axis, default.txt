@@ -1,0 +1,52 @@
+window		0 0 120 30	
+  page	Time axis	0 0 120 24	
+    list		2 3 116 20	23 items
+      list item		2 3 114 2	
+        text	A ruler over tracks: what happens when, laid out across in time and down in tracks, with a playhead. The bones of a sequencer, a video editor, a log of events or a chart of trades.	2 3 114 2	
+      list item		2 5 114 1	
+      list item		2 6 114 7	
+        group		2 6 114 7	
+          column		2 6 14 1	
+            text	Live	2 6 14 1	muted
+          column		18 6 98 7	
+            time axis		18 6 98 7	
+              group		18 6 98 1	
+                text		18 6 16 1	
+                ruler	Playhead	36 6 80 1	playhead at 2.1.1, from 1
+              group		18 7 98 2	
+                text	Drums	18 7 16 1	
+                canvas	Drums	36 7 80 2	
+              group		18 9 98 2	
+                text	Bass	18 9 16 1	
+                canvas	Bass	36 9 80 2	
+              group		18 11 98 2	
+                text	Keys	18 11 16 1	
+                canvas	Keys	36 11 80 2	
+      list item		2 13 114 1	
+      list item		2 14 114 1	
+        heading	Use it for	2 14 7 1	strong
+      list item		2 15 114 2	
+        text	Anything placed in time that the user moves through, zooms into and edits: clips on tracks, notes, spans of a recording, events from several sources side by side.	2 15 114 2	
+      list item		2 17 114 1	
+      list item		2 18 114 1	
+        heading	Code	2 18 4 1	strong
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Press	2 26 7 1	
+    button	Follow the link	11 26 13 1	
+    button	Tick or untick the box	26 26 18 1	
+    button	Bold	46 26 6 1	
+    button	Go one level in	54 26 13 1	
+    button	Say it	69 26 7 1	unavailable (Type something first)
+    button	Back to all components	78 26 20 1	
+    button	Change the light appearance	2 27 24 1	unavailable (The light appearance is being changed already)
+    button	Change the dark appearance	28 27 24 1	
+    button	Use the next weight of lines	54 27 23 1	
+    button	Deepen the shadow	79 27 17 1	
+    button	Make the shadow shallower	2 28 23 1	
+    button	Use the other check mark	27 28 22 1	
+    button	Save the theme and the style	51 28 24 1	unavailable (Nothing has been changed from Graticule's own theme and style)
+    button	Undo	77 28 13 1	unavailable (Nothing to undo)
+    button	Redo	92 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 15 1	

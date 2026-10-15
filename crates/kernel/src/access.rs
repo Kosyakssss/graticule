@@ -18,6 +18,8 @@ fn role(kind: Kind) -> Role {
         Kind::Picker => Role::Group,
         Kind::Matches { .. } => Role::ListBox,
         Kind::Match { .. } => Role::ListBoxOption,
+        Kind::TimeAxis => Role::Group,
+        Kind::Ruler => Role::Slider,
         Kind::Divider => Role::Splitter,
         Kind::ListRow { .. } => Role::ListItem,
         Kind::Field { holds: Holds::Lines { .. } } => Role::MultilineTextInput,
@@ -198,6 +200,12 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 node.set_selected(chosen);
             }
             Kind::Match { chosen } => node.set_selected(chosen),
+            Kind::Ruler => {
+                node.set_label(name);
+                if let Some(r) = tree.rulers.iter().find(|r| tree.nodes[r.node as usize].id == n.id) {
+                    node.set_value(r.clock.label(r.playhead, r.clock.minor(r.view.per_col)));
+                }
+            }
             _ if !name.is_empty() => node.set_label(name),
             _ if !text.is_empty() => node.set_label(text),
             _ => {}

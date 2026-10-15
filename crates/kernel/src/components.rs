@@ -702,6 +702,43 @@ fn knob(p: &mut Painter, n: &Node, x: f32, cell: Rect, look: Look) {
     border(p, knob, if look.focused { t * 2.0 } else { t }, ink);
 }
 
+fn ruler(p: &mut Painter, n: &Node, r: &crate::tree::Ruler, look: Look) {
+    let rect = p.rect(n.area);
+    let (view, clock) = (r.view, r.clock);
+    let (major, minor) = (clock.step(view.per_col), clock.minor(view.per_col));
+    let end = view.end(n.area.cols);
+    let (t, cell) = (p.style.line(p.m), p.m.cell_w);
+    let (rule, muted, faint, ink, cursor) = (p.theme.rule, p.theme.muted, p.theme.faint, p.theme.ink, p.theme.cursor);
+    p.fill(Rect::new(rect.x, rect.bottom() - t, rect.w, t), rule);
+    let x_of = |at: i64| rect.x + (at - view.start) as f32 / view.per_col as f32 * cell;
+    let style = p.m.mono();
+    let mut at = view.start.div_euclid(minor) * minor;
+    while at < end {
+        if at >= view.start {
+            let x = x_of(at).round();
+            let labelled = at.rem_euclid(major) == 0;
+            let h = if labelled { p.m.cell_h * 0.45 } else { p.m.cell_h * 0.2 };
+            p.fill(Rect::new(x, rect.bottom() - h, t, h), if labelled { muted } else { faint });
+            if labelled {
+                let label = clock.label(at, major);
+                let col = ((at - view.start) / view.per_col) as i32 + 1;
+                let width = label.chars().count() as i32;
+                if col + width < n.area.cols {
+                    p.write(Area::new(n.area.col + col, n.area.row, width, 1), &label, style, muted);
+                }
+            }
+        }
+        at = at.saturating_add(minor);
+    }
+    if r.playhead >= view.start && r.playhead < end {
+        let x = x_of(r.playhead).round();
+        p.fill(Rect::new(x - t, rect.y, t * 2.0, rect.h), ink);
+    }
+    if look.focused {
+        border(p, rect, t, cursor);
+    }
+}
+
 fn marked(p: &mut Painter, area: Area, text: &str, mono: bool, weight: f32, marks: &[(u32, u32)], ink: Color) {
     let style = if mono { p.m.mono() } else { p.m.sans(weight) };
     let r = p.rect(area);
@@ -753,6 +790,11 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             wrapped(p, n.area, text, mono, weight, color);
             if let Some((_, marks)) = tree.marks.iter().find(|m| m.0 == i) {
                 marked(p, n.area, text, mono, weight, marks, color);
+            }
+        }
+        (Layer::Over, Kind::Ruler) => {
+            if let Some(r) = tree.rulers.iter().find(|r| r.node == i) {
+                ruler(p, &n, r, look);
             }
         }
         (Layer::Under, Kind::Match { chosen }) => {

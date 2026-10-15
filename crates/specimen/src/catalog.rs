@@ -2,7 +2,7 @@ use graticule_macros::{Choice, Commands, Facts, Form};
 use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
-use kernel::{App, Available, Channel, Cx, Day, Derived, Failure, Image, Ink, Message, Oklch, Order, PaintHook, Path, Sort, States, Time, Ui};
+use kernel::{App, Available, Channel, Clock, Cx, Day, Derived, Failure, Image, Ink, Message, Oklch, Order, PaintHook, Path, Sort, States, Time, TimeView, Ui};
 use ledger::{Edit, Key, List, Outcome, Selection, Text};
 
 use crate::style::{self, Mark, Mix, Nudge, Reach, Reaches, Side, Weight};
@@ -211,6 +211,10 @@ pub struct Catalog {
     #[derived(City::matching, from = [cities, narrowed])]
     matching: Derived<Order<City>>,
     #[session]
+    timeline: TimeView,
+    #[session]
+    playhead: i64,
+    #[session]
     arranged: Sort,
     #[derived(City::arranged, from = [cities, arranged])]
     in_order: Derived<Order<City>>,
@@ -290,6 +294,13 @@ impl City {
         }
     }
 }
+
+const BEAT: i64 = 96;
+
+type Clip = (i64, i64, &'static str);
+
+const TRACKS: [(&str, &[Clip]); 3] =
+    [("Drums", &[(0, 16, "Groove"), (16, 32, "Groove"), (32, 40, "Fill")]), ("Bass", &[(4, 20, "Walk"), (24, 40, "Walk, higher")]), ("Keys", &[(8, 24, "Chords"), (28, 36, "Stab")])];
 
 const PEOPLE: [(&str, u32, i32); 12] = [
     ("Netherlands", 931_000, 8_200),
@@ -457,10 +468,11 @@ pub enum Component {
     Picker,
     TypedFilter,
     Records,
+    TimeAxis,
 }
 
 impl Component {
-    const ALL: [Component; 77] = [
+    const ALL: [Component; 78] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -538,6 +550,7 @@ impl Component {
         Component::Picker,
         Component::TypedFilter,
         Component::Records,
+        Component::TimeAxis,
     ];
 
     fn name(self) -> &'static str {
@@ -619,6 +632,7 @@ impl Component {
             Component::Picker => "Picker",
             Component::TypedFilter => "Typed filter",
             Component::Records => "Table from data",
+            Component::TimeAxis => "Time axis",
         }
     }
 
@@ -701,6 +715,7 @@ impl Component {
             Component::Picker => include_str!("../../../docs/components/picker.md"),
             Component::TypedFilter => include_str!("../../../docs/components/typed-filter.md"),
             Component::Records => include_str!("../../../docs/components/table-from-data.md"),
+            Component::TimeAxis => include_str!("../../../docs/components/time-axis.md"),
         }
     }
 
@@ -842,6 +857,8 @@ impl Default for Catalog {
             found: Derived::default(),
             narrowed: Text::default(),
             matching: Derived::default(),
+            timeline: TimeView::new(0, BEAT / 4),
+            playhead: BEAT * 4,
             arranged: Sort::default(),
             in_order: Derived::default(),
             outline: OUTLINE.iter().zip(1..).map(|(&(name, inside), n)| Part { id: Key::fixed(n), name: name.to_string(), inside: (inside > 0).then(|| Key::fixed(inside)) }).collect(),
@@ -1297,6 +1314,20 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::TimeAxis => ui.time_axis(Clock::Beats { per_beat: BEAT, beats_per_bar: 4 }, Catalog::timeline, Catalog::playhead, |axis| {
+                for (name, clips) in TRACKS {
+                    axis.track(name, 2, |lane| {
+                        for &(from, to, clip) in clips {
+                            let (from, to) = (from * BEAT, to * BEAT);
+                            if lane.shows(from, to) {
+                                lane.span(from, to).ink(Ink::Selection).fill();
+                                lane.span(from, to).ink(Ink::Muted).stroke(kernel::Weight::Line);
+                                lane.label(from + BEAT / 4, clip);
+                            }
+                        }
+                    });
+                }
+            }),
             Component::Records => {
                 ui.records(self.in_order.of(&self.cities), Catalog::picked).sort(Catalog::arranged).height(6);
             }

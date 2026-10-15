@@ -153,6 +153,8 @@ A picker is a search field and the rows `Order::found` keeps, eight at a time. I
 
 A typed filter reads a record through `Field::value`, the same map of named values Ledger saves, so it knows every record's fields without an app describing them twice. That costs building the map for each record, which is why it runs only in a derived order, off the main thread. Reading the query itself is bounded by its length and is done on the main thread too, to say under the field what is wrong.
 
+A time axis's lanes are drawn in the view, but how much time they show depends on how wide they turn out, which only layout knows. The runner keeps each ruler's width from the last layout by its id and hands it to the view, and when layout finds a width that differs it runs the view again before painting, at most once, as a list does with its rows. Dragging on the ruler shows the playhead where it would land, kept as window state, and sets the fact only when let go, as a slider does; the playhead line is drawn into each lane's drawing, so canvases and the ruler agree without the kernel painting over them.
+
 ## 6. Layout in cells
 
 ### 6.1 Units

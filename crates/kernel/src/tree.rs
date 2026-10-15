@@ -194,6 +194,8 @@ pub enum Kind {
     Picker,
     Matches { count: u32, first: u32, shown: u32, at: u32 },
     Match { chosen: bool },
+    TimeAxis,
+    Ruler,
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -241,6 +243,7 @@ impl Kind {
                 | Kind::Head { sortable: true, .. }
                 | Kind::Twig { branch: crate::table::Branch::Closed | crate::table::Branch::Open, .. }
                 | Kind::Divider
+                | Kind::Ruler
         )
     }
 
@@ -274,6 +277,7 @@ impl Kind {
                 | Kind::Picker
                 | Kind::Matches { .. }
                 | Kind::Match { .. }
+                | Kind::TimeAxis
         )
     }
 
@@ -294,6 +298,8 @@ impl Kind {
             Kind::Picker => "picker",
             Kind::Matches { .. } => "matches",
             Kind::Match { .. } => "match",
+            Kind::TimeAxis => "time axis",
+            Kind::Ruler => "ruler",
             Kind::ListRow { .. } => "list item",
             Kind::Field { holds: Holds::Lines { .. } } => "text area",
             Kind::Field { holds: Holds::Search } => "search field",
@@ -526,6 +532,23 @@ pub struct Tree<C> {
     pub picks: HashMap<Id, Picking>,
     /// The letters a picker's query matched in its rows' text, as byte ranges, by the text's node.
     pub marks: Vec<(u32, Vec<(u32, u32)>)>,
+    /// The rulers of time axes, each with what it shows.
+    pub rulers: Vec<Ruler>,
+    /// The time the playhead is being dragged to, by the ruler's id, shown until it is let go.
+    pub scrub: Option<(Id, i64)>,
+    /// How many columns wide each ruler was last laid out, by its id, so its lanes know how much time they show.
+    pub spans: HashMap<Id, i32>,
+}
+
+/// A time axis's ruler: how its time is counted, what it shows, where the playhead is and the facts it sets.
+#[derive(Clone, Copy, Debug)]
+pub struct Ruler {
+    pub node: u32,
+    pub clock: crate::time::Clock,
+    pub view: crate::time::TimeView,
+    pub playhead: i64,
+    pub view_path: ErasedPath,
+    pub playhead_path: ErasedPath,
 }
 
 /// Which row a picker highlights and which it shows at the top, for the query it was moved under. A new query starts from the top.
@@ -572,6 +595,9 @@ impl<C> Default for Tree<C> {
             resized: HashMap::new(),
             picks: HashMap::new(),
             marks: Vec::new(),
+            rulers: Vec::new(),
+            scrub: None,
+            spans: HashMap::new(),
         }
     }
 }
@@ -591,6 +617,7 @@ impl<C> Tree<C> {
         self.images.clear();
         self.orders.clear();
         self.marks.clear();
+        self.rulers.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;
@@ -724,6 +751,9 @@ impl<C> Tree<C> {
             b.presses.hash(&mut h);
             b.paint.as_ref().map(|p| p.stamp()).hash(&mut h);
             self.aim.filter(|a| a.0 == n.id).hash(&mut h);
+        }
+        if let Some(r) = self.rulers.iter().find(|r| r.node == i as u32) {
+            (r.clock, r.view, r.playhead).hash(&mut h);
         }
         if let Some((_, marks)) = self.marks.iter().find(|m| m.0 == i as u32) {
             marks.hash(&mut h);

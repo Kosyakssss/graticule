@@ -189,6 +189,7 @@ impl<'t> Layout<'t> {
                 (c, c)
             }
             Kind::Divider => (1, 1),
+            Kind::Ruler => (8, 8),
             Kind::Split => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref, mut count) = (0, 0, 0);
@@ -333,7 +334,18 @@ impl<'t> Layout<'t> {
                 let gaps = GAP * (count - 1).max(0);
                 (min + gaps, pref + gaps)
             }
-            Kind::Root | Kind::Page | Kind::Column | Kind::Pane | Kind::Picker | Kind::Matches { .. } | Kind::Empty | Kind::Bar | Kind::Palette | Kind::List { .. } | Kind::Overlay { .. } => {
+            Kind::Root
+            | Kind::Page
+            | Kind::Column
+            | Kind::Pane
+            | Kind::Picker
+            | Kind::Matches { .. }
+            | Kind::TimeAxis
+            | Kind::Empty
+            | Kind::Bar
+            | Kind::Palette
+            | Kind::List { .. }
+            | Kind::Overlay { .. } => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref) = (0, 0);
                 let table = matches!(n.kind, Kind::List { .. }) && start < end && tree.nodes[self.stack[start] as usize].kind == Kind::Header;
@@ -496,7 +508,7 @@ impl<'t> Layout<'t> {
             }
             Kind::Value { value: Value::Error } => self.wrapped(tree.str(n.text), false, cols),
             Kind::Value { .. } => 1,
-            Kind::Header | Kind::Head { .. } | Kind::Cell { .. } | Kind::Twig { .. } | Kind::Divider => 1,
+            Kind::Header | Kind::Head { .. } | Kind::Cell { .. } | Kind::Twig { .. } | Kind::Divider | Kind::Ruler => 1,
             Kind::Split => {
                 let (start, end) = self.children(tree, i);
                 let mut rows = 0;
@@ -598,7 +610,7 @@ impl<'t> Layout<'t> {
                 self.release(start);
                 rows
             }
-            Kind::Root | Kind::Page | Kind::Column | Kind::Pane | Kind::Picker | Kind::Matches { .. } | Kind::Empty | Kind::Palette | Kind::Overlay { .. } => {
+            Kind::Root | Kind::Page | Kind::Column | Kind::Pane | Kind::Picker | Kind::Matches { .. } | Kind::TimeAxis | Kind::Empty | Kind::Palette | Kind::Overlay { .. } => {
                 let (start, end) = self.children(tree, i);
                 let inner = match n.kind {
                     Kind::Page => cols - MARGIN * 2,
@@ -695,7 +707,7 @@ impl<'t> Layout<'t> {
                 let inner = Area::new(area.col + MARGIN, area.row + 3, area.cols - MARGIN * 2, area.rows - 4);
                 self.stack_down(tree, i, inner, 1);
             }
-            Kind::Root | Kind::Column | Kind::Pane | Kind::Picker | Kind::Matches { .. } | Kind::Palette => self.stack_down(tree, i, area, 0),
+            Kind::Root | Kind::Column | Kind::Pane | Kind::Picker | Kind::Matches { .. } | Kind::TimeAxis | Kind::Palette => self.stack_down(tree, i, area, 0),
             Kind::Split => self.split(tree, i, area),
             Kind::Overlay { .. } => self.stack_down(tree, i, Area::new(area.col + 1, area.row, area.cols - 2, area.rows), 0),
             Kind::Empty => self.stack_down(tree, i, area, 1),

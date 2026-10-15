@@ -140,6 +140,8 @@ A typed filter narrows a table by what its records hold: `people>1000000 country
 
 A table can also be made from the records alone: one column for each thing a record holds, headed by its name, sorted by pressing a head like any table. It suits places where the data is the point, such as a log or an inspector, and a new field in the record is a new column without anything else changing.
 
+The time axis is the start of a sequencer or a video editor: a ruler across the top, counted in plain numbers, in minutes and seconds, or in bars and beats, and below it a row for each track with what happens when drawn along it. A click on the ruler moves the playhead, which lands on the nearest mark; the arrow keys move it mark by mark. Holding Ctrl (Cmd on a Mac) while turning the wheel zooms in and out around the pointer, and Shift with the wheel scrolls through time. The marks always land on whole cells of the grid, however far in or out.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

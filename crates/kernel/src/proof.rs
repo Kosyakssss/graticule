@@ -65,6 +65,12 @@ fn state<C>(tree: &Tree<C>, n: &Node) -> String {
         }
         Kind::Choice { chosen: true } | Kind::Match { chosen: true } => parts.push("highlighted".to_string()),
         Kind::Matches { count, .. } => parts.push(format!("{count} found")),
+        Kind::Ruler => {
+            if let Some(r) = tree.rulers.iter().find(|r| tree.nodes[r.node as usize].id == n.id) {
+                let step = r.clock.step(r.view.per_col);
+                parts.push(format!("playhead at {}, from {}", r.clock.label(r.playhead, r.clock.minor(r.view.per_col)), r.clock.label(r.view.start, step)));
+            }
+        }
         Kind::List { count, .. } => parts.push(format!("{count} items")),
         Kind::Gauge { filled, .. } => parts.push(format!("{} %", f32::from(filled) / 10.0)),
         Kind::Head { sorted: 1, .. } => parts.push("sorted".to_string()),

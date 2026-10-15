@@ -245,6 +245,8 @@ pub struct Runner<A: App> {
     resized: HashMap<Id, i32>,
     panes: HashMap<Id, i32>,
     picks: HashMap<Id, crate::tree::Picking>,
+    scrub: Option<(Id, i64)>,
+    spans: HashMap<Id, i32>,
     aim: Option<(Id, u64)>,
     opened: Option<Id>,
     browse: Option<Id>,
@@ -336,6 +338,8 @@ impl<A: App> Runner<A> {
             resized: HashMap::new(),
             panes: HashMap::new(),
             picks: HashMap::new(),
+            scrub: None,
+            spans: HashMap::new(),
             aim: None,
             opened: None,
             browse: None,
@@ -429,6 +433,8 @@ impl<A: App> Runner<A> {
         self.tree.aim = self.aim;
         self.tree.resized.clone_from(&self.resized);
         self.tree.picks.clone_from(&self.picks);
+        self.tree.scrub = self.scrub;
+        self.tree.spans.clone_from(&self.spans);
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
@@ -1181,6 +1187,13 @@ impl<A: App> Runner<A> {
 
     fn settle(&mut self) -> bool {
         let mut moved = false;
+        for r in 0..self.tree.rulers.len() {
+            let n = self.tree.nodes[self.tree.rulers[r].node as usize];
+            if n.area.cols > 0 && self.spans.get(&n.id) != Some(&n.area.cols) {
+                self.spans.insert(n.id, n.area.cols);
+                moved = true;
+            }
+        }
         for l in 0..self.tree.lists.len() {
             let info = self.tree.lists[l];
             let n = self.tree.nodes[info.node as usize];
@@ -3291,6 +3304,15 @@ impl<A: App> Runner<A> {
             && typing
             && chord.mods == Mods::default()
             && let Some(i) = self.focused_control()
+            && self.tree.nodes[i as usize].kind == Kind::Ruler
+            && matches!(chord.key, Key::Left | Key::Right | Key::PageUp | Key::PageDown)
+        {
+            return self.ruler_key(i, chord.key);
+        }
+        if self.pending.is_empty()
+            && typing
+            && chord.mods == Mods::default()
+            && let Some(i) = self.focused_control()
             && matches!(self.tree.nodes[i as usize].kind, Kind::Pick { .. })
             && matches!(chord.key, Key::Up | Key::Down | Key::Home | Key::End | Key::Escape)
         {
@@ -3798,6 +3820,65 @@ impl<A: App> Runner<A> {
         out
     }
 
+    fn ruler_of(&self, i: u32) -> Option<crate::tree::Ruler> {
+        self.tree.rulers.iter().find(|r| r.node == i).copied()
+    }
+
+    fn ruler_key(&mut self, i: u32, key: Key) -> bool {
+        let Some(r) = self.ruler_of(i) else { return false };
+        let (minor, major) = (r.clock.minor(r.view.per_col), r.clock.step(r.view.per_col));
+        let by = match key {
+            Key::Left => -minor,
+            Key::Right => minor,
+            Key::PageUp => -major,
+            _ => major,
+        };
+        let to = r.clock.snap(r.view, r.playhead).saturating_add(by);
+        self.play_to(i, to)
+    }
+
+    fn play_to(&mut self, i: u32, to: i64) -> bool {
+        let Some(r) = self.ruler_of(i) else { return false };
+        let cols = self.spans.get(&self.tree.nodes[i as usize].id).copied().unwrap_or(1);
+        let said = format!("Playhead to {}", r.clock.label(to, r.clock.minor(r.view.per_col)));
+        let moved = self.set_value(r.playhead_path, Value::Int(to), said);
+        let view = r.view.showing(to, cols);
+        if view != r.view {
+            self.set_value(r.view_path, ledger::Field::value(&view), "Scroll to the playhead".to_string());
+        }
+        moved
+    }
+
+    fn scrubbed(&self, frame: &Frame, i: u32) -> Option<i64> {
+        let r = self.ruler_of(i)?;
+        let (x, _) = frame.pointer?;
+        let rect = frame.metrics.rect(self.tree.nodes[i as usize].area);
+        let col = f64::from((x - rect.x) / frame.metrics.cell_w);
+        Some(r.clock.snap(r.view, r.view.start + (col * r.view.per_col as f64).round() as i64))
+    }
+
+    fn wheel_axis(&mut self, frame: &Frame, col: i32, row: i32, dx: f32, dy: f32) -> Option<bool> {
+        let axis = self.tree.nodes.iter().rposition(|n| n.kind == Kind::TimeAxis && n.area.contains(col, row))? as u32;
+        let r = *self.tree.rulers.iter().find(|r| self.tree.ancestor(r.node, |n| n.id == self.tree.nodes[axis as usize].id).is_some())?;
+        let m = frame.metrics;
+        let rect = m.rect(self.tree.nodes[r.node as usize].area);
+        if frame.mods.primary && dy != 0.0 {
+            let at = f64::from((frame.pointer?.0 - rect.x) / m.cell_w);
+            let closer = dy > 0.0;
+            let view = r.view.zoomed(closer, at);
+            return Some(view != r.view && self.set_value(r.view_path, ledger::Field::value(&view), if closer { "Zoom in" } else { "Zoom out" }.to_string()));
+        }
+        let cols = if dx != 0.0 {
+            -(dx / m.cell_w).round() as i64
+        } else if frame.mods.shift {
+            -(dy / m.cell_h).round() as i64 * 4
+        } else {
+            return None;
+        };
+        let view = r.view.moved(cols);
+        Some(cols != 0 && self.set_value(r.view_path, ledger::Field::value(&view), "Scroll the time".to_string()))
+    }
+
     fn matches_of(&self, picker: u32) -> Option<u32> {
         self.tree.children(picker).find(|&c| matches!(self.tree.nodes[c as usize].kind, Kind::Matches { .. }))
     }
@@ -4150,6 +4231,14 @@ impl<A: App> Runner<A> {
                     reading.head = head;
                     return moved;
                 }
+                if let Some((id, was)) = self.scrub
+                    && let Some(i) = self.tree.find(id)
+                {
+                    let now = self.scrubbed(frame, i).unwrap_or(was);
+                    self.scrub = Some((id, now));
+                    self.stale |= now != was;
+                    return now != was;
+                }
                 if let Some(r) = self.resizing {
                     let Some((x, y)) = frame.pointer else { return false };
                     let col = frame.metrics.cell_at(x, y).0;
@@ -4216,6 +4305,14 @@ impl<A: App> Runner<A> {
                     if let Some(head) = self.column_edge(col, row) {
                         let n = self.tree.nodes[head as usize];
                         self.resizing = Some(Resizing { id: n.id, from: col, width: n.area.cols, sign: 1, most: i32::MAX });
+                        return true;
+                    }
+                    if let Some(i) = self.hit(col, row)
+                        && self.tree.nodes[i as usize].kind == Kind::Ruler
+                        && let Some(t) = self.scrubbed(frame, i)
+                    {
+                        let id = self.tree.nodes[i as usize].id;
+                        (self.focus, self.scrub, self.stale) = (Some(id), Some((id, t)), true);
                         return true;
                     }
                     if let Some(i) = self.hit(col, row)
@@ -4295,6 +4392,13 @@ impl<A: App> Runner<A> {
                 if self.resizing.take().is_some() {
                     return true;
                 }
+                if let Some((id, t)) = self.scrub.take() {
+                    self.stale = true;
+                    if let Some(i) = self.tree.find(id) {
+                        self.play_to(i, t);
+                    }
+                    return true;
+                }
                 if let Some((id, now)) = self.mixing.take() {
                     self.stale = true;
                     if let Some(i) = self.tree.find(id) {
@@ -4331,9 +4435,12 @@ impl<A: App> Runner<A> {
                 }
                 true
             }
-            Input::Wheel { dy, .. } => {
+            Input::Wheel { dx, dy } => {
                 let Some((x, y)) = frame.pointer else { return false };
                 let (col, row) = frame.metrics.cell_at(x, y);
+                if let Some(done) = self.wheel_axis(frame, col, row, dx, dy) {
+                    return done;
+                }
                 let by = -(dy / frame.metrics.cell_h).round() as i32;
                 if self.sheet.is_some() {
                     return by != 0 && self.scroll_help(by);

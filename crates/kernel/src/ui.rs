@@ -149,6 +149,88 @@ impl<C, S, T> Picked<'_, '_, C, S, T> {
     }
 }
 
+/// A time axis being described: add its tracks with `track`.
+pub struct Axis<'u, 'a, C, S> {
+    ui: &'u mut Ui<'a, C, S>,
+    node: u32,
+    view: crate::time::TimeView,
+    playhead: i64,
+    cols: i32,
+}
+
+/// How many columns the names of a time axis's tracks take.
+const TRACK_NAMES: i32 = 16;
+
+impl<'a, C, S> Axis<'_, 'a, C, S> {
+    /// A track: a row with its name and a lane `rows` tall, in which `f` draws what happens when, in the axis's time. Draw only what [`Lane::shows`] says is in view, so a long piece costs what a screenful does.
+    #[track_caller]
+    pub fn track(&mut self, name: impl AsRef<str>, rows: i32, f: impl FnOnce(&mut Lane<'_, '_, '_, C, S>)) {
+        let (name, at) = (name.as_ref(), Location::caller());
+        let row = self.ui.tree.add(self.node, Kind::Row, None, at);
+        let label = self.ui.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, None, at);
+        let r = self.ui.tree.put(name);
+        (self.ui.tree.nodes[label as usize].text, self.ui.tree.nodes[label as usize].span) = (r, crate::tree::cols(TRACK_NAMES));
+        let (view, playhead, cols, subject) = (self.view, self.playhead, self.cols, self.ui.subject);
+        self.ui.child::<S>(row, subject).canvas(name, rows, |canvas| {
+            canvas.space(0.0..(view.per_col * i64::from(cols)) as f32, 0.0..1.0);
+            let mut lane = Lane { canvas, view, cols };
+            f(&mut lane);
+            let x = lane.x(playhead);
+            lane.canvas.line((x, 0.0), (x, 1.0)).ink(Ink::Ink).stroke(crate::canvas::Weight::Bold);
+        });
+    }
+}
+
+/// A track's lane: a canvas whose space runs across in the axis's time and down from 0 to 1.
+pub struct Lane<'c, 'u, 'a, C, S> {
+    canvas: &'c mut Canvas<'u, 'a, C, S>,
+    view: crate::time::TimeView,
+    cols: i32,
+}
+
+impl<C, S> Lane<'_, '_, '_, C, S> {
+    /// Where `t` is across the lane, in its drawing's space.
+    pub fn x(&self, t: i64) -> f32 {
+        (t - self.view.start) as f32
+    }
+
+    /// Whether anything from `from` to `to` is in view.
+    pub fn shows(&self, from: i64, to: i64) -> bool {
+        to >= self.view.start && from < self.view.end(self.cols)
+    }
+
+    /// A box from `from` to `to`, as a clip or a note is drawn, filling most of the lane's height.
+    pub fn span(&mut self, from: i64, to: i64) -> &mut crate::canvas::Shape {
+        let (a, b) = (self.x(from), self.x(to));
+        self.canvas.rect((a, 0.15), (b, 0.85))
+    }
+
+    /// Words at `at`, as a clip's name is written.
+    pub fn label(&mut self, at: i64, text: &str) -> &mut crate::canvas::Label {
+        let x = self.x(at);
+        self.canvas.text((x, 0.5), text)
+    }
+
+    /// Runs `cmd` when the shape named `key` is pressed, as on any canvas.
+    pub fn press<M>(&mut self, key: u64, cmd: impl Bind<C, S, M>) {
+        self.canvas.press(key, cmd);
+    }
+}
+
+impl<'u, 'a, C, S> Deref for Lane<'_, 'u, 'a, C, S> {
+    type Target = Canvas<'u, 'a, C, S>;
+
+    fn deref(&self) -> &Self::Target {
+        self.canvas
+    }
+}
+
+impl<C, S> DerefMut for Lane<'_, '_, '_, C, S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.canvas
+    }
+}
+
 /// How many items a picker shows at a time.
 pub(crate) const PICKED: u32 = 8;
 
@@ -1368,6 +1450,28 @@ impl<'a, C, S> Ui<'a, C, S> {
                 row.cell(Message::plain(head), crate::table::Plain(value));
             }
         })
+    }
+
+    /// A time axis: a ruler over tracks, each a row with its name and a lane of what happens when. `view` is the stretch of time that shows and `playhead` the time the ruler marks, both facts; `clock` says how time is counted and marked. A click or drag on the ruler moves the playhead, snapped to its marks, and so do Left and Right once it is reached; the wheel with the primary key held zooms around the pointer, and with Shift held, or sideways, scrolls.
+    #[track_caller]
+    pub fn time_axis<F: Field>(&mut self, clock: crate::time::Clock, view: FactPath<F, crate::time::TimeView>, playhead: FactPath<F, i64>, f: impl FnOnce(&mut Axis<'_, 'a, C, S>)) {
+        let at = Location::caller();
+        let (view_path, playhead_path) = (view.erased(), playhead.erased());
+        let Some(facts) = self.facts::<F>() else { return };
+        let (Some(&shown), Some(&now)) = (view.get(facts), playhead.get(facts)) else { return };
+        let id = Id::ROOT.mix(view_path.hash64()).mix(0x7a);
+        let i = self.tree.add(self.parent, Kind::TimeAxis, Some(id), at);
+        let row = self.tree.add(i, Kind::Row, Some(id.mix(1)), at);
+        let gap = self.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(2)), at);
+        self.tree.nodes[gap as usize].span = crate::tree::cols(TRACK_NAMES);
+        let ruler_id = id.mix(3);
+        let r = self.tree.add(row, Kind::Ruler, Some(ruler_id), at);
+        let name = self.tree.put("Playhead");
+        (self.tree.nodes[r as usize].span, self.tree.nodes[r as usize].name, self.tree.nodes[r as usize].path) = (crate::tree::Fill, name, Some(playhead_path));
+        let playhead = self.tree.scrub.filter(|s| s.0 == ruler_id).map_or(now, |s| s.1);
+        self.tree.rulers.push(crate::tree::Ruler { node: r, clock, view: shown, playhead, view_path, playhead_path });
+        let cols = self.tree.spans.get(&ruler_id).copied().unwrap_or(60);
+        f(&mut Axis { ui: self, node: i, view: shown, playhead, cols });
     }
 
     fn rows<T: Record, F: Field>(

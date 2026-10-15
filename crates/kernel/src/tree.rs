@@ -703,6 +703,10 @@ pub struct Tree<C> {
     pub steers: Vec<(u32, ErasedPath)>,
     /// The drag under way on a canvas, by the canvas's id.
     pub dragging: Option<(Id, crate::canvas::Drag)>,
+    /// The canvases a drag pans.
+    pub pans: Vec<u32>,
+    /// How far, in points, the drag under way has panned a canvas, by the canvas's id.
+    pub panning: Option<(Id, (f64, f64))>,
     /// The shape the keyboard has reached in a canvas, by the canvas's id and the shape's key.
     pub aim: Option<(Id, u64)>,
     /// The raster images, each with the node that shows it.
@@ -822,6 +826,8 @@ impl<C> Default for Tree<C> {
             drags: Vec::new(),
             steers: Vec::new(),
             dragging: None,
+            pans: Vec::new(),
+            panning: None,
             aim: None,
             images: Vec::new(),
             orders: Vec::new(),
@@ -863,6 +869,7 @@ impl<C> Tree<C> {
         self.canvases.clear();
         self.drags.clear();
         self.steers.clear();
+        self.pans.clear();
         self.images.clear();
         self.orders.clear();
         self.marks.clear();

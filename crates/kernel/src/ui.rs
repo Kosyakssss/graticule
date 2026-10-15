@@ -1815,8 +1815,18 @@ impl<C, S> Canvas<'_, '_, C, S> {
     /// Draws in page units through the camera at `path`, which the wheel pans and, with the primary key held, zooms around the pointer, each as one change to it.
     pub fn camera<F: Field>(&mut self, path: FactPath<F, crate::canvas::Camera>) {
         if let Some(camera) = self.ui.facts::<F>().and_then(|f| path.get(f)).copied() {
+            let id = self.ui.tree.nodes[self.board.node as usize].id;
+            let camera = match self.ui.tree.panning {
+                Some((panned, (dx, dy))) if panned == id => camera.panned(dx, dy),
+                _ => camera,
+            };
             self.board.camera = Some((Some(path.erased()), camera));
         }
+    }
+
+    /// Makes a drag on this canvas pan its camera, shown moving while the drag is under way and kept as one change to the camera when it is let go. A press that doesn't move still runs the canvas's drag command, if it has one.
+    pub fn pans(&mut self) {
+        self.ui.tree.pans.push(self.board.node);
     }
 
     /// Draws in page units through `camera`, worked out by the view rather than kept in the facts, so the wheel doesn't move it: a map that always shows a whole board.

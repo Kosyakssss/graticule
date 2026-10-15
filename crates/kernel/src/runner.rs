@@ -273,6 +273,7 @@ pub struct Runner<A: App> {
     spans: HashMap<Id, i32>,
     sizes: HashMap<Id, (f64, f64)>,
     dragging: Option<(Id, crate::canvas::Drag, (f32, f32))>,
+    panning: Option<(Id, (f64, f64))>,
     aim: Option<(Id, u64)>,
     opened: Option<Id>,
     browse: Option<Id>,
@@ -383,6 +384,7 @@ impl<A: App> Runner<A> {
             spans: HashMap::new(),
             sizes: HashMap::new(),
             dragging: None,
+            panning: None,
             aim: None,
             opened: None,
             browse: None,
@@ -496,6 +498,7 @@ impl<A: App> Runner<A> {
         self.tree.spans.clone_from(&self.spans);
         self.tree.sizes.clone_from(&self.sizes);
         self.tree.dragging = self.dragging.as_ref().map(|(id, drag, _)| (*id, drag.clone()));
+        self.tree.panning = self.panning;
         self.tree.reveal = self.reveal;
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
@@ -3153,7 +3156,7 @@ impl<A: App> Runner<A> {
 
     fn drag_canvas(&self, col: i32, row: i32) -> Option<u32> {
         let i = self.hit(col, row)?;
-        (self.tree.drags.iter().any(|(n, _)| *n == i) || self.tree.steers.iter().any(|(n, _)| *n == i)).then_some(i)
+        (self.tree.drags.iter().any(|(n, _)| *n == i) || self.tree.steers.iter().any(|(n, _)| *n == i) || self.tree.pans.contains(&i)).then_some(i)
     }
 
     fn press_canvas(&mut self, frame: &Frame, i: u32) -> bool {
@@ -3170,6 +3173,14 @@ impl<A: App> Runner<A> {
         let Some(i) = self.tree.find(id) else { return false };
         let (Some(at), Some((x, y))) = (self.canvas_point(frame, i), frame.pointer) else { return true };
         let wobble = 3.0 * frame.metrics.scale;
+        if self.tree.pans.contains(&i) {
+            let Some((_, drag, _)) = &mut self.dragging else { return true };
+            drag.moved |= (x - from.0).abs() > wobble || (y - from.1).abs() > wobble;
+            let scale = frame.metrics.scale;
+            self.panning = drag.moved.then_some((id, (f64::from((x - from.0) / scale), f64::from((y - from.1) / scale))));
+            self.stale = true;
+            return true;
+        }
         let Some((_, drag, _)) = &mut self.dragging else { return true };
         if drag.to == at {
             return true;
@@ -3184,6 +3195,15 @@ impl<A: App> Runner<A> {
     fn let_go(&mut self) -> bool {
         let Some((id, drag, _)) = self.dragging.take() else { return false };
         self.stale = true;
+        if let Some((panned, (dx, dy))) = self.panning.take() {
+            let shown = self.tree.panning.filter(|(p, _)| *p == panned).map_or((0.0, 0.0), |(_, d)| d);
+            let camera = self.tree.find(panned).and_then(|i| self.tree.canvases.iter().find(|b| b.node == i)).and_then(|b| b.camera);
+            if let Some((Some(path), camera)) = camera {
+                let to = camera.panned(dx - shown.0, dy - shown.1);
+                self.set_value(path, ledger::Field::value(&to), "Pan".to_string());
+            }
+            return true;
+        }
         let steer = self.tree.find(id).and_then(|i| self.tree.steers.iter().find(|(n, _)| *n == i)).map(|(_, path)| *path);
         if let Some(path) = steer {
             return self.steer(path, drag.to);
@@ -3864,6 +3884,7 @@ impl<A: App> Runner<A> {
             return done;
         }
         if chord.key == Key::Escape && self.dragging.take().is_some() {
+            self.panning = None;
             self.stale = true;
             return true;
         }

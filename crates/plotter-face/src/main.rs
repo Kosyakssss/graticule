@@ -1,13 +1,14 @@
 use std::borrow::Cow;
 use std::cell::Cell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use graticule::kernel::canvas::{self, Raster, Scale, Weight};
+use graticule::kernel::image::Image;
 use graticule::kernel::ink::{Appearance, Theme};
 use graticule::kernel::{Camera, Drag, Drawing};
 use graticule::prelude::*;
-use plotter::{Board, Bounds, End, Gesture, Index, Intent, Kind, Page, Point, Shape, Tool};
+use plotter::{Asset, Board, Bounds, End, Gesture, Index, Intent, Kind, Page, Point, Shape, Tool};
 
 #[derive(Facts, Default)]
 struct Whiteboard {
@@ -28,7 +29,9 @@ struct Whiteboard {
     access: Access,
     #[derived(Index::of, from = [board, page])]
     index: Derived<Index>,
-    #[derived(Layers::of, from = [board, index, camera])]
+    #[derived(Pictures::of, from = [board, pictures])]
+    pictures: Derived<Pictures>,
+    #[derived(Layers::of, from = [board, index, camera, pictures])]
     layers: Derived<Layers>,
     #[derived(Overview::of, from = [board, page])]
     overview: Derived<Overview>,
@@ -82,6 +85,26 @@ impl Chosen {
         let shapes: Vec<&Shape> = shapes.collect();
         let around = shapes.iter().map(|s| s.bounds()).reduce(|a, b| a.union(&b));
         Chosen(around.map(|a| (a, plotter::resizable(shapes.iter().copied()))))
+    }
+}
+
+/// The board's pictures decoded, by asset, off the main thread. Each is decoded once: working them out again after a change keeps the ones decoded already.
+#[derive(Default)]
+struct Pictures(HashMap<Key<Asset>, Image>);
+
+impl Pictures {
+    fn of(board: &Board, last: &Derived<Pictures>) -> Pictures {
+        Pictures::decode(board, last.get())
+    }
+
+    fn decode(board: &Board, last: Option<&Pictures>) -> Pictures {
+        let decoded = |asset: &Asset| last.and_then(|p| p.0.get(&asset.id).cloned()).unwrap_or_else(|| Image::decode(&asset.bytes()).unwrap_or_default());
+        Pictures(board.assets.iter().map(|a| (a.id, decoded(a))).collect())
+    }
+
+    fn get(&self, shape: &Shape) -> Option<&Image> {
+        let Kind::Image(asset) = shape.kind else { return None };
+        self.0.get(&asset)
     }
 }
 
@@ -151,6 +174,25 @@ fn mark(key: Key<Shape>) -> u64 {
 /// How far the arrow keys move the chosen shapes, in page units.
 const STEP: f64 = 10.0;
 
+/// The longest side a picture placed on the board has at first, in page units.
+const PLACED: f64 = 480.0;
+
+/// A board holding only a picture file, as an image shape at its own size or at most [`PLACED`] across, with its corner at the board's origin.
+fn placed(bytes: &[u8], image: &Image) -> Board {
+    let (w, h) = (f64::from(image.width()), f64::from(image.height()));
+    let fit = (PLACED / w.max(h).max(1.0)).min(1.0);
+    let apart = ledger::Transaction::begin();
+    let mut board = Board::default();
+    let _ = board.add_image(Shape::new(Key::fixed(1), Kind::Rect, Bounds::new(0.0, 0.0, w * fit, h * fit)), Asset::new(Key::fixed(1), bytes));
+    let _ = apart.end();
+    board
+}
+
+/// Whether a file is a picture to place rather than a board to import, by its name.
+fn picturing(path: &Path) -> bool {
+    path.0.extension().and_then(|e| e.to_str()).is_some_and(|e| ["png", "jpg", "jpeg"].iter().any(|p| e.eq_ignore_ascii_case(p)))
+}
+
 /// How far a pasted board lands from where it was, in page units, across and down.
 const PASTED: f64 = 16.0;
 
@@ -158,7 +200,7 @@ const PASTED: f64 = 16.0;
 const SIGHT: (f64, f64) = (3_840.0, 2_160.0);
 
 impl Layers {
-    fn of(board: &Board, index: &Derived<Index>, camera: &Camera) -> Layers {
+    fn of(board: &Board, index: &Derived<Index>, camera: &Camera, pictures: &Derived<Pictures>) -> Layers {
         let Some(index) = index.get() else { return Layers { slices: Vec::new() } };
         let [left, right, top, bottom] = camera.showing(SIGHT.0, SIGHT.1);
         let seen: Vec<&Shape> = index.query(Bounds::new(left, top, right - left, bottom - top)).into_iter().filter_map(|e| board.shapes.find(e.key)).collect();
@@ -167,7 +209,7 @@ impl Layers {
             .map(|shapes| {
                 let mut drawing = Drawing::new();
                 for shape in shapes {
-                    draw(&mut drawing, shape, board.window(shape));
+                    draw(&mut drawing, shape, board.window(shape), pictures.get());
                 }
                 (shapes.iter().map(|s| s.id).collect(), Arc::new(drawing))
             })
@@ -210,10 +252,12 @@ enum Cmd {
     Paste,
     #[internal]
     Pasted(String),
-    #[label("Import a board")]
+    #[label("Import a board or a picture")]
     Import(Path),
     #[internal]
     Laid(Box<Result<Board, Failure>>),
+    #[internal]
+    Placed(Box<Result<Board, Failure>>),
     #[label("Lock")]
     Lock,
     #[label("Unlock")]
@@ -297,7 +341,7 @@ impl App for Whiteboard {
             Cmd::Draw => no_if(self.tool == Tool::Draw, t!("Drawing freehand already")),
             Cmd::Frame => no_if(self.tool == Tool::Frame, t!("Drawing frames already")),
             Cmd::Write { .. } => no_if(self.chosen.len() > 1, t!("Choose one shape at most")),
-            Cmd::Paste | Cmd::Copied(_) | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
+            Cmd::Paste | Cmd::Copied(_) | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) | Cmd::Placed(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
         }
     }
 
@@ -334,6 +378,19 @@ impl App for Whiteboard {
                 Outcome::Nothing
             }
             Cmd::Pasted(text) => self.paste(text, cx),
+            Cmd::Import(path) if picturing(&path) => {
+                let name = path.0.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let read = move || {
+                    let bytes = std::fs::read(&path.0).map_err(|e| Failure::new(e.to_string()));
+                    Box::new(bytes.and_then(|bytes| Image::decode(&bytes).map(|image| placed(&bytes, &image)).map_err(Failure::new)))
+                };
+                cx.job(t!("Reading {name}"), read, Cmd::Placed);
+                Outcome::Nothing
+            }
+            Cmd::Placed(placed) => match *placed {
+                Ok(board) => self.place(&board, cx),
+                Err(failure) => cx.say_failure(failure),
+            },
             Cmd::Import(path) => {
                 let name = path.0.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 let reading = t!("Reading {name}");
@@ -453,7 +510,7 @@ impl App for Whiteboard {
             Cmd::Saved(Ok(path)) => cx.say(t!("Saved to {path}")),
             Cmd::ExportPicture => {
                 let path = std::path::Path::new(self.file.to_string().as_str()).with_extension("png");
-                cx.write(Path(path), |facts: &Whiteboard| picture(&facts.board, facts.showing()), Cmd::Saved);
+                cx.write(Path(path), |facts: &Whiteboard| picture(&facts.board, facts.showing(), facts.pictures.get()), Cmd::Saved);
                 Outcome::Nothing
             }
             Cmd::Drew(drag) => {
@@ -540,7 +597,7 @@ impl App for Whiteboard {
                                     if keys.iter().any(|k| moving.contains(k)) {
                                         let mut redrawn = Drawing::new();
                                         for shape in keys.iter().filter_map(|k| shown(*k)) {
-                                            draw(&mut redrawn, shape, window(shape));
+                                            draw(&mut redrawn, shape, window(shape), self.pictures.get());
                                         }
                                         canvas.drawing(&Arc::new(redrawn));
                                     } else {
@@ -552,7 +609,7 @@ impl App for Whiteboard {
                                 reached.extend(self.board.on(self.showing()).iter().take(READ).map(|s| s.id));
                                 for shape in self.board.on(self.showing()) {
                                     let shape = shown(shape.id).unwrap_or(shape);
-                                    draw(canvas, shape, window(shape));
+                                    draw(canvas, shape, window(shape), self.pictures.get());
                                 }
                             }
                             None => {}
@@ -561,7 +618,7 @@ impl App for Whiteboard {
                             canvas.press(mark(key), Cmd::ChooseShape(key));
                         }
                         for shape in moved.iter().filter(|m| !self.board.shapes.has(m.id)) {
-                            draw(canvas, shape, window(shape));
+                            draw(canvas, shape, window(shape), self.pictures.get());
                         }
                         let around = match self.around.get().filter(|_| moved.is_empty() && !self.around.coming()) {
                             Some(Chosen(around)) => *around,
@@ -658,6 +715,18 @@ impl App for Whiteboard {
                 let _ = w.chosen.choose(&ledger::Choose::All(stacked.iter().map(|k| k.raw()).collect()));
                 w
             })
+            .add("A picture on the board", {
+                let mut w = Whiteboard::diagram();
+                let mut hills = Drawing::new();
+                hills.space(0.0..8.0, 0.0..6.0);
+                hills.rect((0.0, 0.0), (8.0, 6.0)).ink(Ink::Link);
+                hills.polygon([(0.0, 6.0), (0.0, 4.0), (3.0, 2.0), (5.0, 3.5), (8.0, 1.5), (8.0, 6.0)]).ink(Ink::Ok);
+                hills.dot((6.5, 1.0)).ink(Ink::Warn);
+                let scale = Scale { width: 96, height: 72, weights: [1.0, 1.0, 2.0], dot: 6.0, space: None };
+                let png = Raster { id: 0, scale, drawings: vec![Arc::new(hills)], theme: *Theme::of(Appearance::Light) }.png(0.0);
+                let _ = w.board.add_image(Shape::new(Key::fixed(9_004), Kind::Rect, Bounds::new(480.0, 40.0, 160.0, 120.0)), Asset::new(Key::fixed(9_005), &png));
+                w
+            })
             .add("Many shapes", Whiteboard::many(2_000))
     }
 }
@@ -748,6 +817,13 @@ impl Whiteboard {
     }
 
     /// Lays a pasted or imported board on top, a little down and to the right of where it was, so it doesn't hide what it came from, and chooses it.
+    fn place(&mut self, board: &Board, cx: &mut Cx<Cmd>) -> Outcome {
+        let (x, y) = self.camera.to_page((PASTED * 3.0, PASTED * 3.0));
+        let made = self.board.paste(board, x, y, self.showing(), || cx.key::<Shape>().raw());
+        let _ = self.chosen.choose(&ledger::Choose::All(made.iter().map(|k| k.raw()).collect()));
+        if made.is_empty() { Outcome::Nothing } else { Outcome::Changed }
+    }
+
     fn lay(&mut self, board: &Board, cx: &mut Cx<Cmd>) -> Outcome {
         let made = self.board.paste(board, PASTED, PASTED, self.showing(), || cx.key::<Shape>().raw());
         let count = made.len();
@@ -866,14 +942,15 @@ const PICTURE_SCALE: f64 = 2.0;
 const PICTURE_MOST: f64 = 8_192.0;
 const PICTURE_MARGIN: f64 = 24.0;
 
-fn picture(board: &Board, page: Key<Page>) -> Vec<u8> {
+fn picture(board: &Board, page: Key<Page>, pictures: Option<&Pictures>) -> Vec<u8> {
+    let pictures = Pictures::decode(board, pictures);
     let shapes = board.on(page);
     let Some(area) = shapes.iter().map(|s| s.bounds()).reduce(|a, b| a.union(&b)) else { return Vec::new() };
     let area = area.expand(PICTURE_MARGIN);
     let fit = PICTURE_SCALE.min(PICTURE_MOST / area.w.max(area.h));
     let mut drawing = Drawing::new();
     for shape in shapes {
-        draw(&mut drawing, shape, board.window(shape));
+        draw(&mut drawing, shape, board.window(shape), Some(&pictures));
     }
     let space = [area.x as f32, (area.x + area.w) as f32, area.y as f32, (area.y + area.h) as f32];
     let hair = fit as f32;
@@ -881,7 +958,7 @@ fn picture(board: &Board, page: Key<Page>) -> Vec<u8> {
     Raster { id: 0, scale, drawings: vec![Arc::new(drawing)], theme: *Theme::of(Appearance::Light) }.png(14.0 * hair)
 }
 
-fn draw(canvas: &mut Drawing, shape: &Shape, window: Option<Bounds>) {
+fn draw(canvas: &mut Drawing, shape: &Shape, window: Option<Bounds>, pictures: Option<&Pictures>) {
     let color = ink(shape.ink);
     let b = Bounds::new(shape.x, shape.y, shape.w, shape.h);
     let edge = window.map(|w| (at(w.x, w.y), at(w.right(), w.bottom())));
@@ -926,6 +1003,10 @@ fn draw(canvas: &mut Drawing, shape: &Shape, window: Option<Bounds>) {
                 fit(canvas.polyline([wing(1.0), at(z.x, z.y), wing(-1.0)]).ink(color));
             }
         }
+        Kind::Image(_) => match pictures.and_then(|p| p.get(shape)).filter(|i| !i.is_empty()) {
+            Some(image) => fit(canvas.image(image, at(b.x, b.y), at(b.right(), b.bottom()))),
+            None => fit(corners(canvas, b, Ink::Faint).stroke(Weight::Hair)),
+        },
         Kind::Frame(name) => {
             let b = shape.bounds();
             fit(corners(canvas, b, color).stroke(Weight::Hair));
@@ -955,7 +1036,7 @@ fn outline(canvas: &mut Drawing, b: Bounds, corners: bool) {
 fn changes(cmd: &Cmd) -> bool {
     match cmd {
         Cmd::Rect | Cmd::Ellipse | Cmd::Arrow | Cmd::Draw | Cmd::Frame | Cmd::Write { .. } | Cmd::Remove => true,
-        Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::Paste | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) => true,
+        Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::Paste | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) | Cmd::Placed(_) => true,
         Cmd::Lock | Cmd::Unlock | Cmd::Group | Cmd::Ungroup | Cmd::AddPage | Cmd::RenamePage { .. } | Cmd::RemovePage => true,
         Cmd::ToFront | Cmd::ToBack | Cmd::Open | Cmd::Opened(_) => true,
         Cmd::Select | Cmd::Copy | Cmd::Copied(_) | Cmd::GoToPage(_) | Cmd::ChooseShape(_) | Cmd::ReadOnly | Cmd::AllowEditing | Cmd::ChooseAll | Cmd::ShowAll => false,

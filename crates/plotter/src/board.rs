@@ -6,13 +6,40 @@ use ledger::{Key, List, Outcome};
 use crate::geometry::{Bounds, Geometry, Point};
 use crate::order;
 
-/// A board: its shapes, the bindings between them, the groups that hold them together and the pages they are on. Every change goes through its methods, which keep bound arrows on what they point at and groups whole within the same change, so one undo takes back all of it.
+/// A board: its shapes, the bindings between them, the groups that hold them together, the pages they are on and the pictures its images show. Every change goes through its methods, which keep bound arrows on what they point at and groups whole within the same change, so one undo takes back all of it.
 #[derive(Facts, Default)]
 pub struct Board {
     pub shapes: List<Shape>,
     pub bindings: List<Binding>,
     pub groups: List<Group>,
     pub pages: List<Page>,
+    pub assets: List<Asset>,
+}
+
+/// A picture file an image shape shows, kept whole, as the PNG or JPEG it was, so the board saves and copies it with its shapes. Several shapes may show one asset; one no shape shows any more goes with the last of them.
+#[derive(Facts, Debug)]
+pub struct Asset {
+    #[key]
+    pub id: Key<Asset>,
+    /// The file's bytes, in base64.
+    pub data: String,
+}
+
+impl Asset {
+    /// An asset `id` holding a file's bytes.
+    pub fn new(id: Key<Asset>, bytes: &[u8]) -> Asset {
+        Asset { id, data: crate::base64::encode(bytes) }
+    }
+
+    /// The file's bytes.
+    pub fn bytes(&self) -> Vec<u8> {
+        crate::base64::decode(&self.data).unwrap_or_default()
+    }
+
+    /// The file's type, for a picture exported with it: PNG or JPEG.
+    pub fn media(&self) -> &'static str {
+        if self.data.starts_with("/9j/") { "image/jpeg" } else { "image/png" }
+    }
 }
 
 /// One page of a board: its name and its place among the pages, a key from [`order::between`]. A board with one page needs no record for it; that page is [`Page::FIRST`], which is also where shapes saved before there were pages are.
@@ -79,6 +106,8 @@ pub enum Kind {
     Arrow,
     /// A named box that holds the shapes put in it: they move, copy and go with it, and what of them reaches past its edge is hidden. It is taken by its edge, so what it holds can still be clicked.
     Frame(String),
+    /// A picture, the board's asset, stretched to fill the box.
+    Image(Key<Asset>),
 }
 
 /// What a shape is in words, for reading it out: "rectangle", "text “Facts”".
@@ -91,6 +120,7 @@ impl std::fmt::Display for Kind {
             Kind::Draw(_) => f.write_str("freehand line"),
             Kind::Arrow => f.write_str("arrow"),
             Kind::Frame(name) => write!(f, "frame “{name}”"),
+            Kind::Image(_) => f.write_str("image"),
         }
     }
 }
@@ -160,7 +190,7 @@ impl Shape {
     pub fn geometry(&self) -> Geometry {
         let b = Bounds::new(self.x, self.y, self.w, self.h);
         match &self.kind {
-            Kind::Rect | Kind::Text(_) => Geometry::Rect(b),
+            Kind::Rect | Kind::Text(_) | Kind::Image(_) => Geometry::Rect(b),
             Kind::Ellipse => Geometry::Ellipse(b),
             Kind::Arrow => Geometry::Line(vec![self.end(End::Start), self.end(End::End)]),
             Kind::Frame(_) => Geometry::Line(vec![Point::new(b.x, b.y), Point::new(b.right(), b.y), Point::new(b.right(), b.bottom()), Point::new(b.x, b.bottom()), Point::new(b.x, b.y)]),
@@ -269,6 +299,9 @@ impl Board {
         for p in pages {
             let _ = self.pages.remove(p);
         }
+        for asset in other.assets.iter() {
+            let _ = self.assets.push(asset.clone());
+        }
         for shape in other.shapes.iter() {
             let _ = self.shapes.push(shape.clone());
         }
@@ -290,6 +323,27 @@ impl Board {
         let top = self.shapes.iter().map(|s| s.index.as_str()).max().map(str::to_string);
         shape.index = order::between(top.as_deref(), None);
         self.shapes.push(shape)
+    }
+
+    /// Puts an image shape on top of the stack showing `asset`, or the asset already on the board that holds the same file, so a picture placed twice is kept once.
+    pub fn add_image(&mut self, mut shape: Shape, asset: Asset) -> Outcome {
+        let same = self.assets.iter().find(|a| a.data == asset.data).map(|a| a.id);
+        let id = match same {
+            Some(same) => same,
+            None => {
+                let id = asset.id;
+                let _ = self.assets.push(asset);
+                id
+            }
+        };
+        shape.kind = Kind::Image(id);
+        self.add(shape)
+    }
+
+    /// The asset an image shape shows.
+    pub fn picture(&self, shape: &Shape) -> Option<&Asset> {
+        let Kind::Image(asset) = shape.kind else { return None };
+        self.assets.find(asset)
     }
 
     /// Gives a text shape new words, as wide as they need, or a frame a new name. Nothing happens to a locked shape, a shape that holds no words, or words it already holds.
@@ -379,6 +433,10 @@ impl Board {
         for b in self.touching(keys).into_iter().filter_map(|b| self.bindings.find(b)).filter(|b| inside.contains(&b.arrow) && inside.contains(&b.to)) {
             let _ = part.bindings.push(b.clone());
         }
+        let shown: HashSet<Key<Asset>> = part.shapes.iter().filter_map(|s| if let Kind::Image(a) = s.kind { Some(a) } else { None }).collect();
+        for asset in shown.into_iter().filter_map(|a| self.assets.find(a)) {
+            let _ = part.assets.push(asset.clone());
+        }
         let _ = apart.end();
         part
     }
@@ -390,10 +448,32 @@ impl Board {
         for g in other.groups.iter() {
             let _ = self.groups.push(Group { id: group(Some(g.id)).unwrap_or(g.id), group: group(g.group) });
         }
+        let assets: Vec<(Key<Asset>, Key<Asset>)> = other
+            .assets
+            .iter()
+            .map(|a| {
+                let same = self.assets.iter().find(|b| b.data == a.data).map(|b| b.id);
+                (a, same)
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|(a, same)| match same {
+                Some(same) => (a.id, same),
+                None => {
+                    let id = Key::from_raw(key());
+                    let _ = self.assets.push(Asset { id, data: a.data.clone() });
+                    (a.id, id)
+                }
+            })
+            .collect();
+        let shows = |kind: &Kind| match kind {
+            Kind::Image(old) => Kind::Image(assets.iter().find(|(o, _)| o == old).map_or(*old, |(_, n)| *n)),
+            other => other.clone(),
+        };
         let made: Vec<(Key<Shape>, Key<Shape>)> = other.stacked().into_iter().map(|s| (s.id, Key::from_raw(key()))).collect();
         let renamed = |old: Key<Shape>| made.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
         for (shape, &(_, id)) in other.stacked().into_iter().zip(&made) {
-            let _ = self.add(Shape { id, x: shape.x + dx, y: shape.y + dy, group: group(shape.group), frame: shape.frame.and_then(renamed), page, ..shape.clone() });
+            let _ = self.add(Shape { id, x: shape.x + dx, y: shape.y + dy, kind: shows(&shape.kind), group: group(shape.group), frame: shape.frame.and_then(renamed), page, ..shape.clone() });
         }
         let new = |old: Key<Shape>| made.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
         for b in other.bindings.iter() {
@@ -604,13 +684,20 @@ impl Board {
         }
         let mut outcome = Outcome::Nothing;
         let mut groups = Vec::new();
+        let mut assets = Vec::new();
         for &key in keys {
             groups.extend(self.shapes.find(key).and_then(|s| s.group));
+            assets.extend(self.shapes.find(key).and_then(|s| if let Kind::Image(a) = s.kind { Some(a) } else { None }));
             if self.shapes.remove(key).changed() {
                 outcome = Outcome::Changed;
             }
         }
         self.tidy(groups);
+        for asset in assets {
+            if !self.shapes.iter().any(|s| s.kind == Kind::Image(asset)) {
+                let _ = self.assets.remove(asset);
+            }
+        }
         outcome
     }
 

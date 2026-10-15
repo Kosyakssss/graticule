@@ -10,6 +10,7 @@ use swash::zeno::{Cap, Command, Format, HitTest, Join, Mask, PathBuilder, Placem
 
 use ledger::{Field, Value};
 
+use crate::image::{Image, Pixels};
 use crate::ink::{Color, Ink, Theme};
 
 /// Where a canvas looks on an endless page: the page point at its top left corner, and how many of the screen's points one page unit takes. Keep it in the facts, as `#[session] camera: Camera`, and give it to `Canvas::camera`: what the canvas draws is then in page units, the wheel pans it and, with the primary key held, zooms around the pointer.
@@ -152,6 +153,7 @@ enum Form {
     Path(u32, u32),
     Rect(Point, Point),
     Dot(Point),
+    Image(u32, Point, Point),
 }
 
 /// A shape on a canvas: filled or stroked in one ink, and named by a key that hit tests and presses use.
@@ -265,12 +267,13 @@ pub struct Drawing {
     commands: Vec<Command>,
     labels: Vec<Label>,
     text: String,
+    images: Vec<Image>,
     stamp: OnceLock<u64>,
 }
 
 impl Default for Drawing {
     fn default() -> Self {
-        Self { x: (0.0, 1.0), y: (0.0, 1.0), shapes: Vec::new(), commands: Vec::new(), labels: Vec::new(), text: String::new(), stamp: OnceLock::new() }
+        Self { x: (0.0, 1.0), y: (0.0, 1.0), shapes: Vec::new(), commands: Vec::new(), labels: Vec::new(), text: String::new(), images: Vec::new(), stamp: OnceLock::new() }
     }
 }
 
@@ -369,6 +372,13 @@ impl Drawing {
         self.push(Mark::Fill, Form::Path(start, end))
     }
 
+    /// A picture stretched to fill the rectangle between two corners. It is hit anywhere inside, like a filled rectangle; an empty image draws nothing.
+    pub fn image(&mut self, image: &Image, from: (f32, f32), to: (f32, f32)) -> &mut Shape {
+        self.images.push(image.clone());
+        let at = self.images.len() as u32 - 1;
+        self.push(Mark::Fill, Form::Image(at, from.into(), to.into()))
+    }
+
     /// Words starting at `at`, in the interface's monospace face.
     pub fn text(&mut self, at: (f32, f32), text: &str) -> &mut Label {
         self.stamp = OnceLock::new();
@@ -397,6 +407,7 @@ impl Drawing {
                     Form::Path(a, b) => (0u8, a, b).hash(&mut h),
                     Form::Rect(a, b) => (1u8, a.x.to_bits(), a.y.to_bits(), b.x.to_bits(), b.y.to_bits()).hash(&mut h),
                     Form::Dot(a) => (2u8, a.x.to_bits(), a.y.to_bits()).hash(&mut h),
+                    Form::Image(i, a, b) => (3u8, self.images[i as usize].texture(), a.x.to_bits(), a.y.to_bits(), b.x.to_bits(), b.y.to_bits()).hash(&mut h),
                 }
             }
             for c in &self.commands {
@@ -451,7 +462,7 @@ impl Drawing {
                 Command::CurveTo(c1, c2, p) => Command::CurveTo(at(c1), at(c2), at(p)),
                 Command::Close => Command::Close,
             })),
-            Form::Rect(a, b) => {
+            Form::Rect(a, b) | Form::Image(_, a, b) => {
                 let (a, b) = (at(a), at(b));
                 out.add_rect((a.x.min(b.x), a.y.min(b.y)), (a.x - b.x).abs(), (a.y - b.y).abs());
             }
@@ -594,6 +605,12 @@ impl Raster {
                     }
                     continue;
                 }
+                if let Form::Image(i, a, b) = s.form {
+                    if let Some(p) = d.images[i as usize].pixels() {
+                        stretch(&mut out, (w, h), p, d.place((a.x, a.y), &self.scale), d.place((b.x, b.y), &self.scale), limit);
+                    }
+                    continue;
+                }
                 path.clear();
                 d.outline(s, &self.scale, &mut path);
                 let mut mask = Mask::with_scratch(&path[..], &mut scratch);
@@ -631,6 +648,42 @@ fn blend(out: &mut [u8], (w, _): (usize, usize), mask: &[u8], at: Placement, col
             let cover = mask[(my * at.width as i32 + mx) as usize];
             if cover > 0 {
                 over(&mut out[(y as usize * w + x as usize) * 4..][..4], color, color[3] * f32::from(cover) / 255.0);
+            }
+        }
+    }
+}
+
+fn stretch(out: &mut [u8], (w, _): (usize, usize), p: &Pixels, a: (f32, f32), b: (f32, f32), [lx0, ly0, lx1, ly1]: [i32; 4]) {
+    let (left, top, right, bottom) = (a.0.min(b.0), a.1.min(b.1), a.0.max(b.0), a.1.max(b.1));
+    if right - left < 0.5 || bottom - top < 0.5 {
+        return;
+    }
+    let (sx, sy) = (p.width as f32 / (right - left), p.height as f32 / (bottom - top));
+    let (nx, ny) = (sx.ceil().clamp(1.0, 4.0) as u32, sy.ceil().clamp(1.0, 4.0) as u32);
+    let x0 = (left.round() as i32).max(lx0);
+    let x1 = (right.round() as i32).min(lx1);
+    let y0 = (top.round() as i32).max(ly0);
+    let y1 = (bottom.round() as i32).min(ly1);
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let mut sum = [0.0f32; 4];
+            for j in 0..ny {
+                for i in 0..nx {
+                    let u = ((x as f32 + (i as f32 + 0.5) / nx as f32 - left) * sx).clamp(0.0, p.width as f32 - 1.0) as usize;
+                    let v = ((y as f32 + (j as f32 + 0.5) / ny as f32 - top) * sy).clamp(0.0, p.height as f32 - 1.0) as usize;
+                    let px = &p.rgba[(v * p.width as usize + u) * 4..][..4];
+                    let alpha = f32::from(px[3]) / 255.0;
+                    for k in 0..3 {
+                        sum[k] += f32::from(px[k]) / 255.0 * alpha;
+                    }
+                    sum[3] += alpha;
+                }
+            }
+            let n = (nx * ny) as f32;
+            let alpha = sum[3] / n;
+            if alpha > 0.0 {
+                let color = [sum[0] / sum[3], sum[1] / sum[3], sum[2] / sum[3], 1.0];
+                over(&mut out[(y as usize * w + x as usize) * 4..][..4], color, alpha);
             }
         }
     }

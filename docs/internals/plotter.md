@@ -105,6 +105,12 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **Here.** The kernel's canvas already makes the shapes it is given presses for keyboard stops, read out by their command's label. The face gives each shape in sight a press of `ChooseShape`, labelled from the shape's kind ("Choose the text “Facts”", from `Kind`'s `Display`, so the words are English until the label is translated), and names every mark it draws for a shape with the same key, so the kernel's ring goes round the shape reached. Only the first 512 in sight from the bottom of the stack get presses, so the view's cost stays bounded on a crowded screen. A text shape is drawn as words, which carry no key, so it is read out and chosen but not ringed.
 
+## Images
+
+**tldraw.** An image shape points at an asset record holding the file's source, a URL or a data URL; the store keeps assets beside shapes, and an asset no shape uses is cleaned up later.
+
+**Here.** The asset record holds the PNG or JPEG file as it was, in base64, since a Ledger value has strings and no bytes, so a board saved as SVG or copied to the clipboard carries its pictures without a second file. `add_image` and `paste` keep a file once by comparing contents, and `delete` removes an asset when the last shape showing it goes, in the same change, so undo brings both back. Plotter can't decode, since it needs no kernel: the face decodes in `Pictures`, a derived value that reads its own last value (`from = [board, pictures]`) and decodes only assets it hasn't seen, so a drag doesn't decode anything again. The slices of the board then read the pictures as one more input. A picture not decoded yet is drawn as a faint box.
+
 ## Also in tldraw, later here
 
-Pasting or dropping images; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; and rotation. Export to SVG comes with the core, since a board must render without a screen.
+Pasting images from the clipboard; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; and rotation. Export to SVG comes with the core, since a board must render without a screen.

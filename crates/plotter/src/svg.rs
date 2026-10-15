@@ -15,7 +15,7 @@ pub fn svg(board: &Board, page: Key<Page>) -> String {
         out,
         r#"<defs><marker id="head" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs>"#
     );
-    let _ = writeln!(out, "<metadata>{}{}</metadata>", MARK, base64(&board.value().to_bytes()));
+    let _ = writeln!(out, "<metadata>{}{}</metadata>", MARK, crate::base64::encode(&board.value().to_bytes()));
     for (n, shape) in stacked.into_iter().enumerate() {
         let color = ink(shape.ink);
         let b = Bounds::new(shape.x, shape.y, shape.w, shape.h);
@@ -43,6 +43,19 @@ pub fn svg(board: &Board, page: Key<Page>) -> String {
                 let _ = writeln!(out, r#"<rect x="{}" y="{}" width="{}" height="{}" {stroke}/>"#, num(b.x), num(b.y), num(b.w), num(b.h));
                 writeln!(out, r#"<text x="{}" y="{}" fill="{color}" font-family="IBM Plex Sans, sans-serif" font-size="12">{}</text>"#, num(b.x), num(b.y - 6.0), escape(name))
             }
+            Kind::Image(_) => match board.picture(shape) {
+                Some(asset) => writeln!(
+                    out,
+                    r#"<image x="{}" y="{}" width="{}" height="{}" preserveAspectRatio="none" href="data:{};base64,{}"/>"#,
+                    num(b.x),
+                    num(b.y),
+                    num(b.w),
+                    num(b.h),
+                    asset.media(),
+                    asset.data
+                ),
+                None => Ok(()),
+            },
         };
         if window.is_some() {
             out.push_str("</g>\n");
@@ -59,34 +72,9 @@ impl Board {
     pub fn from_svg(svg: &str) -> Option<Board> {
         let start = svg.find(MARK)? + MARK.len();
         let end = start + svg[start..].find('<')?;
-        let value = Value::from_bytes(&unbase64(svg[start..end].trim())?).ok()?;
+        let value = Value::from_bytes(&crate::base64::decode(svg[start..end].trim())?).ok()?;
         Board::from_value(&value)
     }
-}
-
-const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-fn base64(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let n = chunk.iter().enumerate().fold(0u32, |n, (i, &b)| n | u32::from(b) << (16 - 8 * i));
-        for i in 0..4 {
-            out.push(if i <= chunk.len() { ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
-        }
-    }
-    out
-}
-
-fn unbase64(text: &str) -> Option<Vec<u8>> {
-    let digits: Vec<u32> = text.bytes().filter(|&c| c != b'=').map(|c| ALPHABET.iter().position(|&a| a == c).map(|p| p as u32)).collect::<Option<_>>()?;
-    let mut out = Vec::with_capacity(digits.len() * 3 / 4);
-    for chunk in digits.chunks(4) {
-        let n = chunk.iter().enumerate().fold(0u32, |n, (i, &d)| n | d << (18 - 6 * i));
-        for i in 0..chunk.len().saturating_sub(1) {
-            out.push((n >> (16 - 8 * i)) as u8);
-        }
-    }
-    Some(out)
 }
 
 fn ink(ink: Ink) -> &'static str {

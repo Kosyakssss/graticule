@@ -187,7 +187,8 @@ fn derive_struct(input: &DeriveInput, fields: &Fields) -> syn::Result<TokenStrea
         for name in &from {
             match fields.iter().position(|g| g.ident == *name) {
                 Some(j) if j != i => indexes.push(j as u16),
-                _ => return Err(syn::Error::new_spanned(name, "a derived value reads other fields of the same facts")),
+                Some(_) => {}
+                None => return Err(syn::Error::new_spanned(name, "a derived value reads other fields of the same facts, or its own last value")),
             }
         }
         let (index, label) = (i as u16, fields[i].ident.to_string());

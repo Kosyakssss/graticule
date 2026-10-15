@@ -1,5 +1,6 @@
 //! PL-01, Plotter: the canvas engine. A [`Board`] is facts: its shapes and the bindings between them are Ledger lists, so every change is an operation that undo reverses, saving keeps and sync carries. Geometry, stacking order, snapping, the tools and export to SVG are pure functions over it, so a board needs no screen. The camera is the kernel's, since any canvas can have one. Positions are in page units.
 
+mod base64;
 mod board;
 pub mod freehand;
 mod geometry;
@@ -12,7 +13,7 @@ mod tool;
 #[cfg(test)]
 mod laws;
 
-pub use board::{Binding, Board, End, Group, Ink, Kind, LINE, Page, Shape, text_width};
+pub use board::{Asset, Binding, Board, End, Group, Ink, Kind, LINE, Page, Shape, text_width};
 pub use geometry::{Bounds, Geometry, Point};
 pub use index::{Entry, Index};
 pub use snap::{Gap, Guide, Snapped, snap, snap_edges};

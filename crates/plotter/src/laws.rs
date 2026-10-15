@@ -1,7 +1,7 @@
 use ledger::{ErasedPath, Field, Key, Op, Selection, Transaction};
 use proptest::prelude::*;
 
-use crate::{Board, Bounds, End, Gesture, Index, Intent, Kind, Page, Point, Shape, Tool, order};
+use crate::{Asset, Board, Bounds, End, Gesture, Index, Intent, Kind, Page, Point, Shape, Tool, order};
 
 #[derive(Clone, Debug)]
 enum Act {
@@ -64,7 +64,11 @@ fn run(board: &mut Board, chosen: &mut Selection<Shape>, act: &Act, next: &mut u
             let kind = if k % 2 == 0 { Kind::Rect } else { Kind::Ellipse };
             let pages = board.pages_in_order();
             let page = if pages.is_empty() { Page::FIRST } else { pages[k as usize % pages.len()].id };
-            let _ = board.add(Shape { page, ..Shape::new(Key::fixed(*next), kind, Bounds::new(x, y, w, h)) });
+            let shape = Shape { page, ..Shape::new(Key::fixed(*next), kind, Bounds::new(x, y, w, h)) };
+            let _ = match k % 3 {
+                2 => board.add_image(shape, Asset::new(Key::fixed(*next), &[k % 4])),
+                _ => board.add(shape),
+            };
         }
         Act::AddPage => {
             let _ = board.add_page(Key::fixed(*next), "Next", "First");
@@ -148,6 +152,21 @@ fn bound(board: &Board) -> Result<(), String> {
         }
         if board.frames(Some(f)).contains(&s.id) {
             return Err(format!("{:?} is inside itself", s.id));
+        }
+    }
+    for s in board.shapes.iter() {
+        if let Kind::Image(a) = s.kind
+            && !board.assets.has(a)
+        {
+            return Err(format!("{:?} shows {a:?}, which is gone", s.id));
+        }
+    }
+    for a in board.assets.iter() {
+        if !board.shapes.iter().any(|s| s.kind == Kind::Image(a.id)) {
+            return Err(format!("{:?} is shown by no shape but stays", a.id));
+        }
+        if board.assets.iter().any(|b| b.id != a.id && b.data == a.data) {
+            return Err(format!("{:?} is kept twice", a.id));
         }
     }
     for g in board.groups.iter() {

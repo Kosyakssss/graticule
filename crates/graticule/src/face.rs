@@ -6,13 +6,15 @@ use kernel::runner::Runner;
 use ledger::{Field, Value};
 
 const HELP: &str = "\
---ledger [history | replay N | verify | compare FOLDER | export FILE] [--from FOLDER]
+--ledger [history | replay N | verify | compare FOLDER | export FILE | stopped] [--from FOLDER]
     history          every change kept in the app's command log, numbered, with when
     replay N         the facts as they were after the first N changes
     verify           replays the whole log and checks it gives the facts the app saved
     compare FOLDER   the facts saved here against those saved in another folder,
                      such as a copy from another device, and where they differ
     export FILE      writes the command log to FILE as text, one change a line
+    stopped          the last session that ended without the app closing, replayed
+                     to see whether it fails again and where
     --from FOLDER    reads the store in FOLDER instead of this app's own
 ";
 
@@ -84,8 +86,57 @@ pub fn ledger<A: kernel::App + Default>(args: &[String]) -> Result<(), String> {
             println!("Wrote {} changes to {file}.", entries.len());
             Ok(())
         }
+        ["stopped"] => {
+            let session = ledger::stopped_session(&from).map_err(|e| format!("{}: {e}", from.display()))?;
+            match session {
+                Some(session) => print!("{}", stopped::<A>(&session)),
+                None => println!("Every session so far ended with the app closing."),
+            }
+            Ok(())
+        }
         _ => Err(HELP.into()),
     }
+}
+
+fn stopped<A: kernel::App + Default>(session: &ledger::Stopped) -> String {
+    let mut out = String::new();
+    let _ = match &session.said {
+        Some(said) => writeln!(out, "The session that began {} ended without the app closing. The last failure it noted was “{said}”.", moment(session.began)),
+        None => writeln!(out, "The session that began {} ended without the app closing, and noted no failure.", moment(session.began)),
+    };
+    let mut runner = Runner::new(A::default());
+    runner.replay(&session.before);
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut failed = None;
+    let _ = writeln!(out, "It made {} changes:", session.entries.len());
+    for (n, entry) in session.entries.iter().enumerate() {
+        let what = said::<A>(entry, &runner.facts);
+        if !what.is_empty() {
+            let _ = writeln!(out, "{:>6}  {what}", n + 1);
+        }
+        let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            runner.replay(std::slice::from_ref(entry));
+            runner.build();
+            runner.failure().map(str::to_string)
+        }));
+        let why = match ran {
+            Ok(None) => continue,
+            Ok(Some(why)) => why,
+            Err(panic) => panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned()).unwrap_or_default(),
+        };
+        failed = Some((n + 1, why));
+        break;
+    }
+    std::panic::set_hook(hook);
+    let _ = match failed {
+        Some((n, why)) => writeln!(out, "Replaying them fails again at change {n}: {why}"),
+        None => writeln!(
+            out,
+            "Replaying them runs every change and builds every screen without failing, so the app likely stopped for a reason outside its commands and view: drawing, the window or the system."
+        ),
+    };
+    out
 }
 
 fn history<A: kernel::App + Default>(entries: &[Value]) -> String {

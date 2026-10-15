@@ -100,6 +100,9 @@ impl Store {
         log.set_len(end)?;
         let mut log = OpenOptions::new().append(true).open(&log_path)?;
         log.flush()?;
+        if let Some(stopped) = stopped(folder, end)? {
+            trouble = trouble.or(Some(stopped));
+        }
         let place = fs::read(folder.join("place")).ok().and_then(|b| Value::from_bytes(&b).ok());
         let mut files = Files { folder: folder.to_path_buf(), log, end, snapshot_at, since, counter, shape: migrations.len() as u64 };
         let mut copy = facts.clone();
@@ -131,6 +134,7 @@ impl Store {
                     report(&problems, write_atomic(&files.folder.join("place"), &p.to_bytes()));
                 }
                 if closing {
+                    let _ = fs::remove_file(files.folder.join(RUNNING));
                     break;
                 }
             }
@@ -291,6 +295,79 @@ fn records(bytes: &[u8], from: usize) -> impl Iterator<Item = (Vec<u8>, usize)> 
         at += 8 + len;
         Some((body.to_vec(), at))
     })
+}
+
+const RUNNING: &str = "running";
+const STOPPED: &str = "stopped";
+const PANIC: &str = "panic";
+
+/// Marks a session as running from log offset `end`. If the last one never closed, keeps it as the one that stopped, with the last failure it noted, and says so.
+fn stopped(folder: &Path, end: u64) -> io::Result<Option<String>> {
+    let said = match fs::read(folder.join(RUNNING)).ok().and_then(|b| Value::from_bytes(&b).ok()) {
+        Some(Value::Map(mut session)) => {
+            let panic = fs::read_to_string(folder.join(PANIC)).ok();
+            if let Some(panic) = &panic {
+                session.push(("said".into(), Value::Str(panic.clone())));
+            }
+            write_atomic(&folder.join(STOPPED), &Value::Map(session).to_bytes())?;
+            Some(match panic {
+                Some(panic) => format!("The app stopped unexpectedly last time, after “{panic}”; `--ledger stopped` replays that session"),
+                None => "The app stopped unexpectedly last time; `--ledger stopped` replays that session".into(),
+            })
+        }
+        _ => None,
+    };
+    let _ = fs::remove_file(folder.join(PANIC));
+    let session = Value::Map(vec![("from".into(), Value::UInt(end)), ("at".into(), Value::Int(millis()))]);
+    write_atomic(&folder.join(RUNNING), &session.to_bytes())?;
+    Ok(said)
+}
+
+/// Notes every failure from now on in the store in `folder`, so that if the app then stops without closing, the next launch can say what the last one was.
+pub fn note_failures(folder: PathBuf) {
+    let before = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let said = match (info.payload().downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| info.payload().downcast_ref::<String>().cloned()), info.location()) {
+            (Some(said), Some(at)) => format!("{said}, at {}:{}", at.file(), at.line()),
+            (Some(said), None) => said,
+            (None, _) => "a failure without a message".into(),
+        };
+        let _ = fs::write(folder.join(PANIC), said);
+        before(info);
+    }));
+}
+
+/// The last session of an app that stopped without closing: when it began, the last failure it noted, and its entries, after the ones before it.
+#[derive(Clone, Debug)]
+pub struct Stopped {
+    pub began: i64,
+    pub said: Option<String>,
+    pub before: Vec<Value>,
+    pub entries: Vec<Value>,
+}
+
+/// Reads the session that last stopped without closing in the store in `folder`, if one did.
+pub fn stopped_session(folder: &Path) -> io::Result<Option<Stopped>> {
+    let Ok(bytes) = fs::read(folder.join(STOPPED)) else { return Ok(None) };
+    let session = Value::from_bytes(&bytes).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "the stopped session can't be read"))?;
+    let (Some(Value::UInt(from)), Some(Value::Int(began))) = (session.field("from"), session.field("at")) else {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "the stopped session can't be read"));
+    };
+    let said = match session.field("said") {
+        Some(Value::Str(said)) => Some(said.clone()),
+        _ => None,
+    };
+    let log = fs::read(folder.join("log"))?;
+    let (mut before, mut entries) = (Vec::new(), Vec::new());
+    for (record, next) in records(&log, 0) {
+        let Some(entry) = Value::from_bytes(&record).ok().and_then(|r| r.field("entry").cloned()) else { continue };
+        if next as u64 <= *from { before.push(entry) } else { entries.push(entry) }
+    }
+    Ok(Some(Stopped { began: *began, said, before, entries }))
+}
+
+fn millis() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
 
 /// Reads every entry in a store's log, oldest first: the command log, for replays and for showing what the user did.

@@ -35,7 +35,9 @@ pub fn run<A: kernel::App + Default>(title: kernel::Message) {
                 eprintln!("{trouble}");
             }
             let config = kernel::shell::Config::new(title.as_str());
-            kernel::shell::run(config, |waker| kernel::runner::Runner::open(&kernel::runner::folder(), A::default).wake_with(waker))
+            let folder = kernel::runner::folder();
+            ledger::note_failures(folder.clone());
+            kernel::shell::run(config, move |waker| kernel::runner::Runner::open(&folder, A::default).wake_with(waker))
         }
     });
     if let Err(e) = ran {

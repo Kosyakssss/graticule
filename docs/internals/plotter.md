@@ -57,6 +57,12 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **Here.** The same, ported to `plotter::freehand` under perfect-freehand's MIT notice, with tldraw's settings for a mouse: the board keeps the points (`Kind::Draw`), and `Shape::stroke` makes the outline whenever it is drawn or exported, so the outline never needs saving or migrating. "Export a picture" draws the whole board into a PNG beside the board's file, two pixels to a page unit and no more than 8,192 along the longer side, in the light theme with a clear background, inside the job that writes the file. The kernel's canvas raster sets the words itself for this, with its own copy of the bundled fonts, since the window's text engine belongs to the main thread.
 
+## Locking and styles
+
+**tldraw.** A locked shape can be chosen but not moved, resized or restyled. The style panel shows the chosen shapes' shared style; picking one sets it on them and keeps it as the style the next shape is made in.
+
+**Here.** `Board::lock` and `Board::restyle` change what the keys name and leave locked shapes alone, as moving, resizing and writing already did. The style for the next shape belongs to the app, not the board: the face keeps its ink as a session fact chosen by a select, and since the view never writes back, the face's `update` notices an edit that touches that fact and restyles the chosen shapes in the same step, so one undo takes back both. A locked shape shows no handles, since none would take a drag.
+
 ## Also in tldraw, later here
 
-Groups, frames and pages; locking and read-only; shared styles where the next shape takes the last one's; pasting anything and dropping files; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; rotation and handles on every side, and a minimap. Export to SVG comes with the core, since a board must render without a screen.
+Groups, frames and pages; a read-only board; pasting anything and dropping files; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; rotation, and a minimap. Export to SVG comes with the core, since a board must render without a screen.

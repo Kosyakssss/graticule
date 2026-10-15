@@ -164,6 +164,28 @@ impl Board {
         })
     }
 
+    /// Locks or unlocks shapes. A locked shape can't be moved, resized, written in or drawn in another ink.
+    pub fn lock(&mut self, keys: &[Key<Shape>], locked: bool) -> Outcome {
+        let mut outcome = Outcome::Nothing;
+        for &key in keys {
+            if self.shapes.find(key).is_some_and(|s| s.locked != locked) {
+                outcome = self.shapes.change(key, |s| s.locked = locked);
+            }
+        }
+        outcome
+    }
+
+    /// Draws shapes in another ink, leaving locked ones as they are.
+    pub fn restyle(&mut self, keys: &[Key<Shape>], ink: Ink) -> Outcome {
+        let mut outcome = Outcome::Nothing;
+        for &key in keys {
+            if self.shapes.find(key).is_some_and(|s| !s.locked && s.ink != ink) {
+                outcome = self.shapes.change(key, |s| s.ink = ink);
+            }
+        }
+        outcome
+    }
+
     /// Moves shapes by `dx` and `dy`, leaving locked ones where they are.
     pub fn translate(&mut self, keys: &[Key<Shape>], dx: f64, dy: f64) -> Outcome {
         let mut outcome = Outcome::Nothing;

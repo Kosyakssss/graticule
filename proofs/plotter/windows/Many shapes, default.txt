@@ -7,8 +7,11 @@ window		0 0 120 30
         toggle button	Ellipse	23 3 10 1	
         toggle button	Arrow	33 3 8 1	
         toggle button	Draw	41 3 7 1	
-      button	Remove	50 3 9 1	unavailable (Choose a shape first)
-      button	Show everything	61 3 18 1	
+      group		50 3 16 1	
+        text	Ink	50 3 3 1	
+        select	Ink	55 3 11 1	
+      button	Remove	68 3 9 1	unavailable (Choose a shape first)
+      button	Show everything	79 3 18 1	
     canvas	Board, 2000 shapes	2 5 116 17	
     group		2 23 116 1	
       group		2 23 98 1	
@@ -30,13 +33,15 @@ window		0 0 120 30
     button	Move right	103 27 12 1	unavailable (Choose a shape first)
     button	Move up	2 28 11 1	unavailable (Choose a shape first)
     button	Move down	15 28 13 1	unavailable (Choose a shape first)
-    button	Choose everything	30 28 23 1	
-    button	Bring to front	55 28 12 1	unavailable (Choose a shape first)
-    button	Send to back	69 28 12 1	unavailable (Choose a shape first)
-    button	Show everything	83 28 15 1	
-    button	Open	100 28 6 1	unavailable (Choose a file first)
-    button	Save	108 28 6 1	unavailable (Choose a file first)
-    button	Export a picture	2 29 14 1	unavailable (Choose a file first)
-    button	Undo	18 29 13 1	unavailable (Nothing to undo)
-    button	Redo	33 29 19 1	unavailable (Nothing to redo)
-    button	Open the palette	54 29 28 1	
+    button	Lock	30 28 6 1	unavailable (Choose a shape first)
+    button	Unlock	38 28 8 1	unavailable (Choose a shape first)
+    button	Choose everything	48 28 23 1	
+    button	Bring to front	73 28 12 1	unavailable (Choose a shape first)
+    button	Send to back	87 28 12 1	unavailable (Choose a shape first)
+    button	Show everything	101 28 15 1	
+    button	Open	2 29 6 1	unavailable (Choose a file first)
+    button	Save	10 29 6 1	unavailable (Choose a file first)
+    button	Export a picture	18 29 14 1	unavailable (Choose a file first)
+    button	Undo	34 29 13 1	unavailable (Nothing to undo)
+    button	Redo	49 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	70 29 28 1	

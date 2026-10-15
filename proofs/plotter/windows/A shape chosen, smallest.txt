@@ -1,36 +1,41 @@
-window		0 0 81 16	
-  page	Plotter	0 0 81 9	
-    group		2 3 77 1	
+window		0 0 99 15	
+  page	Plotter	0 0 99 9	
+    group		2 3 95 1	
       group		2 3 46 1	
         toggle button	Choose	2 3 9 1	unavailable (Choosing already)
         toggle button	Rectangle	11 3 12 1	
         toggle button	Ellipse	23 3 10 1	
         toggle button	Arrow	33 3 8 1	
         toggle button	Draw	41 3 7 1	
-      button	Remove	50 3 9 1	
-      button	Show everything	61 3 18 1	
-    canvas	Board, 9 shapes	2 5 77 3	
-  alert		2 9 77 1	
-  status		2 10 77 1	
-  toolbar		2 11 77 5	
+      group		50 3 16 1	
+        text	Ink	50 3 3 1	
+        select	Ink	55 3 11 1	
+      button	Remove	68 3 9 1	
+      button	Show everything	79 3 18 1	
+    canvas	Board, 9 shapes	2 5 95 3	
+  alert		2 9 95 1	
+  status		2 10 95 1	
+  toolbar		2 11 95 4	
     button	Choose	2 11 10 1	unavailable (Choosing already)
     button	Rectangle	14 11 12 1	
     button	Ellipse	28 11 9 1	
     button	Arrow	39 11 9 1	
     button	Draw	50 11 8 1	
     button	Write…	60 11 10 1	
-    button	Remove	2 12 16 1	
-    button	Move left	20 12 11 1	
-    button	Move right	33 12 12 1	
-    button	Move up	47 12 11 1	
-    button	Move down	60 12 13 1	
+    button	Remove	72 11 16 1	
+    button	Move left	2 12 11 1	
+    button	Move right	15 12 12 1	
+    button	Move up	29 12 11 1	
+    button	Move down	42 12 13 1	
+    button	Lock	57 12 6 1	
+    button	Unlock	65 12 8 1	
     button	Choose everything	2 13 23 1	
     button	Bring to front	27 13 12 1	
     button	Send to back	41 13 12 1	
     button	Show everything	55 13 15 1	
     button	Open	72 13 6 1	unavailable (Choose a file first)
-    button	Save	2 14 6 1	unavailable (Choose a file first)
-    button	Export a picture	10 14 14 1	unavailable (Choose a file first)
-    button	Undo	26 14 13 1	unavailable (Nothing to undo)
-    button	Redo	41 14 19 1	unavailable (Nothing to redo)
-    button	Open the palette	2 15 28 1	
+    button	Save	80 13 6 1	unavailable (Choose a file first)
+    button	Export a picture	2 14 14 1	unavailable (Choose a file first)
+    button	Undo	18 14 13 1	unavailable (Nothing to undo)
+    button	Redo	33 14 19 1	unavailable (Nothing to redo)
+    button	Open the palette	54 14 28 1	

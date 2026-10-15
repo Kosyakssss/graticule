@@ -16,6 +16,8 @@ struct Whiteboard {
     #[session]
     tool: Tool,
     #[session]
+    pen: Pen,
+    #[session]
     camera: Camera,
     #[session]
     file: Text,
@@ -27,7 +29,32 @@ struct Whiteboard {
     around: Derived<Chosen>,
 }
 
-/// The box around the chosen shapes, and whether it has handles to drag: only one shape that isn't an arrow does.
+/// The ink the chosen shapes are drawn in and the next shape will be.
+#[derive(Facts, Choice, Copy, Debug, Default, PartialEq, Eq)]
+enum Pen {
+    #[default]
+    Ink,
+    Muted,
+    Link,
+    Ok,
+    Warn,
+    Danger,
+}
+
+impl Pen {
+    fn ink(self) -> plotter::Ink {
+        match self {
+            Pen::Ink => plotter::Ink::Ink,
+            Pen::Muted => plotter::Ink::Muted,
+            Pen::Link => plotter::Ink::Link,
+            Pen::Ok => plotter::Ink::Ok,
+            Pen::Warn => plotter::Ink::Warn,
+            Pen::Danger => plotter::Ink::Danger,
+        }
+    }
+}
+
+/// The box around the chosen shapes, and whether it has handles to drag: only one shape that isn't an arrow and isn't locked does.
 #[derive(Default)]
 struct Chosen(Option<(Bounds, bool)>);
 
@@ -41,7 +68,7 @@ impl Chosen {
         for shape in shapes {
             around = Some(around.map_or(shape.bounds(), |a| a.union(&shape.bounds())));
             count += 1;
-            corners = shape.kind != Kind::Arrow;
+            corners = shape.kind != Kind::Arrow && !shape.locked;
         }
         Chosen(around.map(|a| (a, count == 1 && corners)))
     }
@@ -105,6 +132,10 @@ enum Cmd {
     MoveUp,
     #[label("Move down")]
     MoveDown,
+    #[label("Lock")]
+    Lock,
+    #[label("Unlock")]
+    Unlock,
     #[label("Choose everything")]
     ChooseAll,
     #[label("Bring to front")]
@@ -134,7 +165,9 @@ impl App for Whiteboard {
 
     fn available(&self, cmd: &Cmd) -> Available {
         match cmd {
-            Cmd::Remove | Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::ToFront | Cmd::ToBack => no_if(self.chosen.is_empty(), t!("Choose a shape first")),
+            Cmd::Remove | Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::ToFront | Cmd::ToBack | Cmd::Lock | Cmd::Unlock => {
+                no_if(self.chosen.is_empty(), t!("Choose a shape first"))
+            }
             Cmd::ChooseAll if self.chosen.len() == self.board.shapes.len() && !self.board.shapes.is_empty() => No(t!("Everything is chosen already")),
             Cmd::ChooseAll | Cmd::ShowAll => no_if(self.board.shapes.is_empty(), t!("The board is empty")),
             Cmd::ExportPicture if self.board.shapes.is_empty() => No(t!("The board is empty")),
@@ -165,6 +198,15 @@ impl App for Whiteboard {
                 let keys: Vec<_> = self.chosen.iter().collect();
                 let _ = self.chosen.choose(&ledger::Choose::Clear);
                 self.board.delete(&keys)
+            }
+            Cmd::Lock | Cmd::Unlock => {
+                let keys: Vec<_> = self.chosen.iter().collect();
+                let locking = matches!(cmd, Cmd::Lock);
+                match (self.board.lock(&keys, locking), locking) {
+                    (Outcome::Nothing, true) => cx.say(t!("Locked already")),
+                    (Outcome::Nothing, false) => cx.say(t!("Not locked")),
+                    (changed, _) => changed,
+                }
             }
             Cmd::ChooseAll => self.chosen.choose(&ledger::Choose::All(self.board.shapes.keys().map(Key::raw).collect())),
             Cmd::ToFront => {
@@ -223,7 +265,10 @@ impl App for Whiteboard {
                 Outcome::Nothing
             }
             Cmd::Drew(drag) => {
-                let intent = Intent::of(&self.board, &self.index_now(), &self.chosen, self.tool, &gesture(&drag), self.camera.zoom);
+                let mut intent = Intent::of(&self.board, &self.index_now(), &self.chosen, self.tool, &gesture(&drag), self.camera.zoom);
+                if let Intent::Create { shape, .. } = &mut intent {
+                    shape.ink = self.pen.ink();
+                }
                 let made = matches!(intent, Intent::Create { .. });
                 let outcome = self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw());
                 if made {
@@ -231,7 +276,15 @@ impl App for Whiteboard {
                 }
                 outcome
             }
-            Cmd::Edit(edit) => edit.apply(self),
+            Cmd::Edit(edit) => {
+                let restyled = edit.touches(Whiteboard::pen);
+                let outcome = edit.apply(self);
+                if restyled {
+                    let keys: Vec<_> = self.chosen.iter().collect();
+                    let _ = self.board.restyle(&keys, self.pen.ink());
+                }
+                outcome
+            }
         }
     }
 
@@ -245,6 +298,7 @@ impl App for Whiteboard {
                     ui.toggle(self.tool == Tool::Arrow, Cmd::Arrow);
                     ui.toggle(self.tool == Tool::Draw, Cmd::Draw);
                 });
+                ui.select(t!("Ink"), Whiteboard::pen);
                 ui.button(Cmd::Remove);
                 ui.button(Cmd::ShowAll);
             });
@@ -320,6 +374,15 @@ impl App for Whiteboard {
                 let _ = w.chosen.choose(&ledger::Choose::Only(first.raw()));
                 w
             })
+            .add("A locked shape in the link ink", {
+                let mut w = Whiteboard::diagram();
+                let first = w.board.stacked()[0].id;
+                let _ = w.board.restyle(&[first], plotter::Ink::Link);
+                let _ = w.board.lock(&[first], true);
+                let _ = w.chosen.choose(&ledger::Choose::Only(first.raw()));
+                w.pen = Pen::Link;
+                w
+            })
             .add("Many shapes", Whiteboard::many(2_000))
     }
 }
@@ -355,7 +418,8 @@ impl Whiteboard {
             Some(shape) => Point::new(shape.x + 16.0, shape.y + 12.0),
             None => Point::new(self.camera.x + 40.0, self.camera.y + 40.0),
         };
-        let shape = Shape::new(Key::default(), Kind::Text(words.to_string()), Bounds::new(at.x, at.y, plotter::text_width(words), plotter::LINE));
+        let mut shape = Shape::new(Key::default(), Kind::Text(words.to_string()), Bounds::new(at.x, at.y, plotter::text_width(words), plotter::LINE));
+        shape.ink = self.pen.ink();
         let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None };
         self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw())
     }

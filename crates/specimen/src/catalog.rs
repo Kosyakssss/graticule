@@ -159,6 +159,8 @@ pub struct Catalog {
     #[session]
     notes: Text,
     #[session]
+    gauge: galley::Doc,
+    #[session]
     query: Text,
     #[session]
     title: Text,
@@ -512,10 +514,11 @@ pub enum Component {
     Chart,
     Graph,
     Diff,
+    Editor,
 }
 
 impl Component {
-    const ALL: [Component; 81] = [
+    const ALL: [Component; 82] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -597,6 +600,7 @@ impl Component {
         Component::Chart,
         Component::Graph,
         Component::Diff,
+        Component::Editor,
     ];
 
     fn name(self) -> &'static str {
@@ -682,6 +686,7 @@ impl Component {
             Component::Chart => "Chart",
             Component::Graph => "Node graph",
             Component::Diff => "Diff view",
+            Component::Editor => "Editor",
         }
     }
 
@@ -768,6 +773,7 @@ impl Component {
             Component::Chart => include_str!("../../../docs/components/chart.md"),
             Component::Graph => include_str!("../../../docs/components/node-graph.md"),
             Component::Diff => include_str!("../../../docs/components/diff-view.md"),
+            Component::Editor => include_str!("../../../docs/components/editor.md"),
         }
     }
 
@@ -877,6 +883,7 @@ impl Default for Catalog {
             leaf: 4,
             depth: 0,
             trail: 5,
+            gauge: galley::Doc::new(AFTER),
             notes: Text::from("Milk, eggs and bread.\nAsk about the long weekend before Friday, since the office closes early that week."),
             query: Text::default(),
             title: Text::from("Groceries"),
@@ -1367,6 +1374,9 @@ impl Catalog {
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
             Component::Diff => ui.diff("What changed in the rain gauge's notes", &kernel::Diff::new(BEFORE, AFTER), 14),
+            Component::Editor => {
+                ui.editor("The rain gauge's notes", Catalog::gauge);
+            }
             Component::Graph => ui.graph("How a post moves from draft to archive", &Graph::new(STATES.len(), MOVES), |ui, k| {
                 ui.text(STATES[k].0);
                 ui.muted(format!("{} posts", STATES[k].1));

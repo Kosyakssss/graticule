@@ -12,6 +12,8 @@ Everything the app sees counts characters, not bytes, so a position never falls 
 
 `Selections` holds at least one span, kept in order, with overlapping or identical spans merged after every change, and one of them primary. Spans that only touch stay apart, so two adjacent selected words remain two.
 
+The `Doc` owns its selections, because every edit has to carry them and undo has to bring them back. When a transaction ends, the `Doc` compares its selections with a snapshot taken at the start and records an `Op::Select` if they moved, after the splices. Ledger's history keeps a change that only moves a selection as a move, never as a step of its own, even inside a document: undo puts the moves back together with the step they came before, so the cursor returns to where the user was when they made the change. Applying an `Op::Splice` doesn't touch the selections; the `Op::Select` recorded with it does, so undo and redo restore them exactly instead of mapping them again.
+
 ## Changes made at once
 
 `Changes` is every replacement of one edit, as ranges of the text before it, sorted and never overlapping. The `Doc` applies them from the last to the first so earlier ranges still mean what they meant, and each selection is mapped through them: a position after a change shifts by what it added or removed, one inside a replaced range moves to the end of the replacement, and one at the very place of an insertion moves after it, so a cursor stays after what was typed at it. Typing, deleting, a new line (indented like the line it breaks) and replacing every match are all a `Changes`, so each is one undo step at every cursor.
@@ -20,6 +22,14 @@ Everything the app sees counts characters, not bytes, so a position never falls 
 
 `find_all` walks the rope's bytes once with a Knuth–Morris–Pratt table: time grows with the text, never with the text times the pattern, and nothing is copied out of the rope. On a long text it belongs in a job, like every scan.
 
+## The editor
+
+The kernel can't depend on Galley, since Galley must build without a screen, and Galley can't depend on the kernel. They meet in Ledger. `ledger::Typed` is what a person did in an editor: typed text, a new line, a delete, a move by a `Travel`, a click at a position, select all, collapse. It travels as `Change::Typed` inside an ordinary `Edit`, so the app routes it with `edit.apply(self)` like a field's edit, the command log records it, and replays repeat it. `ledger::Editable` is what the kernel reads from the text to draw it: how many lines, one line's text in chunks, where a line starts, which line a position is on, the cursors, and the selected text for copying. `Doc` implements both; another text type could too.
+
+`ui.editor` reads only the lines that show, from the scroll position the window keeps for it, and writes each as an `EditLine` node with its selection ranges in the tree's marks and its cursors in the tree's carets. The kernel learns the editor's height from layout and, after any typing, scrolls so the primary cursor's line shows, the way a list follows its focused row. Copy and clicks need the facts at a time when the view isn't running, so the tree keeps two erased functions per editor (`EditorInfo`): one asks for the selected text, the other where a line starts, so a click turns into a character position without the kernel knowing the text's type.
+
+The keys follow each platform's conventions in `field::editor_key`, beside a text field's, so the two never disagree. Typing joins into one undo step per word by the same rule as a field's.
+
 ## Laws
 
-`crates/galley/src/laws.rs`: any sequence of edits at any cursors, over text with combining marks, emoji and line breaks, undoes to the start and redoes to the end through its recorded operations; and the selections are valid after every step.
+`crates/galley/src/laws.rs`: any sequence of edits at any cursors, over text with combining marks, emoji and line breaks, undoes to the start and redoes to the end through its recorded operations, bringing back the selections each time as well as the text; and the selections are valid after every step. Every app with an editor also gets the universal laws, which Assay drives by typing into its editors as well as its fields.

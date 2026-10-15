@@ -1,0 +1,43 @@
+window		0 0 120 30	
+  page	Galley	0 0 120 27	
+    group		2 3 116 1	
+      group		2 3 98 1	
+        text field	File	2 3 86 1	
+        button	Choose…	90 3 10 1	
+      button	Open	102 3 7 1	unavailable (Choose a file first)
+      button	Save	111 3 7 1	unavailable (Choose a file first)
+    editor	Text	2 5 116 19	
+      line	Line 1	2 5 116 1	
+      line	Line 2	2 6 116 1	
+      line	Line 3	2 7 116 1	
+      line	Line 4	2 8 116 1	
+      line	Line 5	2 9 116 1	
+      line	Line 6	2 10 116 1	
+      line	Line 7	2 11 116 1	
+      line	Line 8	2 12 116 1	
+      line	Line 9	2 13 116 1	
+      line	Line 10	2 14 116 1	
+      line	Line 11	2 15 116 1	
+      line	Line 12	2 16 116 1	
+      line	Line 13	2 17 116 1	
+      line	Line 14	2 18 116 1	
+      line	Line 15	2 19 116 1	
+      line	Line 16	2 20 116 1	
+      line	Line 17	2 21 116 1	
+      line	Line 18	2 22 116 1	
+      line	Line 19	2 23 116 1	
+    group		2 25 116 1	
+      text field	Find	2 25 37 1	
+      text field	Replace with	41 25 38 1	
+      button	Select every match	81 25 21 1	unavailable (Type what to find first)
+      button	Replace all	104 25 14 1	unavailable (Type what to find first)
+  alert		2 27 116 1	
+  status		2 28 116 1	
+  toolbar		2 29 116 1	
+    button	Open	2 29 6 1	unavailable (Choose a file first)
+    button	Save	10 29 6 1	unavailable (Choose a file first)
+    button	Select every match	18 29 17 1	unavailable (Type what to find first)
+    button	Replace all	37 29 11 1	unavailable (Type what to find first)
+    button	Undo	50 29 13 1	unavailable (Nothing to undo)
+    button	Redo	65 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	86 29 28 1	

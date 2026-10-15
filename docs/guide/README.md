@@ -152,6 +152,8 @@ A diff view shows what changed between two versions of a text: lines taken out i
 
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
+`cargo run -p galley-face` opens Galley, Graticule's text editor: a file to open and save, the text, and under it a field to find a word and one to replace it with. The editor takes text of any length, since it only ever reads the lines on screen, and as many cursors as you make: "Select every match" puts a cursor on every place the word appears, and what you type then goes in at all of them. The keys are your system's own, undo takes back a word at a time and puts the cursors back where they were, and the editor scrolls to follow you. Long lines are still cut at the right edge instead of wrapping, and replacing every match in a very long file still makes the window wait for a moment; both are next.
+
 ## How speed is measured
 
 A screen refreshes 60 to 1000 times a second; at 1000, there is one millisecond per picture. Graticule's goal is to finish its work for an ordinary interaction in a tenth of that, and to do nothing at all when nothing is happening, which is what saves battery. Times are measured automatically and judged by the slowest frames, not the average, because the slow ones are the ones you notice.

@@ -1202,6 +1202,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "galley-face"
+version = "0.1.0"
+dependencies = [
+ "galley",
+ "graticule",
+]
+
+[[package]]
 name = "generator"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3321,6 +3329,7 @@ name = "specimen"
 version = "0.1.0"
 dependencies = [
  "assay",
+ "galley",
  "graticule-macros",
  "kernel",
  "ledger",

@@ -1,0 +1,18 @@
+[package]
+name = "galley-face"
+description = "Galley's face: a plain text editor, and Graticule's text demo."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "galley"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+graticule.workspace = true
+galley.workspace = true

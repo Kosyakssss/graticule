@@ -12,4 +12,5 @@ workspace = true
 kernel.workspace = true
 assay.workspace = true
 ledger.workspace = true
+galley.workspace = true
 graticule-macros.workspace = true

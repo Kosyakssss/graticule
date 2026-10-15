@@ -10,8 +10,18 @@ fn any_area() -> Area {
 }
 
 fn partitions(whole: Area, cut: Area, rest: Area) -> bool {
-    let stacked = cut.col == whole.col && rest.col == whole.col && cut.cols == whole.cols && rest.cols == whole.cols && cut.rows + rest.rows == whole.rows && (cut.bottom() == rest.row || rest.bottom() == cut.row);
-    let side_by_side = cut.row == whole.row && rest.row == whole.row && cut.rows == whole.rows && rest.rows == whole.rows && cut.cols + rest.cols == whole.cols && (cut.right() == rest.col || rest.right() == cut.col);
+    let stacked = cut.col == whole.col
+        && rest.col == whole.col
+        && cut.cols == whole.cols
+        && rest.cols == whole.cols
+        && cut.rows + rest.rows == whole.rows
+        && (cut.bottom() == rest.row || rest.bottom() == cut.row);
+    let side_by_side = cut.row == whole.row
+        && rest.row == whole.row
+        && cut.rows == whole.rows
+        && rest.rows == whole.rows
+        && cut.cols + rest.cols == whole.cols
+        && (cut.right() == rest.col || rest.right() == cut.col);
     cut.cols >= 0 && cut.rows >= 0 && rest.cols >= 0 && rest.rows >= 0 && whole.holds(cut) && whole.holds(rest) && (stacked || side_by_side)
 }
 

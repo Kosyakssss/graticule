@@ -1,4 +1,4 @@
-use galley::Doc;
+use galley::{Doc, Replacement};
 use graticule::prelude::*;
 
 #[derive(Facts, Default)]
@@ -27,6 +27,8 @@ enum Cmd {
     #[label("Replace all")]
     ReplaceAll,
     #[internal]
+    Replaced(Replacement),
+    #[internal]
     Edit(Edit),
 }
 
@@ -37,7 +39,7 @@ impl App for Galley {
         match cmd {
             Cmd::Open | Cmd::Save => no_if(self.file.is_empty(), t!("Choose a file first")),
             Cmd::SelectMatches | Cmd::ReplaceAll => no_if(self.find.is_empty(), t!("Type what to find first")),
-            Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Edit(_) => Yes,
+            Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Replaced(_) | Cmd::Edit(_) => Yes,
         }
     }
 
@@ -63,11 +65,20 @@ impl App for Galley {
                 count => cx.say(t!("Selected {count} matches")),
             },
             Cmd::ReplaceAll => {
-                let (count, outcome) = self.text.replace_all(self.find.as_str(), self.with.as_str());
-                if count == 0 {
-                    return cx.say(t!("Nothing matches"));
+                let (text, find, with) = (self.text.clone(), self.find.to_string(), self.with.to_string());
+                cx.job(t!("Replacing “{find}”"), move || text.replacement(&find, &with), Cmd::Replaced);
+                Outcome::Nothing
+            }
+            Cmd::Replaced(replacement) => {
+                let count = replacement.count();
+                match self.text.take(replacement) {
+                    Ok(_) if count == 0 => cx.say(t!("Nothing matches")),
+                    Ok(outcome) => {
+                        let _ = cx.say(t!("Replaced {count} matches"));
+                        outcome
+                    }
+                    Err(_) => cx.say(t!("The text changed while the matches were being found, so nothing was replaced")),
                 }
-                outcome
             }
             Cmd::Edit(edit) => edit.apply(self),
         }

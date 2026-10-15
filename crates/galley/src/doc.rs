@@ -14,11 +14,12 @@ pub struct Doc {
     rope: Rope,
     selections: Selections,
     at: ErasedPath,
+    revision: u64,
 }
 
 impl Doc {
     pub fn new(text: &str) -> Self {
-        Doc { rope: Rope::from_str(text), selections: Selections::default(), at: ErasedPath::ROOT }
+        Doc { rope: Rope::from_str(text), selections: Selections::default(), at: ErasedPath::ROOT, revision: 0 }
     }
 
     /// How many characters it holds.
@@ -103,6 +104,7 @@ impl Doc {
         }
         self.rope.remove(range.clone());
         self.rope.insert(range.start, inserted);
+        self.revision += 1;
         Outcome::Changed
     }
 
@@ -231,6 +233,16 @@ impl Doc {
         &self.rope
     }
 
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub(crate) fn swap(&mut self, rope: Rope, selections: Selections) {
+        self.rope = rope;
+        self.selections = selections;
+        self.revision += 1;
+    }
+
     pub fn path(&self) -> ErasedPath {
         self.at
     }
@@ -319,6 +331,7 @@ impl Field for Doc {
                 }
                 self.rope.remove(start..stop);
                 self.rope.insert(start, inserted);
+                self.revision += 1;
                 true
             }
             ([], Op::Select { after, .. }) => match Selections::from_value(after) {
@@ -330,6 +343,7 @@ impl Field for Doc {
             },
             ([], Op::Set { after: Value::Str(s), .. }) => {
                 self.rope = Rope::from_str(s);
+                self.revision += 1;
                 let len = self.len();
                 self.selections.each(len, |s| s);
                 true

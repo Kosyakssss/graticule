@@ -85,8 +85,10 @@ impl Selections {
 
     /// Every span moved where `changes` put the text under it, in a text now `len` characters long.
     pub fn map(&mut self, changes: &Changes, len: usize) {
+        let mut mapper = changes.mapper();
         for span in &mut self.spans {
-            *span = Span::new(changes.map(span.anchor), changes.map(span.head));
+            let (start, end) = (mapper.map(span.anchor.min(span.head)), mapper.map(span.anchor.max(span.head)));
+            *span = if span.anchor <= span.head { Span::new(start, end) } else { Span::new(end, start) };
         }
         self.settle(len);
     }

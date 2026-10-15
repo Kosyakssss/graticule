@@ -2,7 +2,7 @@ use proptest::prelude::*;
 
 use ledger::{ErasedPath, Field, Transaction, Travel, Typed};
 
-use crate::{Doc, Motion};
+use crate::{Doc, Motion, Replacement};
 
 #[derive(Clone, Debug)]
 enum Act {
@@ -10,6 +10,7 @@ enum Act {
     Go(Motion, bool),
     AddCursor(usize),
     ReplaceAll(String, String),
+    Replacement(String, String, bool),
     SelectMatches(String),
 }
 
@@ -71,6 +72,7 @@ fn act() -> impl Strategy<Value = Act> {
         (motion(), any::<bool>()).prop_map(|(m, e)| Act::Go(m, e)),
         (0..40usize).prop_map(Act::AddCursor),
         (text(), text()).prop_map(|(a, b)| Act::ReplaceAll(a, b)),
+        (text(), text(), any::<bool>()).prop_map(|(a, b, logged)| Act::Replacement(a, b, logged)),
         text().prop_map(Act::SelectMatches),
     ]
 }
@@ -84,6 +86,11 @@ fn run(doc: &mut Doc, act: &Act) {
         Act::AddCursor(at) => doc.add_cursor(*at),
         Act::ReplaceAll(needle, with) => {
             let _ = doc.replace_all(needle, with);
+        }
+        Act::Replacement(needle, with, logged) => {
+            let replacement = doc.replacement(needle, with);
+            let replacement = if *logged { Replacement::from_value(&replacement.value()).unwrap_or(replacement) } else { replacement };
+            let _ = doc.take(replacement);
         }
         Act::SelectMatches(needle) => {
             let _ = doc.select_matches(needle);

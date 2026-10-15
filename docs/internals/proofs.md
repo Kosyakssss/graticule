@@ -12,6 +12,8 @@ Each named state is proved at the normal size, 1920 by 1280 at scale 2, and at t
 
 `proofs/<app>/<platform>/<state>, <size>.txt`, in the workspace Specimen was started in. The workspace is found by walking up from the current folder to the one with `Cargo.lock`; outside a workspace they go in the app's data folder. Each platform has its own proofs because the bar's layout follows how keys are written ("Ctrl+Z", "⌘Z"). Specimen's own pages show Chinese and emoji, which are measured with the system's fonts when the fetched Plex fonts are missing, so their proofs can differ on a machine that lacks them. The to-do app's proofs don't have this problem.
 
+Beside them, `proofs/<app>/facts/<shape>/<state>.value` keeps each named state's facts as saved, written by `--approve` for the current shape only, so Assay can check that facts saved by every older version still load (`docs/internals/ledger.md`, Migrations).
+
 ## How changes are said
 
 `kernel::proof::changes` matches the two proofs' lines by depth, role and label (the longest common sequence) and then says:

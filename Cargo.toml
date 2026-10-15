@@ -10,6 +10,7 @@ repository = "https://github.com/Kosyakssss/graticule"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
 
 [workspace.lints.clippy]
 dbg_macro = "warn"

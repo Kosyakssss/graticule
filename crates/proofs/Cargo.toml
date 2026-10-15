@@ -1,0 +1,10 @@
+[package]
+name = "proofs"
+description = "Kani proofs of the cores where a mistake would be worst, over the kernel's own source, without the kernel's dependencies."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true

@@ -72,6 +72,8 @@ Twin is the first of them. It shows two folders side by side with a preview of t
 
 Ticker is a market board. It trades on a pretend exchange of sixteen made-up companies, so it needs no account and nothing leaves your computer: a million trades of the day so far, then new ones many times a second. Your watchlist shows each stock's last price, which glows green or red for a moment when it moves, and its change since the open; below it is every listed stock, and beside them the chosen stock's chart and the tape of every trade today, a million rows that scroll as quickly as ten. Choose stocks and "Watch" or "Stop watching" them, one or several at a time. Whether Ticker should show real prices is a question for you (question 18 in the spec).
 
+Patchbay is a node editor built on Plotter, the same engine as the whiteboard. "Add" puts a module on the board, an oscillator, a filter, an amplifier and so on, with its inputs on the left and outputs on the right. Drag from an output to an input to wire them; drag a module to move it, and its wires follow. A wire that can't be made, such as one into an input that already has one, turns red while you drag and says why when you let go. "Connect…" wires by name instead, and the pane beside the board lists every wire in words. A patch saves as a picture file that the whiteboard opens too. Nothing plays yet; what a patch should do is a question for you (question 19 in the spec).
+
 ## The order things are built in
 
 The build plan, at the end of the spec, is one list from top to bottom, and anyone (a person or an AI) asked to build Graticule works down it item by item.

@@ -99,7 +99,7 @@ impl Layers {
     }
 }
 
-/// What a board canvas shows: the board and the page on screen, the values worked out off the main thread for it, the chosen shapes, the tool in hand and the camera's zoom.
+/// What a board canvas shows: the board and the page on screen, the values worked out off the main thread for it, the chosen shapes, the tool in hand, the camera's zoom and whether shapes can be resized.
 pub struct Sight<'a> {
     pub board: &'a Board,
     pub page: Key<Page>,
@@ -110,6 +110,8 @@ pub struct Sight<'a> {
     pub chosen: &'a Selection<Shape>,
     pub tool: Tool,
     pub zoom: f64,
+    /// Whether the chosen shapes show handles to resize them by.
+    pub resizing: bool,
 }
 
 impl<'a> Sight<'a> {
@@ -128,10 +130,9 @@ impl<'a> Sight<'a> {
         Intent::of(self.board, &self.index(), self.chosen, self.tool, &gesture(drag), self.zoom)
     }
 
-    /// Draws the board on `canvas`, with the drag under way shown as what letting go would do, and `also` drawn in place of the shapes with the same keys, or added. A press on a shape runs `choose` with its key. Give the canvas its camera and its drag command first.
-    pub fn show<C, S>(&self, canvas: &mut Canvas<'_, '_, C, S>, also: Vec<Shape>, choose: impl Fn(Key<Shape>) -> C) {
+    /// Draws the board on `canvas`, with `intent`, what letting go of the drag under way would do, shown as done, and `also` drawn in place of the shapes with the same keys, or added. A press on a shape runs `choose` with its key. Give the canvas its camera and its drag command first.
+    pub fn show<C, S>(&self, canvas: &mut Canvas<'_, '_, C, S>, intent: Option<Intent>, also: Vec<Shape>, choose: impl Fn(Key<Shape>) -> C) {
         let board = self.board;
-        let intent = canvas.drag().map(|drag| self.intent(drag));
         let mut moved = intent.as_ref().map(|i| i.preview(board)).unwrap_or_default();
         for shape in also {
             if !moved.iter().any(|m| m.id == shape.id) {
@@ -179,7 +180,7 @@ impl<'a> Sight<'a> {
             None => Around::shapes(self.chosen.iter().filter_map(shown)).0,
         };
         if let Some((b, corners)) = around {
-            outline(canvas, b, corners);
+            outline(canvas, b, corners && self.resizing);
         }
         match &intent {
             Some(Intent::Brush { area, .. }) => {

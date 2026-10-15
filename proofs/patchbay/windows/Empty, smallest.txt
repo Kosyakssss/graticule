@@ -1,0 +1,36 @@
+window		0 0 56 18	
+  page	Patchbay	0 0 56 11	
+    group		2 3 52 1	
+      menu button	Add	2 3 8 1	
+      button	Connect…	12 3 11 1	unavailable (The patch is empty)
+      button	Remove	25 3 9 1	unavailable (Choose a module or a wire first)
+      button	Show everything	36 3 18 1	unavailable (The patch is empty)
+    split		2 5 52 3	
+      pane	Patch	2 5 23 3	
+        canvas	Patch, 0 modules	2 5 23 3	
+      divider	Between “Patch” and “Wires”	27 5 1 3	
+      pane	Wires	30 5 24 3	
+        text	Drag from an output on a module's right to an input on another's left	30 5 24 3	muted
+    group		2 9 52 1	
+      group		2 9 34 1	
+        text field	File	2 9 22 1	
+        button	Choose…	26 9 10 1	
+      button	Open	38 9 7 1	unavailable (Choose a file first)
+      button	Save	47 9 7 1	unavailable (Choose a file first)
+  alert		2 11 52 1	
+  status		2 12 52 1	
+  toolbar		2 13 52 5	
+    button	Add an oscillator	2 13 15 1	
+    button	Add noise	19 13 10 1	
+    button	Add a filter	31 13 11 1	
+    button	Add an envelope	2 14 15 1	
+    button	Add an amplifier	19 14 15 1	
+    button	Add an output	36 14 13 1	
+    button	Connect…	2 15 10 1	
+    button	Remove	14 15 16 1	unavailable (Choose a module or a wire first)
+    button	Show everything	32 15 15 1	unavailable (The patch is empty)
+    button	Open	2 16 6 1	unavailable (Choose a file first)
+    button	Save	10 16 6 1	unavailable (Choose a file first)
+    button	Undo	18 16 13 1	unavailable (Nothing to undo)
+    button	Redo	33 16 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 17 15 1	

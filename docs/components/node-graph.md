@@ -4,7 +4,7 @@ Boxes joined by wires, set out by Graticule: in layers from left to right so the
 
 ## Use it for
 
-Showing how things lead to one another: the states a post moves through, the steps of a build, which tasks wait on which. Patchbay uses it for nodes the user wires by hand.
+Showing how things lead to one another: the states a post moves through, the steps of a build, which tasks wait on which. Graticule lays it out, so it is for graphs the app reads, not ones the user draws: Patchbay, where the user places and wires modules by hand, is a Plotter board instead.
 
 ## Code
 

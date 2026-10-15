@@ -569,7 +569,9 @@ impl App for Whiteboard {
                             };
                             writing.push(Shape { kind, ..shape.clone() });
                         }
-                        self.sight().show(canvas, writing, Cmd::ChooseShape);
+                        let sight = self.sight();
+                        let intent = canvas.drag().map(|drag| sight.intent(drag));
+                        sight.show(canvas, intent, writing, Cmd::ChooseShape);
                         if let Writing::Into(key) = self.writing
                             && let Some(shape) = self.board.shapes.find(key).filter(|s| s.page == self.showing())
                         {
@@ -683,6 +685,7 @@ impl Whiteboard {
             chosen: &self.chosen,
             tool: self.tool,
             zoom: self.camera.zoom,
+            resizing: true,
         }
     }
 

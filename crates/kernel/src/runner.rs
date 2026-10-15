@@ -756,7 +756,7 @@ impl<A: App> Runner<A> {
         }
         if overlay.taste {
             let (t, color) = (p.m.hair() * 2.0, p.theme.danger);
-            for flaw in crate::taste::off_grid(&self.tree, p.m.screen()) {
+            for flaw in crate::taste::judge(&self.tree, p.m.screen()) {
                 let r = p.rect(self.tree.nodes[flaw.node as usize].area);
                 crate::components::border(p, r, t, color);
             }
@@ -820,9 +820,9 @@ impl<A: App> Runner<A> {
 
     fn taste_answer(&self, window: crate::grid::Area) -> String {
         let mut out = String::from("taste\tbegin\n");
-        for flaw in crate::taste::off_grid(&self.tree, window) {
+        for flaw in crate::taste::judge(&self.tree, window) {
             let n = self.tree.nodes[flaw.node as usize];
-            let _ = writeln!(out, "flaw\ton the grid\t{}:{}\t{}", n.at.file().replace('\\', "/"), n.at.line(), flaw.said);
+            let _ = writeln!(out, "flaw\t{}\t{}:{}\t{}", flaw.law.name(), n.at.file().replace('\\', "/"), n.at.line(), flaw.said);
         }
         out.push_str("taste\tdone\n");
         out

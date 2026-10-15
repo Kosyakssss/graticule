@@ -1,5 +1,5 @@
 use kernel::grid::Area;
-use kernel::ink::{Appearance, Ink, contrast};
+use kernel::ink::{Appearance, Ink, Sight, contrast};
 use kernel::runner::Runner;
 use kernel::shell::Face;
 use kernel::tree::Tree;
@@ -34,15 +34,26 @@ pub fn run<A: kernel::App>(starts: &[(String, A)]) -> Taste {
             let theme = file.theme(appearance);
             for ink in Ink::ALL {
                 let Some(needs) = ink.needs() else { continue };
+                let look = if appearance == Appearance::Light { "light" } else { "dark" };
                 let ratio = contrast(theme.get(ink), theme.bg);
                 if ratio < needs {
-                    let look = if appearance == Appearance::Light { "light" } else { "dark" };
                     taste.findings.push(Finding {
                         law: Law::Contrast,
                         said: format!("{} on the background reaches {ratio:.2}:1 in {}'s {look} appearance; it needs {needs}:1", ink.name(), file.name),
                         from: String::new(),
                         steps: Vec::new(),
                     });
+                }
+                for sight in Sight::ALL {
+                    let ratio = contrast(sight.sees(theme.get(ink)), sight.sees(theme.bg));
+                    if ratio < needs {
+                        taste.findings.push(Finding {
+                            law: Law::ColorBlind,
+                            said: format!("{} on the background reaches {ratio:.2}:1 in {}'s {look} appearance as seen with {}; it needs {needs}:1", ink.name(), file.name, sight.name()),
+                            from: String::new(),
+                            steps: Vec::new(),
+                        });
+                    }
                 }
             }
         }
@@ -51,8 +62,16 @@ pub fn run<A: kernel::App>(starts: &[(String, A)]) -> Taste {
 }
 
 fn grid<C>(tree: &Tree<C>, window: Area, at: &str, findings: &mut Vec<Finding>) {
-    if let Some(flaw) = kernel::taste::off_grid(tree, window).into_iter().next() {
-        findings.push(Finding { law: Law::OnTheGrid, said: flaw.said, from: at.to_string(), steps: Vec::new() });
+    let flaws = kernel::taste::judge(tree, window);
+    for law in kernel::taste::Law::ALL {
+        if let Some(flaw) = flaws.iter().find(|f| f.law == law) {
+            let law = match law {
+                kernel::taste::Law::OnTheGrid => Law::OnTheGrid,
+                kernel::taste::Law::Reachable => Law::Reachable,
+                kernel::taste::Law::Named => Law::Named,
+            };
+            findings.push(Finding { law, said: flaw.said.clone(), from: at.to_string(), steps: Vec::new() });
+        }
     }
 }
 

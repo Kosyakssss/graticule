@@ -156,6 +156,46 @@ pub fn to_oklch(c: Color) -> (f32, f32, f32) {
     (lightness, a.hypot(bb), bb.atan2(a).to_degrees().rem_euclid(360.0))
 }
 
+/// A kind of color blindness, the whole of it, as the taste laws judge a screen through it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Sight {
+    /// No red cones.
+    Protanopia,
+    /// No green cones.
+    Deuteranopia,
+    /// No blue cones.
+    Tritanopia,
+}
+
+impl Sight {
+    pub const ALL: [Sight; 3] = [Sight::Protanopia, Sight::Deuteranopia, Sight::Tritanopia];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Sight::Protanopia => "protanopia",
+            Sight::Deuteranopia => "deuteranopia",
+            Sight::Tritanopia => "tritanopia",
+        }
+    }
+
+    /// A color as someone with this sight sees it, by the model of Machado, Oliveira and Fernandes (2009) at full severity, worked in linear light.
+    pub fn sees(self, c: Color) -> Color {
+        let m: [[f32; 3]; 3] = match self {
+            Sight::Protanopia => [[0.152_286, 1.052_583, -0.204_868], [0.114_503, 0.786_281, 0.099_216], [-0.003_882, -0.048_116, 1.051_998]],
+            Sight::Deuteranopia => [[0.367_322, 0.860_646, -0.227_968], [0.280_085, 0.672_501, 0.047_413], [-0.011_820, 0.042_940, 0.968_881]],
+            Sight::Tritanopia => [[1.255_528, -0.076_749, -0.178_779], [-0.078_411, 0.930_809, 0.147_602], [0.004_733, 0.691_367, 0.303_900]],
+        };
+        let decode = |v: f32| if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) };
+        let encode = |v: f32| {
+            let v = v.clamp(0.0, 1.0);
+            if v <= 0.003_130_8 { v * 12.92 } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 }
+        };
+        let rgb = [decode(c[0]), decode(c[1]), decode(c[2])];
+        let row = |r: [f32; 3]| encode(r[0] * rgb[0] + r[1] * rgb[1] + r[2] * rgb[2]);
+        [row(m[0]), row(m[1]), row(m[2]), c[3]]
+    }
+}
+
 /// The WCAG contrast ratio between two colors.
 pub fn contrast(a: Color, b: Color) -> f32 {
     let lum = |c: Color| {

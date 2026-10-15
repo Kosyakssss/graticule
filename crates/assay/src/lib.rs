@@ -17,6 +17,9 @@ pub const FRAME_BUDGET: u32 = 1000;
 /// The longest one call of `available` may take, in nanoseconds. The kernel asks it for every command on screen when the view is built, so it has to be a small part of a frame.
 pub const AVAILABLE_BUDGET: u32 = 10_000;
 
+/// The ceiling on a program's size on disk, in bytes, proposed in spec §12.3 and not judged until the owner sets it.
+pub const SIZE_PROPOSED: u64 = 10 * 1024 * 1024;
+
 /// Which law a finding breaks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Law {
@@ -27,7 +30,10 @@ pub enum Law {
     EveryCommandReachable,
     SavedFactsLoad,
     OnTheGrid,
+    Reachable,
+    Named,
     Contrast,
+    ColorBlind,
     FrameBudget,
     AvailableBudget,
     NoAllocationPerFrame,
@@ -43,7 +49,10 @@ impl Law {
             Law::EveryCommandReachable => "every command is reachable",
             Law::SavedFactsLoad => "saved facts load",
             Law::OnTheGrid => "every box lies on the grid, inside its parent and the window",
+            Law::Reachable => "every control can be reached by the pointer in at least one cell",
+            Law::Named => "no two items in one list read the same",
             Law::Contrast => "text inks reach their contrast",
+            Law::ColorBlind => "text inks reach their contrast with each kind of color blindness",
             Law::FrameBudget => "every frame stays within budget",
             Law::AvailableBudget => "available stays within its budget",
             Law::NoAllocationPerFrame => "a steady frame allocates nothing",
@@ -84,6 +93,8 @@ pub struct Assayed {
     pub sequences: usize,
     pub steps: usize,
     pub allocations: Option<u64>,
+    /// How many bytes the running program takes on disk, when it could be read.
+    pub size: Option<u64>,
 }
 
 /// Times measured, in microseconds for frames and nanoseconds for `available`: how many, the slowest 1%, the slowest and where it happened.
@@ -153,7 +164,8 @@ pub fn assay<A: kernel::App>(plan: Plan) -> Assayed {
     }));
     findings.sort_by(|a, b| a.law.cmp(&b.law).then_with(|| a.from.cmp(&b.from)));
     let allocations = cfg!(feature = "count-allocations").then(|| taste.allocations.iter().map(|(_, n)| n).sum());
-    Assayed { findings, frames, available, states: starts.len(), sequences: plan.sequences, steps: plan.steps, allocations }
+    let size = std::env::current_exe().and_then(std::fs::metadata).ok().map(|m| m.len());
+    Assayed { findings, frames, available, states: starts.len(), sequences: plan.sequences, steps: plan.steps, allocations, size }
 }
 
 /// Runs every check over an app and prints a report. Fails when anything was found, so a check can stop on it.
@@ -199,6 +211,19 @@ pub fn written(a: &Assayed) -> String {
         None => writeln!(out, "Allocation: not counted in this build; build with the feature count-allocations to count it."),
     };
     let _ = writeln!(out, "Idle: an app can't ask for frames itself, so the shell's law that idle is zero holds for it.");
+    if let Some(size) = a.size {
+        let mb = |b: u64| b as f64 / 1_048_576.0;
+        let fonts = kernel::fonts::bundled() as u64;
+        let build = if judged() { "" } else { " in this debug build" };
+        let _ = writeln!(
+            out,
+            "Size: the program takes {:.1} MB on disk{build}, {:.1} MB of it the bundled fonts, against a ceiling of {:.0} MB that is proposed and not yet judged.",
+            mb(size),
+            mb(fonts),
+            mb(SIZE_PROPOSED)
+        );
+    }
+    let _ = writeln!(out, "Energy: not measured; it needs the reference machine.");
     let _ = match a.findings.len() {
         0 => writeln!(out, "Every law holds."),
         1 => writeln!(out, "One finding."),

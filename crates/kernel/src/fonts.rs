@@ -16,6 +16,18 @@ pub const SANS: [&[u8]; 6] = [
     include_bytes!("../assets/fonts/IBMPlexSans-Bold.ttf"),
 ];
 
+/// How many bytes of fonts every program carries inside it: the fetched ones are not counted.
+pub fn bundled() -> usize {
+    let extra: usize = EXTRA
+        .iter()
+        .map(|f| match f.files {
+            Files::Bundled(files) => files.iter().map(|b| b.len()).sum(),
+            Files::Fetched(_) => 0,
+        })
+        .sum();
+    MONO.iter().chain(SANS.iter()).map(|b| b.len()).sum::<usize>() + extra
+}
+
 pub enum Files {
     Bundled(&'static [&'static [u8]]),
     Fetched(&'static [&'static str]),

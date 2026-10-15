@@ -1,6 +1,6 @@
 # Assay, small
 
-Assay (`crates/assay`) holds every app to the same checks. `assay::assay::<App>(plan)` runs them and returns what it found and measured; `assay::report::<App>()` prints it and fails when anything was found. Every app has it for free: `--assay` on any app's command line (through `specimen::offscreen`, so the to-do app, Specimen and Scope alike). The rest of spec §13.7 (every taste law, color blindness, energy and size) is build-plan item 20.
+Assay (`crates/assay`) holds every app to the same checks. `assay::assay::<App>(plan)` runs them and returns what it found and measured; `assay::report::<App>()` prints it and fails when anything was found. Every app has it for free: `--assay` on any app's command line (through `specimen::offscreen`, so the to-do app, Specimen and Scope alike). Item 20 adds the taste laws that judge single boxes, color blindness and the size report; what remains of §13.7 waits on open questions 9 and 10 and on the reference machine.
 
 ## The universal laws
 
@@ -19,15 +19,25 @@ At the end of a sequence, the facts as saved must load back as they were. Across
 
 When a sequence breaks a law, Assay shrinks it: it drops one step at a time while the same law still breaks, repeating until no step can go, and reports the shortest sequence in words ("click the button “Clear finished”"). Findings that differ only in numbers (the same panic on another item) count once, and each law reports at most three.
 
-## The taste laws, small
+## The taste laws
 
-Each named state is laid out at the normal size (1920 by 1280 at scale 2) and at its smallest window. Every box must lie inside its parent and inside the window; areas are whole cells by type, so this is what "on the grid" can still get wrong. Each ink that text is drawn in must reach its contrast on the background (`Ink::needs`) in both appearances.
+Each named state is laid out at the normal size (1920 by 1280 at scale 2) and at its smallest window, and judged by the laws in `kernel::taste`, which the running app also uses to answer Scope (`scope.md`). Each law reports the first box that breaks it in each state and size.
+
+- **On the grid.** Every box lies inside its parent and inside the window; areas are whole cells by type, so this is what "on the grid" can still get wrong.
+- **Reachable.** Every control has at least one cell where the pointer reaches it: hit testing, which gives each cell to the topmost control there, finds it in some cell of its area. Two exceptions are by design: controls under an open menu, which the menu covers on purpose, and controls of one kind sharing a parent and its whole area, like a range's two handles, between which the runner chooses by where the pointer is (`Runner::nearer`).
+- **Told apart.** No two items of one list read the same, read the way a screen reader reads an item: all the text inside it, in order. Items that read the same can't be told apart by ear.
+
+Contrast is judged on the themes, not the screens, since every text ink comes from the theme: each ink that text is drawn in must reach its contrast on the background (`Ink::needs`) in both appearances of every theme, and again as each kind of color blindness sees both (`Sight::sees`: protanopia, deuteranopia and tritanopia at full severity, by the model of Machado, Oliveira and Fernandes, 2009, applied in linear light).
+
+One type size is the grid's, so "at most a set number of type sizes per screen" holds by construction for everything but text an app draws on a canvas. The laws that need a line drawn by the owner (how many inks a screen may use; whether text cut short with an ellipsis is clipped) wait for open question 9.
 
 ## The budgets
 
 - **Frames.** Every step is followed by a frame, timed from the start of the step to the end of painting (input, view, layout, paint; not the GPU, which offscreen has none of). The slowest 1% of all frames is judged against 1 ms, and the slowest frame is named with its stages so the cause is visible. Bulk changes landed by `finish` between steps are not counted: in a window they land a slice at a time between frames.
 - **`available`.** Every command on screen is asked after each step, each call timed; the slowest 1% is judged against 10 µs (proposed, spec §12.2). The kernel asks once per command on screen whenever the view is rebuilt, so this keeps a hundred commands to a tenth of a frame.
 - **Allocation.** Each named state is painted until steady and then once more, counting allocations, which must be zero. Counting replaces the program's allocator, which every app would then pay for on every allocation, so it is a feature: build with `--features graticule/count-allocations` (or `assay/count-allocations`) to count. Without it the report says it didn't count.
+- **Size.** The running program's size on disk is reported with the share that is bundled fonts (`kernel::fonts::bundled`), against the proposed ceiling of spec §12.3; it is not judged until the owner sets the ceiling (open question 10).
+- **Energy.** Not measured: it needs `powermetrics` on the reference machine.
 - **Idle.** An app has no way to ask for frames: it has no timers, jobs wake the window only when they finish, and the shell's one timer wakes it only when a date written as how long ago would read differently. The shell's own law (`idle_is_zero`) therefore covers every app, and the report says so rather than measuring it again.
 
 Times are judged only in an optimized build; a debug build shows them and says they don't count.

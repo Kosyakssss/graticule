@@ -102,7 +102,7 @@ Several names on either side are the same component. They are merged into one ro
 | Chart | | | wave 6: lines, bars and candles on a canvas with scales on whole cells, sized in rows; sparklines in table cells; readouts under the pointer are not done |
 | Diff view | | | wave 6: lines and the words inside them, worked out off the main thread, unchanged stretches folded, only the lines that show built; side by side and stepping between changes are not done |
 | Node graph | | | wave 6: boxes holding what the app gives, set out in layers by a layout worked out off the main thread, wires in tracks of their own; listed when narrow; keys along wires, dragging and drawing wires are not done |
-| Editor | | | with Galley: plain text of any length with many cursors, only the lines that show built, the platform's keys; wrapping and scrolling sideways are not done |
+| Editor | | | with Galley: plain text of any length with many cursors, only the lines that show built, long lines wrapped, the platform's keys; Up and Down by wrapped rows are not done |
 | Split panes | | | wave 6: panes side by side with dividers dragged or moved by the arrows, the widths kept with the window, stacked when narrow; panes moved left and right, closed and opened again, and the layout saved as a file and read back; moving a pane into another split is not done |
 
 ## Wave 6: beyond both kits

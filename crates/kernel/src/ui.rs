@@ -1565,11 +1565,31 @@ impl<'a, C, S> Ui<'a, C, S> {
         let primary = doc.cursors(&mut cursors);
         let head = cursors.get(primary).map_or(0, |c| doc.line_of(c.1));
         let scroll = self.scrolls.get(&id).copied().unwrap_or_default();
-        let first = (scroll.index as usize).min(count - 1);
-        let shown = scroll.rows.max(1) as usize + 1;
-        for line in first..(first + shown).min(count) {
-            let n = self.tree.add(i, Kind::EditLine { line: line as u32 }, Some(id.mix(line as u64)), at);
+        let cols = self.tree.spans.get(&id).copied().unwrap_or(80).max(1) as usize;
+        let visible = scroll.rows.max(1) as usize;
+        let mut line_text = String::new();
+        let mut wrapped = |line: usize| {
+            line_text.clear();
+            doc.line(line, &mut |chunk| line_text.push_str(chunk));
+            crate::field::rows(&line_text, cols).count().max(1)
+        };
+        let mut first = (scroll.index as usize).min(count - 1);
+        if self.tree.reveal && head < first {
+            first = head;
+        } else if self.tree.reveal {
+            let (mut top, mut used) = (head, wrapped(head));
+            while top > first && used + wrapped(top - 1) <= visible {
+                top -= 1;
+                used += wrapped(top);
+            }
+            first = top;
+        }
+        let (mut line, mut used) = (first, 0);
+        while line < count && used < visible {
             let text = self.tree.write(|out| doc.line(line, &mut |chunk| out.push_str(chunk)));
+            let s = &self.tree.text[text.start as usize..text.end as usize];
+            let rows = crate::field::rows(s, cols).count().max(1);
+            let n = self.tree.add(i, Kind::EditLine { line: line as u32, rows: rows.min(usize::from(u16::MAX)) as u16 }, Some(id.mix(line as u64)), at);
             self.tree.nodes[n as usize].text = text;
             let start = doc.line_start(line);
             let s = &self.tree.text[text.start as usize..text.end as usize];
@@ -1577,15 +1597,17 @@ impl<'a, C, S> Ui<'a, C, S> {
             let byte = |at: usize| s.char_indices().nth(at - start).map_or(s.len(), |(b, _)| b) as u32;
             let mut marks = Vec::new();
             let mut carets = Vec::new();
-            for (k, &(anchor, head)) in cursors.iter().enumerate() {
+            let from = cursors.partition_point(|c| c.0.max(c.1) < start);
+            for (k, &(anchor, head)) in cursors.iter().enumerate().skip(from).take_while(|(_, c)| c.0.min(c.1) <= end) {
                 let (a, b) = (anchor.min(head), anchor.max(head));
-                if a < b && a <= end && b > start {
+                if a < b && b > start {
                     marks.push((byte(a.max(start)), byte(b.min(end))));
                 }
                 if (start..=end).contains(&head) {
                     carets.push((n, byte(head), k == primary));
                 }
             }
+            (line, used) = (line + 1, used + rows);
             if !marks.is_empty() {
                 self.tree.marks.push((n, marks));
             }

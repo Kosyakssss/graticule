@@ -969,11 +969,21 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         (Layer::Under, Kind::EditLine { .. }) => {
             let (a, fill) = (n.area, if look.focused { p.theme.selection } else { p.theme.hover });
             if let Some((_, marks)) = tree.marks.iter().find(|m| m.0 == i) {
+                let width = a.cols.max(1) as usize;
                 for &(s, e) in marks {
-                    let (from, to) = (a.col + cells_in(&text[..s as usize]), a.col + cells_in(&text[..e as usize]));
-                    let to = if e as usize == text.len() && s < e { to + 1 } else { to.max(from + 1) }.min(a.right());
-                    if to > from {
-                        p.fill_area(Area::new(from, a.row, to - from, 1), fill);
+                    let (s, e) = (s as usize, e as usize);
+                    let past = e == text.len() && s < e;
+                    for (k, row) in crate::field::rows(text, width).enumerate().take(a.rows.max(0) as usize) {
+                        let (from, to) = (s.max(row.start), e.min(row.end));
+                        if from > to || (from == to && !(past && to == row.end)) {
+                            continue;
+                        }
+                        let x0 = a.col + cells_in(&text[row.start..from]);
+                        let x1 = a.col + cells_in(&text[row.start..to]) + i32::from(past && to == text.len());
+                        let x1 = x1.max(x0 + 1).min(a.right());
+                        if x1 > x0 {
+                            p.fill_area(Area::new(x0, a.row + k as i32, x1 - x0, 1), fill);
+                        }
                     }
                 }
             }
@@ -981,13 +991,21 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         (Layer::Over, Kind::EditLine { .. }) => {
             let (a, style, theme) = (n.area, p.m.mono(), p.theme);
             let r = p.rect(a);
-            p.cells((r.x, r.y), a.cols, text, style, theme.ink);
+            let (width, cell_h) = (a.cols.max(1) as usize, p.m.cell_h);
+            for (k, row) in crate::field::rows(text, width).enumerate().take(a.rows.max(0) as usize) {
+                p.cells((r.x, r.y + k as f32 * cell_h), a.cols, &text[row], style, theme.ink);
+            }
             if look.focused {
                 let bar = (p.m.scale * 2.0).round().max(1.0);
                 for &(_, byte, primary) in tree.carets.iter().filter(|c| c.0 == i) {
-                    let x = r.x + cells_in(&text[..byte as usize]) as f32 * p.m.cell_w;
+                    let byte = byte as usize;
+                    let Some((k, row)) = crate::field::rows(text, width).enumerate().filter(|(_, row)| row.start <= byte).last() else { continue };
+                    if k as i32 >= a.rows {
+                        continue;
+                    }
+                    let x = r.x + cells_in(&text[row.start..byte]) as f32 * p.m.cell_w;
                     let ink = if primary { theme.cursor } else { theme.muted };
-                    p.fill(Rect::new(x.floor(), r.y + p.m.cell_h * 0.1, bar, p.m.cell_h * 0.8), ink);
+                    p.fill(Rect::new(x.floor(), r.y + k as f32 * cell_h + cell_h * 0.1, bar, cell_h * 0.8), ink);
                 }
             }
         }

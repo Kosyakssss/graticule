@@ -146,7 +146,7 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 node.set_value(text);
             }
             Kind::Editor { .. } => node.set_label(name),
-            Kind::EditLine { line } => {
+            Kind::EditLine { line, .. } => {
                 node.set_label(format!("Line {}", line + 1));
                 node.set_value(text);
             }

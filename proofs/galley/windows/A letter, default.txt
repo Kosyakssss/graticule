@@ -9,14 +9,14 @@ window		0 0 120 30
     editor	Text	2 5 116 19	
       line	Dear reader,	2 5 116 1	
       line		2 6 116 1	
-      line	The text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.	2 7 116 1	
-      line	Every change is an operation the ledger keeps, and undo takes it back with the cursors where they were.	2 8 116 1	
-      line		2 9 116 1	
-      line	    Indented lines keep their indent when Return starts the next one.	2 10 116 1	
-      line		2 11 116 1	
-      line	With thanks,	2 12 116 1	
-      line	the galley	2 13 116 1	
-      line		2 14 116 1	
+      line	The text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.	2 7 116 2	
+      line	Every change is an operation the ledger keeps, and undo takes it back with the cursors where they were.	2 9 116 1	
+      line		2 10 116 1	
+      line	    Indented lines keep their indent when Return starts the next one.	2 11 116 1	
+      line		2 12 116 1	
+      line	With thanks,	2 13 116 1	
+      line	the galley	2 14 116 1	
+      line		2 15 116 1	
     group		2 25 116 1	
       text field	Find	2 25 37 1	
       text field	Replace with	41 25 38 1	

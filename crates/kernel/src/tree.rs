@@ -330,9 +330,10 @@ pub enum Kind {
         head: u32,
         single: bool,
     },
-    /// One line of an editor, its text without the line break.
+    /// One line of an editor, its text without the line break, and how many rows it wraps into.
     EditLine {
         line: u32,
+        rows: u16,
     },
 }
 
@@ -714,6 +715,8 @@ pub struct Tree<C> {
     pub scrub: Option<(Id, i64)>,
     /// How many columns wide each ruler was last laid out, by its id, so its lanes know how much time they show.
     pub spans: HashMap<Id, i32>,
+    /// Whether the view should bring the focused part into sight, as after typing or a move.
+    pub reveal: bool,
     /// The labels of charts' scales, each with where it falls from 0 to 1, by the scale's node.
     pub scales: Vec<(u32, Vec<(f32, String)>)>,
     /// The heights of sparklines' bars, from 0 to 1, by the sparkline's node.
@@ -800,6 +803,7 @@ impl<C> Default for Tree<C> {
             rulers: Vec::new(),
             scrub: None,
             spans: HashMap::new(),
+            reveal: false,
             scales: Vec::new(),
             sparks: Vec::new(),
             graphs: Vec::new(),

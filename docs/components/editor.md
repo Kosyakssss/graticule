@@ -1,6 +1,6 @@
 # Editor
 
-A box of plain text to read and edit, of any length: a note, a letter, a source file, a log of a hundred megabytes. It shows the text in mono, one line to a row, with every cursor and selection the user has made.
+A box of plain text to read and edit, of any length: a note, a letter, a source file, a log of a hundred megabytes. It shows the text in mono, each line wrapped at the editor's width, with every cursor and selection the user has made.
 
 ## Use it for
 
@@ -27,11 +27,11 @@ The editor is as tall as the room it is given, at least three rows, and builds o
 
 A click puts the cursor there and Shift with a click selects up to it; dragging selects. The wheel scrolls. Once it has the focus, the keys are the platform's own: the arrows move by a character or a line, with the word keys by a word, Home and End to the ends of a line, the line keys or Page Up and Page Down by a screenful, Shift with any of them selects, Backspace and Delete delete a character or a word, Return starts a new line with the line's indent, Escape keeps only the primary cursor and then lets go of the selection, and select all, copy, cut and paste work as everywhere else. Typing words is one undo step per word.
 
-Wrapping long lines, scrolling sideways, showing what an input method is composing, more cursors from the keyboard, and finding inside the editor itself are not done.
+Up and Down move by whole lines, not by the rows a long line wraps into. Showing what an input method is composing, more cursors from the keyboard, and finding inside the editor itself are not done.
 
 ## Narrow windows
 
-Lines that don't fit are cut at the right edge.
+A long line wraps after the last space that fits, or mid-word when there is none, as a text area's does. A line taller than the whole editor shows its first rows.
 
 ## Screen reader
 

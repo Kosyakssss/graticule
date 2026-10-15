@@ -469,6 +469,7 @@ impl<A: App> Runner<A> {
         self.tree.picks.clone_from(&self.picks);
         self.tree.scrub = self.scrub;
         self.tree.spans.clone_from(&self.spans);
+        self.tree.reveal = self.reveal;
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
         self.tree.reindex();
@@ -1402,24 +1403,17 @@ impl<A: App> Runner<A> {
         }
         for e in 0..self.tree.editors.len() {
             let n = self.tree.nodes[self.tree.editors[e].node as usize];
-            let Kind::Editor { count, first, head, .. } = n.kind else { continue };
-            let reveal = self.reveal;
+            let Kind::Editor { first, .. } = n.kind else { continue };
+            if n.area.cols > 0 && self.spans.get(&n.id) != Some(&n.area.cols) {
+                self.spans.insert(n.id, n.area.cols);
+                moved = true;
+            }
             let s = self.scrolls.entry(n.id).or_default();
             if s.rows != n.area.rows {
                 s.rows = n.area.rows;
                 moved = true;
             }
-            let rows = n.area.rows.max(1) as u32;
-            let mut to = first.min((count as i32 - n.area.rows).max(0) as u32);
-            if reveal && head < to {
-                to = head;
-            } else if reveal && head >= to + rows {
-                to = head + 1 - rows;
-            }
-            if to != first {
-                s.index = to;
-                moved = true;
-            }
+            s.index = first;
         }
         moved
     }
@@ -3466,15 +3460,26 @@ impl<A: App> Runner<A> {
         let Some((x, y)) = frame.pointer else { return false };
         let m = frame.metrics;
         let row = m.cell_at(x, y).1;
-        let lines: Vec<u32> = self.tree.children(i).collect();
-        let Some(&line) = lines.iter().find(|&&c| self.tree.nodes[c as usize].area.row == row).or(if row < n.area.row { lines.first() } else { lines.last() }) else { return false };
+        let lines: Vec<u32> = self.tree.children(i).filter(|&c| !self.tree.nodes[c as usize].area.is_empty()).collect();
+        let inside = |c: u32| {
+            let a = self.tree.nodes[c as usize].area;
+            a.row <= row && row < a.bottom()
+        };
+        let Some(&line) = lines.iter().find(|&&c| inside(c)).or(if row < n.area.row { lines.first() } else { lines.last() }) else { return false };
         let l = self.tree.nodes[line as usize];
-        let Kind::EditLine { line: number } = l.kind else { return false };
+        let Kind::EditLine { line: number, .. } = l.kind else { return false };
+        let text = self.tree.str(l.text);
+        let width = l.area.cols.max(1) as usize;
+        let count = field::rows(text, width).count();
+        let k = if row < l.area.row { 0 } else { ((row - l.area.row) as usize).min(count.saturating_sub(1)) };
+        let span = field::rows(text, width).nth(k).unwrap_or(0..text.len());
+        let last = k + 1 >= count;
         let cells = ((x - m.rect(l.area).x) / m.cell_w).max(0.0);
-        let (mut column, mut used) = (0, 0.0);
-        for c in self.tree.str(l.text).chars() {
+        let (mut column, mut used) = (text[..span.start].chars().count(), 0.0);
+        let mut chars = text[span].chars().peekable();
+        while let Some(c) = chars.next() {
             let w = crate::text::cells(c) as f32;
-            if used + w / 2.0 > cells {
+            if used + w / 2.0 > cells || (!last && chars.peek().is_none()) {
                 break;
             }
             (column, used) = (column + 1, used + w);

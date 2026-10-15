@@ -774,9 +774,16 @@ impl<'t> Layout<'t> {
             Kind::Split => self.split(tree, i, area),
             Kind::Diff { .. } | Kind::Editor { .. } => {
                 let (start, end) = self.children(tree, i);
+                let mut row = area.row;
                 for k in start..end {
-                    let (c, row) = (self.stack[k], area.row + (k - start) as i32);
-                    self.place(tree, c, if row < area.bottom() { Area::new(area.col, row, area.cols, 1) } else { Area::default() });
+                    let c = self.stack[k];
+                    let tall = match tree.nodes[c as usize].kind {
+                        Kind::EditLine { rows, .. } => i32::from(rows).max(1),
+                        _ => 1,
+                    };
+                    let shown = tall.min(area.bottom() - row);
+                    self.place(tree, c, if shown > 0 { Area::new(area.col, row, area.cols, shown) } else { Area::default() });
+                    row += tall;
                 }
                 self.release(start);
             }

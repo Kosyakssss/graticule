@@ -24,6 +24,8 @@ fn role(kind: Kind) -> Role {
         Kind::Scale { .. } => Role::Label,
         Kind::Spark => Role::Image,
         Kind::Graph | Kind::Vertex => Role::Group,
+        Kind::Diff { .. } => Role::List,
+        Kind::DiffLine { .. } => Role::ListItem,
         Kind::Divider => Role::Splitter,
         Kind::ListRow { .. } => Role::ListItem,
         Kind::Field { holds: Holds::Lines { .. } } => Role::MultilineTextInput,
@@ -136,6 +138,10 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 node.set_label(name);
                 node.set_value(text);
                 node.set_expanded(open);
+            }
+            Kind::DiffLine { .. } => {
+                node.set_label(name);
+                node.set_value(text);
             }
             Kind::Canvas { .. } => {
                 node.set_label(name);

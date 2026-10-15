@@ -201,6 +201,8 @@ pub enum Kind {
     Spark,
     Graph,
     Vertex,
+    Diff { count: u32, first: u32, rows: i32 },
+    DiffLine { change: crate::diff::Change, old: u32, new: u32, digits: u8 },
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -249,6 +251,7 @@ impl Kind {
                 | Kind::Twig { branch: crate::table::Branch::Closed | crate::table::Branch::Open, .. }
                 | Kind::Divider
                 | Kind::Ruler
+                | Kind::Diff { .. }
         )
     }
 
@@ -286,6 +289,7 @@ impl Kind {
                 | Kind::Chart
                 | Kind::Graph
                 | Kind::Vertex
+                | Kind::Diff { .. }
         )
     }
 
@@ -313,6 +317,11 @@ impl Kind {
             Kind::Spark => "sparkline",
             Kind::Graph => "graph",
             Kind::Vertex => "node",
+            Kind::Diff { .. } => "diff",
+            Kind::DiffLine { change: crate::diff::Change::Added, .. } => "added line",
+            Kind::DiffLine { change: crate::diff::Change::Removed, .. } => "removed line",
+            Kind::DiffLine { change: crate::diff::Change::Folded, .. } => "unchanged lines",
+            Kind::DiffLine { .. } => "line",
             Kind::ListRow { .. } => "list item",
             Kind::Field { holds: Holds::Lines { .. } } => "text area",
             Kind::Field { holds: Holds::Search } => "search field",

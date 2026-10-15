@@ -1493,6 +1493,37 @@ impl<'a, C, S> Ui<'a, C, S> {
         self.scale(xs, plot.x_labels(), crate::tree::Fill);
     }
 
+    /// A diff, `rows` tall and as wide as it is given: each line with its numbers in the old and new texts, removed lines in the danger ink and added ones in the ok ink, the words that changed inside a line marked more strongly, and long runs of unchanged lines folded into one. It scrolls by the wheel, and by the arrow keys, Page Up, Page Down, Home and End once it is reached.
+    #[track_caller]
+    pub fn diff(&mut self, label: impl AsRef<str>, diff: &crate::diff::Diff, rows: i32) {
+        use crate::diff::Change;
+        let at = Location::caller();
+        let lines = diff.lines();
+        let rows = rows.max(1);
+        let i = self.add(Kind::Diff { count: lines.len() as u32, first: 0, rows }, at);
+        let r = self.tree.put(label.as_ref());
+        (self.tree.nodes[i as usize].text, self.tree.nodes[i as usize].span) = (r, crate::tree::Fill);
+        let id = self.tree.nodes[i as usize].id;
+        let most = lines.iter().filter(|l| l.change != Change::Folded).map(|l| l.old.max(l.new)).max().unwrap_or(1).max(1);
+        let digits = most.ilog10() as u8 + 1;
+        let first = self.scrolls.get(&id).map_or(0, |s| s.index).min(lines.len().saturating_sub(rows as usize) as u32);
+        self.tree.nodes[i as usize].kind = Kind::Diff { count: lines.len() as u32, first, rows };
+        for (k, line) in lines.iter().enumerate().skip(first as usize).take(rows as usize) {
+            let n = self.tree.add(i, Kind::DiffLine { change: line.change, old: line.old, new: line.new, digits }, Some(id.mix(k as u64)), at);
+            let (text, name) = match line.change {
+                Change::Folded => (format!("⋯ {} unchanged lines", line.old), format!("{} unchanged lines", line.old)),
+                Change::Added => (line.text.clone(), format!("Added, line {}", line.new)),
+                Change::Removed => (line.text.clone(), format!("Removed, line {}", line.old)),
+                Change::Same => (line.text.clone(), format!("Line {}", line.new)),
+            };
+            let (text, name) = (self.tree.put(&text), self.tree.put(&name));
+            (self.tree.nodes[n as usize].text, self.tree.nodes[n as usize].name) = (text, name);
+            if !line.marks.is_empty() {
+                self.tree.marks.push((n, line.marks.clone()));
+            }
+        }
+    }
+
     /// A node graph: each of `graph`'s nodes a box holding what `node` puts in it for that node's number, set out in layers from left to right with wires between them. A graph too wide for its place lists its nodes one under another, without wires.
     #[track_caller]
     pub fn graph(&mut self, label: impl AsRef<str>, graph: &crate::graph::Graph, mut node: impl FnMut(&mut Ui<'_, C, S>, usize)) {

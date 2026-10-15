@@ -316,6 +316,10 @@ const STATES: [(&str, u32); 8] = [("Draft", 14), ("In review", 5), ("Changes ask
 
 const MOVES: [(usize, usize); 10] = [(0, 1), (1, 2), (2, 0), (1, 3), (3, 4), (4, 5), (3, 5), (5, 6), (0, 7), (2, 7)];
 
+const BEFORE: &str = "# Rain gauge\n\nReads the gauge every hour and keeps a month of readings.\n\n## Setting up\n\n1. Put the gauge somewhere open.\n2. Join it to the house network.\n3. Open the app and choose Find gauges.\n4. Pick yours from the list.\n\n## Readings\n\nEach reading is the rain since the last one, in millimetres.\nReadings older than a month are dropped.\nThe chart shows the last week.\n\n## Cleaning\n\nTip the funnel out once a month.\nWipe the bucket with a dry cloth.\nDo not use soap.\n\n## Batteries\n\nTwo AA batteries last about a year.\nThe app warns you when they run low.\n";
+
+const AFTER: &str = "# Rain gauge\n\nReads the gauge every ten minutes and keeps a year of readings.\n\n## Setting up\n\n1. Put the gauge somewhere open.\n2. Join it to the house network.\n3. Open the app and choose Find gauges.\n4. Pick yours from the list.\n\n## Readings\n\nEach reading is the rain since the last one, in millimetres.\nThe chart shows the last week, or any month you choose.\n\n## Cleaning\n\nTip the funnel out once a month.\nWipe the bucket with a dry cloth.\nDo not use soap.\n\n## Batteries\n\nTwo AA batteries last about a year.\nThe app warns you a week before they run low.\nRechargeable batteries work too.\n";
+
 fn candles() -> Vec<kernel::Candle> {
     let mut price = 100.0;
     (0..24)
@@ -507,10 +511,11 @@ pub enum Component {
     TimeAxis,
     Chart,
     Graph,
+    Diff,
 }
 
 impl Component {
-    const ALL: [Component; 80] = [
+    const ALL: [Component; 81] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -591,6 +596,7 @@ impl Component {
         Component::TimeAxis,
         Component::Chart,
         Component::Graph,
+        Component::Diff,
     ];
 
     fn name(self) -> &'static str {
@@ -675,6 +681,7 @@ impl Component {
             Component::TimeAxis => "Time axis",
             Component::Chart => "Chart",
             Component::Graph => "Node graph",
+            Component::Diff => "Diff view",
         }
     }
 
@@ -760,6 +767,7 @@ impl Component {
             Component::TimeAxis => include_str!("../../../docs/components/time-axis.md"),
             Component::Chart => include_str!("../../../docs/components/chart.md"),
             Component::Graph => include_str!("../../../docs/components/node-graph.md"),
+            Component::Diff => include_str!("../../../docs/components/diff-view.md"),
         }
     }
 
@@ -1358,6 +1366,7 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::Diff => ui.diff("What changed in the rain gauge's notes", &kernel::Diff::new(BEFORE, AFTER), 14),
             Component::Graph => ui.graph("How a post moves from draft to archive", &Graph::new(STATES.len(), MOVES), |ui, k| {
                 ui.text(STATES[k].0);
                 ui.muted(format!("{} posts", STATES[k].1));

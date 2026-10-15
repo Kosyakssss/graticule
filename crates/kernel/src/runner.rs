@@ -3313,6 +3313,15 @@ impl<A: App> Runner<A> {
             && typing
             && chord.mods == Mods::default()
             && let Some(i) = self.focused_control()
+            && matches!(self.tree.nodes[i as usize].kind, Kind::Diff { .. })
+            && matches!(chord.key, Key::Up | Key::Down | Key::PageUp | Key::PageDown | Key::Home | Key::End)
+        {
+            return self.diff_key(i, chord.key);
+        }
+        if self.pending.is_empty()
+            && typing
+            && chord.mods == Mods::default()
+            && let Some(i) = self.focused_control()
             && matches!(self.tree.nodes[i as usize].kind, Kind::Pick { .. })
             && matches!(chord.key, Key::Up | Key::Down | Key::Home | Key::End | Key::Escape)
         {
@@ -3939,6 +3948,33 @@ impl<A: App> Runner<A> {
         was != Some(now)
     }
 
+    fn scroll_diff(&mut self, i: u32, by: i32) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let Kind::Diff { count, first, rows } = n.kind else { return false };
+        let to = (first as i32).saturating_add(by).clamp(0, (count as i32 - rows).max(0)) as u32;
+        if to == first {
+            return false;
+        }
+        let s = self.scrolls.entry(n.id).or_default();
+        *s = Scroll { anchor: None, index: to, ..*s };
+        self.stale = true;
+        true
+    }
+
+    fn diff_key(&mut self, i: u32, key: Key) -> bool {
+        let Kind::Diff { count, rows, .. } = self.tree.nodes[i as usize].kind else { return false };
+        let page = (rows - 1).max(1);
+        let by = match key {
+            Key::Up => -1,
+            Key::Down => 1,
+            Key::PageUp => -page,
+            Key::PageDown => page,
+            Key::Home => -(count as i32),
+            _ => count as i32,
+        };
+        self.scroll_diff(i, by)
+    }
+
     fn divider_key(&mut self, i: u32, key: Key) -> bool {
         let Some(r) = self.divided(i) else { return false };
         let by = match key {
@@ -3997,6 +4033,9 @@ impl<A: App> Runner<A> {
     }
 
     fn scroll(&mut self, col: i32, row: i32, by: i32) -> bool {
+        if let Some(d) = self.tree.nodes.iter().rposition(|n| matches!(n.kind, Kind::Diff { .. }) && n.area.contains(col, row)) {
+            return self.scroll_diff(d as u32, by);
+        }
         if let Some(m) = self.tree.nodes.iter().rposition(|n| matches!(n.kind, Kind::Matches { .. }) && n.area.contains(col, row)) {
             let n = self.tree.nodes[m];
             let Kind::Matches { count, first, at, .. } = n.kind else { return false };

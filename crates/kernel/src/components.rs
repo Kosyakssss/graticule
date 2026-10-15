@@ -809,6 +809,19 @@ fn scrollbar(p: &mut Painter, track: Rect, first: u32, shown: u32, count: u32) {
     p.fill(Rect::new((track.x + (track.w - w) / 2.0).round(), y, w, thumb_h), muted);
 }
 
+fn tint(color: crate::ink::Color, alpha: f32) -> crate::ink::Color {
+    [color[0], color[1], color[2], color[3] * alpha]
+}
+
+/// Where a diff line's text starts: after its old and new numbers and its sign.
+fn diff_gutter(digits: u8) -> i32 {
+    2 * i32::from(digits) + 4
+}
+
+fn cells_in(s: &str) -> i32 {
+    s.chars().map(|c| crate::text::cells(c) as i32).sum()
+}
+
 /// A graph's wires: out of a node's right edge, along to a track of their own in the gap between layers, up or down to the next place and into it, with a square where each arrives.
 fn wires(p: &mut Painter, g: &crate::tree::Graphed) {
     if g.places.is_empty() {
@@ -912,6 +925,50 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             if let Some(g) = tree.graphs.iter().find(|g| g.node == i) {
                 wires(p, g);
             }
+        }
+        (Layer::Under, Kind::DiffLine { change, digits, .. }) => {
+            let (theme, a) = (p.theme, n.area);
+            let (row, word) = match change {
+                crate::diff::Change::Added => (tint(theme.ok, 0.12), tint(theme.ok, 0.3)),
+                crate::diff::Change::Removed => (tint(theme.danger, 0.12), tint(theme.danger, 0.3)),
+                crate::diff::Change::Folded => (theme.hover, theme.hover),
+                crate::diff::Change::Same => return,
+            };
+            p.fill_area(a, row);
+            let start = a.col + diff_gutter(digits);
+            if let Some((_, marks)) = tree.marks.iter().find(|m| m.0 == i) {
+                for &(s, e) in marks {
+                    let (from, to) = (cells_in(&text[..s as usize]), cells_in(&text[..e as usize]));
+                    let (from, to) = (start + from, (start + to).min(a.right()));
+                    if to > from {
+                        p.fill_area(Area::new(from, a.row, to - from, 1), word);
+                    }
+                }
+            }
+        }
+        (Layer::Over, Kind::DiffLine { change, old, new, digits }) => {
+            let (theme, a, style) = (p.theme, n.area, p.m.mono());
+            let (x, y, cw) = (p.rect(a).x, p.rect(a).y, p.m.cell_w);
+            let w = i32::from(digits);
+            let number = |k: u32| if k == 0 { String::new() } else { format!("{k:>w$}", w = w as usize) };
+            let start = diff_gutter(digits);
+            if change == crate::diff::Change::Folded {
+                p.cells((x + start as f32 * cw, y), a.cols - start, text, style, theme.muted);
+                return;
+            }
+            p.cells((x, y), w, &number(old), style, theme.faint);
+            p.cells((x + (w + 1) as f32 * cw, y), w, &number(new), style, theme.faint);
+            let (sign, ink) = match change {
+                crate::diff::Change::Added => ("+", theme.ok),
+                crate::diff::Change::Removed => ("-", theme.danger),
+                _ => (" ", theme.ink),
+            };
+            p.cells((x + (2 * w + 2) as f32 * cw, y), 1, sign, style, ink);
+            p.cells((x + start as f32 * cw, y), a.cols - start, text, style, theme.ink);
+        }
+        (Layer::Over, Kind::Diff { .. }) if look.focused => {
+            let (r, t, cursor) = (p.rect(n.area), p.style.line(p.m), p.theme.cursor);
+            border(p, r, t, cursor);
         }
         (Layer::Under, Kind::Vertex) => {
             let outer = p.rect(n.area);

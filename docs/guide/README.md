@@ -146,6 +146,8 @@ Charts draw numbers as lines, bars or candles, the kind traders read, with a sca
 
 A node graph shows boxes joined by wires, such as the states a post moves through. The app only says which boxes lead to which; Graticule sets them out from left to right so the wires run forward and cross as little as it can, and a loop is drawn running back. In a window too narrow for it, the boxes are listed one under another instead.
 
+A diff view shows what changed between two versions of a text: lines taken out in red, lines put in in green, and inside a line that changed, the words that changed marked more strongly. Long stretches that stayed the same fold into one line saying how many, so the changes stand out. However long the text, only the lines on screen are drawn.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

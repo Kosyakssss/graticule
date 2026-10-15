@@ -195,6 +195,8 @@ impl<'t> Layout<'t> {
             Kind::Scale { vertical: false, .. } => (8, 8),
             Kind::Scale { vertical: true, .. } => (1, 1),
             Kind::Spark => (6, 12),
+            Kind::Diff { .. } => (20, 20),
+            Kind::DiffLine { .. } => (1, 1),
             Kind::Vertex => {
                 let (start, end) = self.children(tree, i);
                 let (mut min, mut pref) = (1, 1);
@@ -542,6 +544,8 @@ impl<'t> Layout<'t> {
             Kind::Value { .. } => 1,
             Kind::Header | Kind::Head { .. } | Kind::Cell { .. } | Kind::Twig { .. } | Kind::Divider | Kind::Ruler | Kind::Spark => 1,
             Kind::Scale { rows, .. } => rows.max(1),
+            Kind::Diff { rows, .. } => rows.max(1),
+            Kind::DiffLine { .. } => 1,
             Kind::Vertex => {
                 let (start, end) = self.children(tree, i);
                 let mut rows = 0;
@@ -766,6 +770,14 @@ impl<'t> Layout<'t> {
             }
             Kind::Root | Kind::Column | Kind::Pane | Kind::Picker | Kind::Matches { .. } | Kind::TimeAxis | Kind::Chart | Kind::Palette => self.stack_down(tree, i, area, 0),
             Kind::Split => self.split(tree, i, area),
+            Kind::Diff { .. } => {
+                let (start, end) = self.children(tree, i);
+                for k in start..end {
+                    let (c, row) = (self.stack[k], area.row + (k - start) as i32);
+                    self.place(tree, c, if row < area.bottom() { Area::new(area.col, row, area.cols, 1) } else { Area::default() });
+                }
+                self.release(start);
+            }
             Kind::Vertex => self.stack_down(tree, i, Area::new(area.col + 1, area.row, area.cols - 2, area.rows), 0),
             Kind::Graph => {
                 let (start, end) = self.children(tree, i);

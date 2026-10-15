@@ -26,7 +26,8 @@ window		0 0 28 23
     button	Commands	11 17 11 1	unavailable (Attach to an app first)
     button	Facts	2 18 6 1	unavailable (Attach to an app first)
     button	Effects and jobs	10 18 14 1	unavailable (Attach to an app first)
-    button	Ask again	2 19 10 1	unavailable (Time and redraws arrive by themselves)
+    button	Taste	2 19 7 1	unavailable (Attach to an app first)
+    button	Ask again	11 19 10 1	unavailable (Time and redraws arrive by themselves)
     button	Undo	2 20 13 1	unavailable (Nothing to undo)
     button	Redo	2 21 19 1	unavailable (Nothing to redo)
     button	Open the palette	2 22 15 1	

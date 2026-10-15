@@ -2,7 +2,7 @@ use kernel::grid::Area;
 use kernel::ink::{Appearance, Ink, contrast};
 use kernel::runner::Runner;
 use kernel::shell::Face;
-use kernel::tree::{NONE, Tree};
+use kernel::tree::Tree;
 
 use crate::screen::{HEIGHT, Screen, WIDTH};
 use crate::{Finding, Law};
@@ -51,21 +51,8 @@ pub fn run<A: kernel::App>(starts: &[(String, A)]) -> Taste {
 }
 
 fn grid<C>(tree: &Tree<C>, window: Area, at: &str, findings: &mut Vec<Finding>) {
-    let within = |inner: Area, outer: Area| inner.col >= outer.col && inner.row >= outer.row && inner.right() <= outer.right() && inner.bottom() <= outer.bottom();
-    for n in &tree.nodes {
-        if n.area.is_empty() {
-            continue;
-        }
-        let said = if !within(n.area, window) {
-            format!("a {} {} leaves the window, {} by {} cells", n.kind.role(), at_cells(n.area), window.cols, window.rows)
-        } else if n.parent != NONE && !within(n.area, tree.nodes[n.parent as usize].area) {
-            let parent = tree.nodes[n.parent as usize];
-            format!("a {} {} leaves its parent, a {} {}", n.kind.role(), at_cells(n.area), parent.kind.role(), at_cells(parent.area))
-        } else {
-            continue;
-        };
-        findings.push(Finding { law: Law::OnTheGrid, said, from: at.to_string(), steps: Vec::new() });
-        return;
+    if let Some(flaw) = kernel::taste::off_grid(tree, window).into_iter().next() {
+        findings.push(Finding { law: Law::OnTheGrid, said: flaw.said, from: at.to_string(), steps: Vec::new() });
     }
 }
 
@@ -84,8 +71,4 @@ fn steady<A: kernel::App>(screen: &mut Screen, runner: &mut Runner<A>) -> Option
 #[cfg(not(feature = "count-allocations"))]
 fn steady<A: kernel::App>(_: &mut Screen, _: &mut Runner<A>) -> Option<u64> {
     None
-}
-
-fn at_cells(a: Area) -> String {
-    format!("at column {}, row {}, {} by {} cells", a.col, a.row, a.cols, a.rows)
 }

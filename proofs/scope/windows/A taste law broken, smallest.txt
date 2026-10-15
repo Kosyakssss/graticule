@@ -1,0 +1,30 @@
+window		0 0 60 18	
+  page	Taste: To do	0 0 60 12	
+    text	The boxes on the app's screen that break a taste law, as Assay judges them.	2 3 56 2	muted
+    switch	Mark each one on the app	2 6 56 1	
+    list		2 8 56 3	1 items
+      list item		2 8 54 3	
+        group		2 8 54 3	
+          column		2 8 14 1	
+            text	on the grid	2 8 14 1	
+          column		18 8 28 1	
+            text	apps/todo/src/main.rs:104	18 8 28 1	mono
+          column		48 8 8 3	
+            text	a text at column 70, row 6, 14 by 1 cells leaves its parent, a column at column 70, row 6, 10 by 1 cells	48 8 8 3	
+  alert		2 12 56 1	
+  status		2 13 56 1	
+  toolbar		2 14 56 4	
+    button	Look for running apps	2 14 19 1	
+    button	Detach	23 14 8 1	
+    button	Running apps	33 14 13 1	
+    button	Time	48 14 6 1	
+    button	Why it redrew	2 15 13 1	
+    button	Boxes	17 15 7 1	
+    button	Commands	26 15 11 1	
+    button	Facts	39 15 6 1	
+    button	Effects and jobs	2 16 14 1	
+    button	Taste	18 16 7 1	unavailable (It is showing)
+    button	Ask again	27 16 10 1	
+    button	Undo	39 16 13 1	unavailable (Nothing to undo)
+    button	Redo	2 17 19 1	unavailable (Nothing to redo)
+    button	Open the palette	23 17 15 1	

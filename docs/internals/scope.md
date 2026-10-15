@@ -1,6 +1,6 @@
 # Scope, small
 
-Scope has two halves: a recorder inside every app (`kernel::scope`) and a window of its own (`crates/scope`) that attaches to a running app. The small version records what each frame cost and why it was drawn, and shows Time and Why it redrew. Item 19 adds the asks: boxes, commands, facts, effects and jobs, and overlays drawn in the app. The rest of spec §13.6 (rewind, editing facts, taste) is still to come.
+Scope has two halves: a recorder inside every app (`kernel::scope`) and a window of its own (`crates/scope`) that attaches to a running app. The small version records what each frame cost and why it was drawn, and shows Time and Why it redrew. Item 19 adds the asks: boxes, commands, facts, effects and jobs, taste, and overlays drawn in the app. The rest of spec §13.6 (rewind, editing facts) is still to come.
 
 ## The recorder
 
@@ -21,6 +21,8 @@ The wire runs both ways. A second thread reads what Scope writes, one ask a line
 Why a box is its size is worked out when asked, not recorded during layout, so layout pays nothing for it: `Layout::explain` compares the box with what the code asked for (fixed columns, least and most), what its content wants (`size`, `rows`) and what its parent gave. It reads the laid-out tree, so it names the outcome and its nearest reason, not the whole chain of decisions.
 
 Facts and effects are answered differently from boxes, because they grow with the data. Facts are copied (lists share their chunks, so the copy is cheap), turned into a value and written as lines on a thread of their own, which wakes the window when the answer is ready; the answer goes out after the next frame. The lines are `fact <depth> <name> <value>`, a list's items named by their place, cut at 5,000. Effects come from a ring of the last 200 the runner started, kept as each starts and stamped when its job sends back or stops: `effect <kind> <what> <seconds ago> <ms taken> <outcome>`. Scope reads every answer on its reading thread too, so its own main thread only swaps in a finished list.
+
+Taste laws that judge one laid-out tree live in `kernel::taste`, pure functions from a tree to the boxes that break them. Assay calls them over every state of every app and reports the first in each; the runner calls them when Scope asks, answering `flaw <law> <file:line> <said>`, and while the taste overlay is on, outlining each such box in the danger ink at twice the hairline. Assay depends on the kernel, so a law that the running app must also judge has to live below it.
 
 The overlays are quads that belong to no node, kept in their own slot of the topmost kept layer (`Kept::loose`), so turning one on or off rewrites only those quads. The grid is the same corner marks Specimen draws; the outlines are a hairline in the link ink around every box with an area. While an overlay is on it is redrawn with every frame, a cost that grows with the boxes on screen, not with the data.
 

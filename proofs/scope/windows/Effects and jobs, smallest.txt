@@ -1,4 +1,4 @@
-window		0 0 70 15	
+window		0 0 70 16	
   page	Effects and jobs: To do	0 0 70 10	
     text	What the app asked for lately, newest first: files written, links opened, jobs started, and how long each took.	2 3 66 2	muted
     list		2 6 66 3	3 items
@@ -28,7 +28,7 @@ window		0 0 70 15
             text	done	56 8 10 1	
   alert		2 10 66 1	
   status		2 11 66 1	
-  toolbar		2 12 66 3	
+  toolbar		2 12 66 4	
     button	Look for running apps	2 12 19 1	
     button	Detach	23 12 8 1	
     button	Running apps	33 12 13 1	
@@ -38,7 +38,8 @@ window		0 0 70 15
     button	Commands	26 13 11 1	
     button	Facts	39 13 6 1	
     button	Effects and jobs	47 13 14 1	unavailable (It is showing)
-    button	Ask again	2 14 10 1	
-    button	Undo	14 14 13 1	unavailable (Nothing to undo)
-    button	Redo	29 14 19 1	unavailable (Nothing to redo)
-    button	Open the palette	50 14 15 1	
+    button	Taste	2 14 7 1	
+    button	Ask again	11 14 10 1	
+    button	Undo	23 14 13 1	unavailable (Nothing to undo)
+    button	Redo	38 14 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 15 15 1	

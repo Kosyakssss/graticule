@@ -138,7 +138,7 @@ impl Window {
     fn ask(&mut self) {
         let Some(line) = &mut self.line else { return };
         let facts = &self.runner.facts;
-        let overlay = Overlay { grid: facts.grid, boxes: facts.outlines };
+        let overlay = Overlay { grid: facts.grid, boxes: facts.outlines, taste: facts.marks };
         let mut asks = Vec::new();
         if overlay != line.overlay {
             line.overlay = overlay;
@@ -152,6 +152,7 @@ impl Window {
                 View::Commands => asks.push(Ask::Commands),
                 View::Facts => asks.push(Ask::Facts),
                 View::Effects => asks.push(Ask::Effects),
+                View::Taste => asks.push(Ask::Taste),
                 _ => {}
             }
         }

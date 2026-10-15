@@ -42,6 +42,7 @@ pub mod scope;
 pub mod search;
 pub mod shell;
 pub mod table;
+pub mod taste;
 pub mod text;
 pub mod time;
 pub mod tree;

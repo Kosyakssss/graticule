@@ -1,4 +1,4 @@
-window		0 0 38 19	
+window		0 0 38 20	
   page	Why it redrew: To do	0 0 38 10	
     text	Of the last 40 frames: scrolling 10, a thread waking it 10, a key 10, the pointer moving 10.	2 3 34 2	
     list		2 6 34 3	40 items
@@ -20,7 +20,7 @@ window		0 0 38 19
             text	a thread waking it	26 7 8 2	
   alert		2 10 34 1	
   status		2 11 34 1	
-  toolbar		2 12 34 7	
+  toolbar		2 12 34 8	
     button	Look for running apps	2 12 19 1	
     button	Detach	23 12 8 1	
     button	Running apps	2 13 13 1	
@@ -30,7 +30,8 @@ window		0 0 38 19
     button	Commands	2 15 11 1	
     button	Facts	15 15 6 1	
     button	Effects and jobs	2 16 14 1	
-    button	Ask again	18 16 10 1	unavailable (Time and redraws arrive by themselves)
-    button	Undo	2 17 13 1	unavailable (Nothing to undo)
-    button	Redo	17 17 19 1	unavailable (Nothing to redo)
-    button	Open the palette	2 18 15 1	
+    button	Taste	18 16 7 1	
+    button	Ask again	2 17 10 1	unavailable (Time and redraws arrive by themselves)
+    button	Undo	14 17 13 1	unavailable (Nothing to undo)
+    button	Redo	2 18 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 19 15 1	

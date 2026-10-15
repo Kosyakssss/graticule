@@ -32,7 +32,8 @@ window		0 0 24 25
     button	Commands	11 18 11 1	
     button	Facts	2 19 6 1	unavailable (It is showing)
     button	Effects and jobs	2 20 14 1	
-    button	Ask again	2 21 10 1	
+    button	Taste	2 21 7 1	
+    button	Ask again	11 21 10 1	
     button	Undo	2 22 13 1	unavailable (Nothing to undo)
     button	Redo	2 23 19 1	unavailable (Nothing to redo)
     button	Open the palette	2 24 15 1	

@@ -44,11 +44,17 @@ pub struct Scope {
     #[session]
     reading_errands: Selection<Errand>,
     #[session]
+    flaws: List<Flaw>,
+    #[session]
+    reading_flaws: Selection<Flaw>,
+    #[session]
     pub asked: u32,
     #[session]
     pub grid: bool,
     #[session]
     pub outlines: bool,
+    #[session]
+    pub marks: bool,
 }
 
 #[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
@@ -61,6 +67,7 @@ pub enum View {
     Commands,
     Facts,
     Effects,
+    Taste,
 }
 
 /// A block of lines the attached app sent in answer to an ask, read on Scope's reading thread.
@@ -70,6 +77,7 @@ pub enum Answer {
     Commands(Vec<Listed>),
     Facts(Vec<Fact>),
     Effects(Vec<Errand>),
+    Taste(Vec<Flaw>),
 }
 
 impl Answer {
@@ -91,8 +99,27 @@ impl Answer {
             "commands" => Some(Answer::Commands(numbered().filter_map(|(l, n)| Listed::read(n, l)).collect())),
             "facts" => Some(Answer::Facts(numbered().filter_map(|(l, n)| Fact::read(n, l)).collect())),
             "effects" => Some(Answer::Effects(numbered().filter_map(|(l, n)| Errand::read(n, l)).collect())),
+            "taste" => Some(Answer::Taste(numbered().filter_map(|(l, n)| Flaw::read(n, l)).collect())),
             _ => None,
         }
+    }
+}
+
+/// A box on the attached app's screen that breaks a taste law: which law, the line of code that made the box, and what is wrong.
+#[derive(Facts)]
+pub struct Flaw {
+    #[key]
+    id: Key<Flaw>,
+    pub law: String,
+    pub at: String,
+    pub said: String,
+}
+
+impl Flaw {
+    /// Reads a `flaw` line of the wire.
+    pub fn read(n: u64, line: &str) -> Option<Flaw> {
+        let mut f = line.strip_prefix("flaw\t")?.split('\t');
+        Some(Flaw { id: Key::fixed(n), law: f.next()?.to_string(), at: f.next()?.to_string(), said: f.next().unwrap_or_default().to_string() })
     }
 }
 
@@ -281,6 +308,8 @@ pub enum Cmd {
     Facts,
     #[label("Effects and jobs")]
     Effects,
+    #[label("Taste")]
+    Taste,
     #[label("Ask again")]
     Again,
     #[internal]
@@ -330,6 +359,10 @@ impl App for Scope {
                 Available::Yes => here(View::Effects),
                 no => no,
             },
+            Cmd::Taste => match attached() {
+                Available::Yes => here(View::Taste),
+                no => no,
+            },
             Cmd::Again => kernel::no_if(matches!(self.view, View::Apps | View::Time | View::Redraws), Message::from("Time and redraws arrive by themselves")),
             Cmd::Look | Cmd::Found(_) | Cmd::Launched(_) | Cmd::Arrived(_) | Cmd::Lost | Cmd::Answered(_) => Available::Yes,
         }
@@ -357,6 +390,7 @@ impl App for Scope {
                 let _ = self.commands.replace([]);
                 let _ = self.facts.replace([]);
                 let _ = self.errands.replace([]);
+                let _ = self.flaws.replace([]);
                 self.view = View::Time;
                 Outcome::Changed
             }
@@ -388,12 +422,17 @@ impl App for Scope {
                 self.asked += 1;
                 self.show(View::Effects)
             }
+            Cmd::Taste => {
+                self.asked += 1;
+                self.show(View::Taste)
+            }
             Cmd::Answered(answer) => {
                 let _ = match answer {
                     Answer::Boxes(boxes) => self.boxes.replace(boxes),
                     Answer::Commands(commands) => self.commands.replace(commands),
                     Answer::Facts(facts) => self.facts.replace(facts),
                     Answer::Effects(errands) => self.errands.replace(errands),
+                    Answer::Taste(flaws) => self.flaws.replace(flaws),
                 };
                 Outcome::Changed
             }
@@ -490,6 +529,10 @@ impl App for Scope {
         let errands = errands.iter().zip(1..).filter_map(|(l, n)| Errand::read(n, l)).collect();
         let read_facts = Scope { facts, ..attached(View::Facts) };
         let effects = Scope { errands, ..attached(View::Effects) };
+        let flaws = ["flaw\ton the grid\tapps/todo/src/main.rs:104\ta text at column 70, row 6, 14 by 1 cells leaves its parent, a column at column 70, row 6, 10 by 1 cells"];
+        let flaws = flaws.iter().zip(1..).filter_map(|(l, n)| Flaw::read(n, l)).collect();
+        let tasteful = Scope { marks: true, ..attached(View::Taste) };
+        let flawed = Scope { flaws, marks: true, ..attached(View::Taste) };
         kernel::States::new()
             .add("No apps", Scope::default())
             .add("Two apps running", running)
@@ -499,6 +542,8 @@ impl App for Scope {
             .add("Commands", listed)
             .add("Facts", read_facts)
             .add("Effects and jobs", effects)
+            .add("Taste", tasteful)
+            .add("A taste law broken", flawed)
     }
 
     fn view(&self, ui: &mut Ui<Cmd>) {
@@ -509,6 +554,7 @@ impl App for Scope {
             (View::Commands, Some(_)) => self.listed(ui),
             (View::Facts, Some(_)) => self.read_facts(ui),
             (View::Effects, Some(_)) => self.effects(ui),
+            (View::Taste, Some(_)) => self.taste(ui),
             _ => self.running(ui),
         }
     }
@@ -656,6 +702,24 @@ impl Scope {
                     ui.column(14, |ui| ui.mono(format!("{} s ago", e.ago)));
                     ui.column(16, |ui| ui.mono(format!("{} {} ms", if e.outcome == "running" { "for" } else { "took" }, e.took)));
                     ui.column(10, |ui| ui.text(&e.outcome));
+                });
+            });
+        });
+    }
+
+    fn taste(&self, ui: &mut Ui<Cmd>) {
+        ui.page(Message::plain(format!("Taste: {}", self.name())), |ui| {
+            ui.muted("The boxes on the app's screen that break a taste law, as Assay judges them.");
+            ui.switch("Mark each one on the app", Scope::marks);
+            if self.flaws.is_empty() {
+                ui.empty(Message::from("Nothing on the app's screen breaks a taste law."), Cmd::Again);
+                return;
+            }
+            ui.list(&self.flaws, Scope::reading_flaws, |ui, f| {
+                ui.columns(|ui| {
+                    ui.column(14, |ui| ui.text(&f.law));
+                    ui.column(28, |ui| ui.mono(&f.at));
+                    ui.column(kernel::Fill, |ui| ui.text(&f.said));
                 });
             });
         });

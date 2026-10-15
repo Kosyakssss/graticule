@@ -732,7 +732,7 @@ impl<A: App> Runner<A> {
 
     fn overlay_on(&mut self, p: &mut Painter) {
         let overlay = self.overlay;
-        if !overlay.grid && !overlay.boxes {
+        if !overlay.grid && !overlay.boxes && !overlay.taste {
             if self.overlaid {
                 self.kept.loose(&[]);
                 self.overlaid = false;
@@ -749,6 +749,13 @@ impl<A: App> Runner<A> {
             let (t, color) = (p.m.hair(), p.theme.link);
             for n in self.tree.nodes.iter().skip(1).filter(|n| n.area.cols > 0 && n.area.rows > 0) {
                 let r = p.rect(n.area);
+                crate::components::border(p, r, t, color);
+            }
+        }
+        if overlay.taste {
+            let (t, color) = (p.m.hair() * 2.0, p.theme.danger);
+            for flaw in crate::taste::off_grid(&self.tree, p.m.screen()) {
+                let r = p.rect(self.tree.nodes[flaw.node as usize].area);
                 crate::components::border(p, r, t, color);
             }
         }
@@ -781,6 +788,16 @@ impl<A: App> Runner<A> {
         }
         (self.stack, self.widths) = layout.finish();
         out.push_str("boxes\tdone\n");
+        out
+    }
+
+    fn taste_answer(&self, window: crate::grid::Area) -> String {
+        let mut out = String::from("taste\tbegin\n");
+        for flaw in crate::taste::off_grid(&self.tree, window) {
+            let n = self.tree.nodes[flaw.node as usize];
+            let _ = writeln!(out, "flaw\ton the grid\t{}:{}\t{}", n.at.file().replace('\\', "/"), n.at.line(), flaw.said);
+        }
+        out.push_str("taste\tdone\n");
         out
     }
 
@@ -4383,6 +4400,7 @@ impl<A: App> Face for Runner<A> {
                 crate::scope::Ask::Boxes => self.boxes_answer(p),
                 crate::scope::Ask::Commands => self.commands_answer(),
                 crate::scope::Ask::Effects => self.effects_answer(),
+                crate::scope::Ask::Taste => self.taste_answer(p.m.screen()),
                 crate::scope::Ask::Facts => {
                     self.facts_asked();
                     continue;

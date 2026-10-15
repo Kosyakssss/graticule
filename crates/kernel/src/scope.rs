@@ -101,11 +101,12 @@ impl Stamp {
     }
 }
 
-/// What Scope draws over the app's own window: the grid's corners, and the outline of every box.
+/// What Scope draws over the app's own window: the grid's corners, the outline of every box, and the boxes that break a taste law.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Overlay {
     pub grid: bool,
     pub boxes: bool,
+    pub taste: bool,
 }
 
 /// What Scope asks the attached app for. The app answers after its next frame, in lines of its own.
@@ -119,6 +120,8 @@ pub enum Ask {
     Facts,
     /// The effects the app asked for lately and the jobs still running, with their timings.
     Effects,
+    /// The boxes on screen that break a taste law, and why.
+    Taste,
     /// Draw this over the window.
     Overlay(Overlay),
 }
@@ -131,7 +134,8 @@ impl Ask {
             Ask::Commands => "ask\tcommands\n".into(),
             Ask::Facts => "ask\tfacts\n".into(),
             Ask::Effects => "ask\teffects\n".into(),
-            Ask::Overlay(o) => format!("ask\toverlay\t{}\t{}\n", u8::from(o.grid), u8::from(o.boxes)),
+            Ask::Taste => "ask\ttaste\n".into(),
+            Ask::Overlay(o) => format!("ask\toverlay\t{}\t{}\t{}\n", u8::from(o.grid), u8::from(o.boxes), u8::from(o.taste)),
         }
     }
 
@@ -143,7 +147,8 @@ impl Ask {
             "commands" => Some(Ask::Commands),
             "facts" => Some(Ask::Facts),
             "effects" => Some(Ask::Effects),
-            "overlay" => Some(Ask::Overlay(Overlay { grid: f.next()? == "1", boxes: f.next()? == "1" })),
+            "taste" => Some(Ask::Taste),
+            "overlay" => Some(Ask::Overlay(Overlay { grid: f.next()? == "1", boxes: f.next()? == "1", taste: f.next() == Some("1") })),
             _ => None,
         }
     }

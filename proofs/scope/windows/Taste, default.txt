@@ -1,0 +1,24 @@
+window		0 0 120 30	
+  page	Taste: To do	0 0 120 26	
+    text	The boxes on the app's screen that break a taste law, as Assay judges them.	2 3 116 1	muted
+    switch	Mark each one on the app	2 5 116 1	
+    empty		2 7 116 3	
+      text	Nothing on the app's screen breaks a taste law.	2 7 116 1	muted
+      button	Ask again	2 9 12 1	
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Look for running apps	2 28 19 1	
+    button	Detach	23 28 8 1	
+    button	Running apps	33 28 13 1	
+    button	Time	48 28 6 1	
+    button	Why it redrew	56 28 13 1	
+    button	Boxes	71 28 7 1	
+    button	Commands	80 28 11 1	
+    button	Facts	93 28 6 1	
+    button	Effects and jobs	101 28 14 1	
+    button	Taste	2 29 7 1	unavailable (It is showing)
+    button	Ask again	11 29 10 1	
+    button	Undo	23 29 13 1	unavailable (Nothing to undo)
+    button	Redo	38 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	59 29 15 1	

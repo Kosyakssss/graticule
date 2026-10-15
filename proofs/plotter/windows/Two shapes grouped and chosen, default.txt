@@ -1,17 +1,18 @@
 window		0 0 120 30	
   page	Plotter	0 0 120 24	
     group		2 3 116 1	
-      group		2 3 46 1	
+      group		2 3 54 1	
         toggle button	Choose	2 3 9 1	unavailable (Choosing already)
         toggle button	Rectangle	11 3 12 1	
         toggle button	Ellipse	23 3 10 1	
         toggle button	Arrow	33 3 8 1	
         toggle button	Draw	41 3 7 1	
-      group		50 3 16 1	
-        text	Ink	50 3 3 1	
-        select	Ink	55 3 11 1	
-      button	Remove	68 3 9 1	
-      button	Show everything	79 3 18 1	
+        toggle button	Frame	48 3 8 1	
+      group		58 3 16 1	
+        text	Ink	58 3 3 1	
+        select	Ink	63 3 11 1	
+      button	Remove	76 3 9 1	
+      button	Show everything	87 3 18 1	
     split		2 5 116 16	
       pane	Board	2 5 87 16	
         canvas	Board, 9 shapes	2 5 87 16	
@@ -32,18 +33,19 @@ window		0 0 120 30
     button	Ellipse	28 26 9 1	
     button	Arrow	39 26 9 1	
     button	Draw	50 26 8 1	
-    button	Write…	60 26 10 1	
-    button	Remove	72 26 16 1	
-    button	Move left	90 26 11 1	
-    button	Move right	103 26 12 1	
-    button	Move up	2 27 11 1	
-    button	Move down	15 27 13 1	
-    button	Copy	30 27 13 1	
-    button	Paste	45 27 14 1	
-    button	Import…	61 27 9 1	
-    button	Lock	72 27 6 1	
-    button	Unlock	80 27 8 1	
-    button	Group	90 27 14 1	
+    button	Frame	60 26 9 1	
+    button	Write…	71 26 10 1	
+    button	Remove	83 26 16 1	
+    button	Move left	101 26 11 1	
+    button	Move right	2 27 12 1	
+    button	Move up	16 27 11 1	
+    button	Move down	29 27 13 1	
+    button	Copy	44 27 13 1	
+    button	Paste	59 27 14 1	
+    button	Import…	75 27 9 1	
+    button	Lock	86 27 6 1	
+    button	Unlock	94 27 8 1	
+    button	Group	104 27 14 1	
     button	Ungroup	2 28 22 1	
     button	Choose everything	26 28 23 1	
     button	Bring to front	51 28 12 1	

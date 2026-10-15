@@ -3,6 +3,7 @@ r: rect
 o: ellipse
 a: arrow
 d: draw
+f: frame
 t: write
 delete: remove
 left: move-left

@@ -30,6 +30,8 @@ pub struct Shape {
     pub locked: bool,
     /// The group it is in, if any.
     pub group: Option<Key<Group>>,
+    /// The frame it is in, if any.
+    pub frame: Option<Key<Shape>>,
 }
 
 /// Shapes held together, so choosing, moving, copying or deleting one does it to them all. A group may sit in another, and always holds at least two things: shapes, groups or both.
@@ -58,6 +60,8 @@ pub enum Kind {
     /// A freehand stroke: its points as x and y in turn, relative to the shape's corner.
     Draw(Vec<f64>),
     Arrow,
+    /// A named box that holds the shapes put in it: they move, copy and go with it, and what of them reaches past its edge is hidden. It is taken by its edge, so what it holds can still be clicked.
+    Frame(String),
 }
 
 /// How tall a line of a text shape is, in page units.
@@ -102,12 +106,12 @@ pub enum End {
 
 impl Shape {
     pub fn new(id: Key<Shape>, kind: Kind, bounds: Bounds) -> Self {
-        Shape { id, index: String::new(), x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, kind, ink: Ink::default(), locked: false, group: None }
+        Shape { id, index: String::new(), x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, kind, ink: Ink::default(), locked: false, group: None, frame: None }
     }
 
     /// An arrow from `from` to `to`.
     pub fn arrow(id: Key<Shape>, from: Point, to: Point) -> Self {
-        Shape { id, index: String::new(), x: from.x, y: from.y, w: to.x - from.x, h: to.y - from.y, kind: Kind::Arrow, ink: Ink::default(), locked: false, group: None }
+        Shape { id, index: String::new(), x: from.x, y: from.y, w: to.x - from.x, h: to.y - from.y, kind: Kind::Arrow, ink: Ink::default(), locked: false, group: None, frame: None }
     }
 
     pub fn bounds(&self) -> Bounds {
@@ -128,6 +132,7 @@ impl Shape {
             Kind::Rect | Kind::Text(_) => Geometry::Rect(b),
             Kind::Ellipse => Geometry::Ellipse(b),
             Kind::Arrow => Geometry::Line(vec![self.end(End::Start), self.end(End::End)]),
+            Kind::Frame(_) => Geometry::Line(vec![Point::new(b.x, b.y), Point::new(b.right(), b.y), Point::new(b.right(), b.bottom()), Point::new(b.x, b.bottom()), Point::new(b.x, b.y)]),
             Kind::Draw(points) => Geometry::Line(points.chunks_exact(2).map(|p| Point::new(self.x + p[0], self.y + p[1])).collect()),
         }
     }
@@ -171,21 +176,79 @@ impl Board {
         self.shapes.push(shape)
     }
 
-    /// Gives a text shape new words, as wide as they need. Nothing happens to a locked shape, a shape that holds no text, or words it already holds.
+    /// Gives a text shape new words, as wide as they need, or a frame a new name. Nothing happens to a locked shape, a shape that holds no words, or words it already holds.
     pub fn write(&mut self, key: Key<Shape>, words: &str) -> Outcome {
-        let writable = self.shapes.find(key).is_some_and(|s| !s.locked && matches!(&s.kind, Kind::Text(t) if t != words));
+        let writable = self.shapes.find(key).is_some_and(|s| !s.locked && matches!(&s.kind, Kind::Text(t) | Kind::Frame(t) if t != words));
         if !writable {
             return Outcome::Nothing;
         }
-        self.shapes.change(key, |s| {
-            s.kind = Kind::Text(words.to_string());
-            s.w = text_width(words);
+        self.shapes.change(key, |s| match &mut s.kind {
+            Kind::Frame(name) => *name = words.to_string(),
+            _ => {
+                s.kind = Kind::Text(words.to_string());
+                s.w = text_width(words);
+            }
         })
+    }
+
+    /// `keys` and every shape in the frames among them, however deep, except what frames that `through` turns down hold.
+    pub(crate) fn carried(&self, keys: &[Key<Shape>], through: impl Fn(&Shape) -> bool) -> Vec<Key<Shape>> {
+        let mut seen = HashSet::new();
+        let mut carried = Vec::new();
+        let mut due: Vec<Key<Shape>> = keys.iter().rev().copied().collect();
+        while let Some(key) = due.pop() {
+            let Some(shape) = self.shapes.find(key).filter(|_| seen.insert(key)) else { continue };
+            carried.push(key);
+            if matches!(shape.kind, Kind::Frame(_)) && through(shape) {
+                due.extend(self.shapes.linked(Shape::frame, key).map(|s| s.id));
+            }
+        }
+        carried
+    }
+
+    /// Every shape in `keys` and every shape their frames hold: what a move or a copy takes along.
+    pub fn contents(&self, keys: &[Key<Shape>]) -> Vec<Key<Shape>> {
+        self.carried(keys, |_| true)
+    }
+
+    /// Puts shapes in the frame `into`, or on the board itself, leaving those whose frame is among `keys`, since they go with it. A frame can't go inside itself or what it holds, and only a frame holds shapes.
+    pub fn reframe(&mut self, keys: &[Key<Shape>], into: Option<Key<Shape>>) -> Outcome {
+        let mine: HashSet<Key<Shape>> = keys.iter().copied().collect();
+        if let Some(f) = into
+            && (!self.shapes.find(f).is_some_and(|s| matches!(s.kind, Kind::Frame(_))) || self.frames(Some(f)).iter().any(|a| mine.contains(a)))
+        {
+            return Outcome::Nothing;
+        }
+        let mut outcome = Outcome::Nothing;
+        for &key in keys {
+            let loose = self.shapes.find(key).is_some_and(|s| !s.locked && s.frame != into && !s.frame.is_some_and(|f| mine.contains(&f)));
+            if loose {
+                outcome = self.shapes.change(key, |s| s.frame = into);
+            }
+        }
+        outcome
+    }
+
+    /// The frames `frame` sits in, from itself outward.
+    pub fn frames(&self, mut frame: Option<Key<Shape>>) -> Vec<Key<Shape>> {
+        let mut found = Vec::new();
+        while let Some(f) = frame.filter(|f| !found.contains(f)) {
+            found.push(f);
+            frame = self.shapes.find(f).and_then(|s| s.frame);
+        }
+        found
+    }
+
+    /// The box a shape is seen through: where all the frames it sits in overlap, or `None` when it is in none.
+    pub fn window(&self, shape: &Shape) -> Option<Bounds> {
+        self.frames(shape.frame).into_iter().filter_map(|f| self.shapes.find(f)).map(|f| f.bounds()).reduce(|a, b| a.overlap(&b))
     }
 
     /// A board of only `keys`, the bindings between them and the groups they are in: what copying them takes. Making it records nothing, even inside a command, since it is a copy and not a change.
     pub fn excerpt(&self, keys: &[Key<Shape>]) -> Board {
-        let inside: HashSet<Key<Shape>> = keys.iter().copied().filter(|k| self.shapes.has(*k)).collect();
+        let keys = self.contents(keys);
+        let keys = keys.as_slice();
+        let inside: HashSet<Key<Shape>> = keys.iter().copied().collect();
         let apart = ledger::Transaction::begin();
         let mut part = Board::default();
         let mut groups = HashSet::new();
@@ -210,11 +273,10 @@ impl Board {
         for g in other.groups.iter() {
             let _ = self.groups.push(Group { id: group(Some(g.id)).unwrap_or(g.id), group: group(g.group) });
         }
-        let mut made = Vec::new();
-        for shape in other.stacked() {
-            let id = Key::from_raw(key());
-            let _ = self.add(Shape { id, x: shape.x + dx, y: shape.y + dy, group: group(shape.group), ..shape.clone() });
-            made.push((shape.id, id));
+        let made: Vec<(Key<Shape>, Key<Shape>)> = other.stacked().into_iter().map(|s| (s.id, Key::from_raw(key()))).collect();
+        let renamed = |old: Key<Shape>| made.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
+        for (shape, &(_, id)) in other.stacked().into_iter().zip(&made) {
+            let _ = self.add(Shape { id, x: shape.x + dx, y: shape.y + dy, group: group(shape.group), frame: shape.frame.and_then(renamed), ..shape.clone() });
         }
         let new = |old: Key<Shape>| made.iter().find(|(o, _)| *o == old).map(|(_, n)| *n);
         for b in other.bindings.iter() {
@@ -352,8 +414,10 @@ impl Board {
         outcome
     }
 
-    /// Moves shapes by `dx` and `dy`, leaving locked ones where they are.
+    /// Moves shapes by `dx` and `dy`, with what their frames hold, leaving locked ones where they are; a locked frame keeps what it holds still too.
     pub fn translate(&mut self, keys: &[Key<Shape>], dx: f64, dy: f64) -> Outcome {
+        let keys = self.carried(keys, |s| !s.locked);
+        let keys = keys.as_slice();
         let mut outcome = Outcome::Nothing;
         for &key in keys {
             if self.shapes.find(key).is_some_and(|s| !s.locked) && (dx != 0.0 || dy != 0.0) {
@@ -382,8 +446,10 @@ impl Board {
         outcome
     }
 
-    /// Takes shapes off the board, with every binding to or from them. An arrow whose target goes keeps its end where it was.
+    /// Takes shapes off the board, with what their frames hold and every binding to or from them. An arrow whose target goes keeps its end where it was.
     pub fn delete(&mut self, keys: &[Key<Shape>]) -> Outcome {
+        let keys = self.contents(keys);
+        let keys = keys.as_slice();
         for b in self.touching(keys) {
             let _ = self.bindings.remove(b);
         }
@@ -401,7 +467,9 @@ impl Board {
 
     /// Holds an arrow's end to a shape at the point `at`, which the end moves to. An end already held is held anew. Arrows can't be held to, so moving one end never pulls on another arrow.
     pub fn bind(&mut self, id: Key<Binding>, arrow: Key<Shape>, end: End, to: Key<Shape>, at: Point) -> Outcome {
-        let (Some(target), true) = (self.shapes.find(to).filter(|t| t.kind != Kind::Arrow), self.shapes.find(arrow).is_some_and(|a| a.kind == Kind::Arrow)) else { return Outcome::Nothing };
+        let (Some(target), true) = (self.shapes.find(to).filter(|t| !matches!(t.kind, Kind::Arrow | Kind::Frame(_))), self.shapes.find(arrow).is_some_and(|a| a.kind == Kind::Arrow)) else {
+            return Outcome::Nothing;
+        };
         let b = target.bounds();
         let fraction = |v: f64, start: f64, size: f64| if size == 0.0 { 0.5 } else { ((v - start) / size).clamp(0.0, 1.0) };
         let (ax, ay) = (fraction(at.x, b.x, b.w), fraction(at.y, b.y, b.h));

@@ -86,6 +86,12 @@ impl Bounds {
         o.x >= self.x && o.y >= self.y && o.right() <= self.right() && o.bottom() <= self.bottom()
     }
 
+    /// Where it and `o` overlap, which is empty, at the nearer corner, when they don't.
+    pub fn overlap(&self, o: &Bounds) -> Bounds {
+        let (x, y) = (self.x.max(o.x), self.y.max(o.y));
+        Bounds { x, y, w: (self.right().min(o.right()) - x).max(0.0), h: (self.bottom().min(o.bottom()) - y).max(0.0) }
+    }
+
     pub fn union(&self, o: &Bounds) -> Bounds {
         let (x, y) = (self.x.min(o.x), self.y.min(o.y));
         Bounds { x, y, w: self.right().max(o.right()) - x, h: self.bottom().max(o.bottom()) - y }

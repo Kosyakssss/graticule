@@ -3,7 +3,7 @@ use std::cell::Cell;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use graticule::kernel::canvas::{Raster, Scale, Weight};
+use graticule::kernel::canvas::{self, Raster, Scale, Weight};
 use graticule::kernel::ink::{Appearance, Theme};
 use graticule::kernel::{Camera, Drag, Drawing};
 use graticule::prelude::*;
@@ -149,7 +149,7 @@ impl Layers {
             .map(|shapes| {
                 let mut drawing = Drawing::new();
                 for shape in shapes {
-                    draw(&mut drawing, shape);
+                    draw(&mut drawing, shape, board.window(shape));
                 }
                 (shapes.iter().map(|s| s.id).collect(), Arc::new(drawing))
             })
@@ -170,6 +170,8 @@ enum Cmd {
     Arrow,
     #[label("Draw")]
     Draw,
+    #[label("Frame")]
+    Frame,
     #[label("Write…")]
     Write { words: String },
     #[label("Remove")]
@@ -246,6 +248,7 @@ impl App for Whiteboard {
             Cmd::Ellipse => no_if(self.tool == Tool::Ellipse, t!("Drawing ellipses already")),
             Cmd::Arrow => no_if(self.tool == Tool::Arrow, t!("Drawing arrows already")),
             Cmd::Draw => no_if(self.tool == Tool::Draw, t!("Drawing freehand already")),
+            Cmd::Frame => no_if(self.tool == Tool::Frame, t!("Drawing frames already")),
             Cmd::Write { .. } => no_if(self.chosen.len() > 1, t!("Choose one shape at most")),
             Cmd::Paste | Cmd::Copied(_) | Cmd::Pasted(_) | Cmd::Import(_) | Cmd::Laid(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
         }
@@ -258,6 +261,7 @@ impl App for Whiteboard {
             Cmd::Ellipse => self.hold(Tool::Ellipse),
             Cmd::Arrow => self.hold(Tool::Arrow),
             Cmd::Draw => self.hold(Tool::Draw),
+            Cmd::Frame => self.hold(Tool::Frame),
             Cmd::MoveLeft => self.nudge(-STEP, 0.0, cx),
             Cmd::MoveRight => self.nudge(STEP, 0.0, cx),
             Cmd::MoveUp => self.nudge(0.0, -STEP, cx),
@@ -380,6 +384,9 @@ impl App for Whiteboard {
                 let mut intent = Intent::of(&self.board, &self.index_now(), &self.chosen, self.tool, &gesture(&drag), self.camera.zoom);
                 if let Intent::Create { shape, .. } = &mut intent {
                     shape.ink = self.pen.ink();
+                    if let Kind::Frame(name) = &mut shape.kind {
+                        *name = t!("Frame").to_string();
+                    }
                 }
                 let made = matches!(intent, Intent::Create { .. });
                 let outcome = self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw());
@@ -409,6 +416,7 @@ impl App for Whiteboard {
                     ui.toggle(self.tool == Tool::Ellipse, Cmd::Ellipse);
                     ui.toggle(self.tool == Tool::Arrow, Cmd::Arrow);
                     ui.toggle(self.tool == Tool::Draw, Cmd::Draw);
+                    ui.toggle(self.tool == Tool::Frame, Cmd::Frame);
                 });
                 ui.select(t!("Ink"), Whiteboard::pen);
                 ui.button(Cmd::Remove);
@@ -426,6 +434,7 @@ impl App for Whiteboard {
                         let moved = intent.as_ref().map(|i| i.preview(&self.board)).unwrap_or_default();
                         let moving: HashSet<Key<Shape>> = moved.iter().map(|m| m.id).collect();
                         let shown = |key: Key<Shape>| moved.iter().find(|m| m.id == key).or(self.board.shapes.find(key));
+                        let window = |shape: &Shape| self.board.frames(shape.frame).into_iter().filter_map(shown).map(|f| f.bounds()).reduce(|a, b| a.overlap(&b));
                         let small = self.board.shapes.len() <= SMALL;
                         match self.layers.get().filter(|_| !(small && (self.layers.coming() || self.index.coming()))) {
                             Some(layers) => {
@@ -433,7 +442,7 @@ impl App for Whiteboard {
                                     if keys.iter().any(|k| moving.contains(k)) {
                                         let mut redrawn = Drawing::new();
                                         for shape in keys.iter().filter_map(|k| shown(*k)) {
-                                            draw(&mut redrawn, shape);
+                                            draw(&mut redrawn, shape, window(shape));
                                         }
                                         canvas.drawing(&Arc::new(redrawn));
                                     } else {
@@ -443,13 +452,14 @@ impl App for Whiteboard {
                             }
                             None if small => {
                                 for shape in self.board.stacked() {
-                                    draw(canvas, shown(shape.id).unwrap_or(shape));
+                                    let shape = shown(shape.id).unwrap_or(shape);
+                                    draw(canvas, shape, window(shape));
                                 }
                             }
                             None => {}
                         }
                         for shape in moved.iter().filter(|m| !self.board.shapes.has(m.id)) {
-                            draw(canvas, shape);
+                            draw(canvas, shape, window(shape));
                         }
                         let around = match self.around.get().filter(|_| moved.is_empty() && !self.around.coming()) {
                             Some(Chosen(around)) => *around,
@@ -511,6 +521,14 @@ impl App for Whiteboard {
                 w.pen = Pen::Link;
                 w
             })
+            .add("A frame holding two shapes, one reaching past its edge", {
+                let mut w = Whiteboard::diagram();
+                let held: Vec<_> = w.board.stacked().iter().take(2).map(|s| s.id).collect();
+                let frame = Key::fixed(9_001);
+                let _ = w.board.add(Shape::new(frame, Kind::Frame("Plan".into()), Bounds::new(20.0, 20.0, 380.0, 130.0)));
+                let _ = w.board.reframe(&held, Some(frame));
+                w
+            })
             .add("Two shapes grouped and chosen", {
                 let mut w = Whiteboard::diagram();
                 let stacked: Vec<_> = w.board.stacked().iter().take(2).map(|s| s.id).collect();
@@ -543,10 +561,10 @@ impl Whiteboard {
             _ => None,
         };
         let at = match &one {
-            Some(shape) if matches!(shape.kind, Kind::Text(_)) => {
+            Some(shape) if matches!(shape.kind, Kind::Text(_) | Kind::Frame(_)) => {
                 let key = shape.id;
                 return match self.board.write(key, words) {
-                    Outcome::Nothing => cx.say(t!("That text is locked or says this already")),
+                    Outcome::Nothing => cx.say(t!("That is locked or says this already")),
                     written => written,
                 };
             }
@@ -555,7 +573,8 @@ impl Whiteboard {
         };
         let mut shape = Shape::new(Key::default(), Kind::Text(words.to_string()), Bounds::new(at.x, at.y, plotter::text_width(words), plotter::LINE));
         shape.ink = self.pen.ink();
-        let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None };
+        shape.frame = one.and_then(|s| s.frame);
+        let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None, holds: Vec::new() };
         self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw())
     }
 
@@ -602,7 +621,7 @@ impl Whiteboard {
         let at = Point::new(self.camera.x + 40.0, self.camera.y + 40.0);
         let mut shape = Shape::new(Key::default(), Kind::Text(words.clone()), Bounds::new(at.x, at.y, plotter::text_width(&words), plotter::LINE));
         shape.ink = self.pen.ink();
-        let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None };
+        let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None, holds: Vec::new() };
         self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw())
     }
 
@@ -712,7 +731,7 @@ fn picture(board: &Board) -> Vec<u8> {
     let fit = PICTURE_SCALE.min(PICTURE_MOST / area.w.max(area.h));
     let mut drawing = Drawing::new();
     for shape in board.stacked() {
-        draw(&mut drawing, shape);
+        draw(&mut drawing, shape, board.window(shape));
     }
     let space = [area.x as f32, (area.x + area.w) as f32, area.y as f32, (area.y + area.h) as f32];
     let hair = fit as f32;
@@ -720,51 +739,62 @@ fn picture(board: &Board) -> Vec<u8> {
     Raster { id: 0, scale, drawings: vec![Arc::new(drawing)], theme: *Theme::of(Appearance::Light) }.png(14.0 * hair)
 }
 
-fn draw(canvas: &mut Drawing, shape: &Shape) {
+fn draw(canvas: &mut Drawing, shape: &Shape, window: Option<Bounds>) {
     let color = ink(shape.ink);
     let b = Bounds::new(shape.x, shape.y, shape.w, shape.h);
-    match &shape.kind {
-        Kind::Rect => {
-            corners(canvas, b, color);
+    let edge = window.map(|w| (at(w.x, w.y), at(w.right(), w.bottom())));
+    let fit = |mark: &mut canvas::Shape| {
+        if let Some((from, to)) = edge {
+            mark.clip(from, to);
         }
+    };
+    match &shape.kind {
+        Kind::Rect => fit(corners(canvas, b, color)),
         Kind::Ellipse => {
             let (c, rx, ry) = (b.center(), b.w / 2.0, b.h / 2.0);
             let k = 0.552_284_75;
-            canvas
-                .path(|pen| {
-                    pen.move_to(at(c.x + rx, c.y))
-                        .curve_to(at(c.x + rx, c.y + ry * k), at(c.x + rx * k, c.y + ry), at(c.x, c.y + ry))
-                        .curve_to(at(c.x - rx * k, c.y + ry), at(c.x - rx, c.y + ry * k), at(c.x - rx, c.y))
-                        .curve_to(at(c.x - rx, c.y - ry * k), at(c.x - rx * k, c.y - ry), at(c.x, c.y - ry))
-                        .curve_to(at(c.x + rx * k, c.y - ry), at(c.x + rx, c.y - ry * k), at(c.x + rx, c.y))
-                        .close();
-                })
-                .stroke(Weight::Line)
-                .ink(color);
+            let mark = canvas.path(|pen| {
+                pen.move_to(at(c.x + rx, c.y))
+                    .curve_to(at(c.x + rx, c.y + ry * k), at(c.x + rx * k, c.y + ry), at(c.x, c.y + ry))
+                    .curve_to(at(c.x - rx * k, c.y + ry), at(c.x - rx, c.y + ry * k), at(c.x - rx, c.y))
+                    .curve_to(at(c.x - rx, c.y - ry * k), at(c.x - rx * k, c.y - ry), at(c.x, c.y - ry))
+                    .curve_to(at(c.x + rx * k, c.y - ry), at(c.x + rx, c.y - ry * k), at(c.x + rx, c.y))
+                    .close();
+            });
+            fit(mark.stroke(Weight::Line).ink(color));
         }
         Kind::Text(text) => {
-            canvas.text(at(b.x, b.y + b.h / 2.0), text).ink(color);
+            let label = canvas.text(at(b.x, b.y + b.h / 2.0), text).ink(color);
+            if let Some((from, to)) = edge {
+                label.clip(from, to);
+            }
         }
-        Kind::Draw(_) => {
-            canvas.polygon(shape.stroke().unwrap_or_default().iter().map(|p| at(p.x, p.y))).ink(color);
-        }
+        Kind::Draw(_) => fit(canvas.polygon(shape.stroke().unwrap_or_default().iter().map(|p| at(p.x, p.y))).ink(color)),
         Kind::Arrow => {
             let (a, z) = (shape.end(End::Start), shape.end(End::End));
-            canvas.line(at(a.x, a.y), at(z.x, z.y)).ink(color);
+            fit(canvas.line(at(a.x, a.y), at(z.x, z.y)).ink(color));
             let along = z - a;
             let length = along.length();
             if length > 0.0 {
                 let (ux, uy) = (along.x / length, along.y / length);
                 let head = 12.0_f64.min(length / 2.0);
                 let wing = |side: f64| at(z.x - head * ux - side * head * 0.5 * uy, z.y - head * uy + side * head * 0.5 * ux);
-                canvas.polyline([wing(1.0), at(z.x, z.y), wing(-1.0)]).ink(color);
+                fit(canvas.polyline([wing(1.0), at(z.x, z.y), wing(-1.0)]).ink(color));
+            }
+        }
+        Kind::Frame(name) => {
+            let b = shape.bounds();
+            fit(corners(canvas, b, color).stroke(Weight::Hair));
+            let label = canvas.text(at(b.x, b.y - plotter::LINE / 2.0 - 4.0), name).ink(color);
+            if let Some((from, to)) = edge {
+                label.clip(from, to);
             }
         }
     }
 }
 
-fn corners(canvas: &mut Drawing, b: Bounds, color: Ink) {
-    canvas.polyline([at(b.x, b.y), at(b.right(), b.y), at(b.right(), b.bottom()), at(b.x, b.bottom()), at(b.x, b.y)]).ink(color);
+fn corners(canvas: &mut Drawing, b: Bounds, color: Ink) -> &mut canvas::Shape {
+    canvas.polyline([at(b.x, b.y), at(b.right(), b.y), at(b.right(), b.bottom()), at(b.x, b.bottom()), at(b.x, b.y)]).ink(color)
 }
 
 fn outline(canvas: &mut Drawing, b: Bounds, corners: bool) {

@@ -649,9 +649,13 @@ fn canvas<C>(p: &mut Painter, tree: &Tree<C>, i: u32, n: &Node, look: Look) {
     let saved = p.clip_to(Rect::new(x, y, w, h));
     let mono = p.m.mono();
     for d in &board.drawings {
-        for (words, (lx, ly), ink) in d.labels(&scale) {
+        for (words, (lx, ly), ink, clip) in d.labels(&scale) {
             let color = p.theme.get(ink);
+            let inner = clip.map(|[x0, y0, x1, y1]| p.clip_to(Rect::new(x + x0, y + y0, x1 - x0, y1 - y0)));
             p.text(words, mono, (x + lx, (y + ly - p.m.cell_h / 2.0).round()), None, color);
+            if let Some(outer) = inner {
+                p.set_clip(outer);
+            }
         }
     }
     p.set_clip(saved);

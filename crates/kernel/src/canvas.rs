@@ -161,6 +161,7 @@ pub struct Shape {
     ink: Ink,
     mark: Mark,
     form: Form,
+    clip: Option<[Point; 2]>,
 }
 
 impl Shape {
@@ -187,6 +188,12 @@ impl Shape {
         self.key = key;
         self
     }
+
+    /// Shows only the part of it inside the box from `from` to `to`, in the drawing's space, as a frame hides what reaches past its edge. Only that part is hit.
+    pub fn clip(&mut self, from: (f32, f32), to: (f32, f32)) -> &mut Self {
+        self.clip = Some([from.into(), to.into()]);
+        self
+    }
 }
 
 /// Words on a canvas, starting at a point and centred on it from top to bottom.
@@ -195,12 +202,19 @@ pub struct Label {
     at: Point,
     text: Range<u32>,
     ink: Ink,
+    clip: Option<[Point; 2]>,
 }
 
 impl Label {
     /// Writes it in `ink`.
     pub fn ink(&mut self, ink: Ink) -> &mut Self {
         self.ink = ink;
+        self
+    }
+
+    /// Shows only the part of it inside the box from `from` to `to`, in the drawing's space.
+    pub fn clip(&mut self, from: (f32, f32), to: (f32, f32)) -> &mut Self {
+        self.clip = Some([from.into(), to.into()]);
         self
     }
 }
@@ -299,7 +313,7 @@ impl Drawing {
     fn push(&mut self, mark: Mark, form: Form) -> &mut Shape {
         self.stamp = OnceLock::new();
         let key = self.shapes.len() as u64;
-        self.shapes.push(Shape { key, ink: Ink::Ink, mark, form });
+        self.shapes.push(Shape { key, ink: Ink::Ink, mark, form, clip: None });
         let last = self.shapes.len() - 1;
         &mut self.shapes[last]
     }
@@ -360,7 +374,7 @@ impl Drawing {
         self.stamp = OnceLock::new();
         let start = self.text.len() as u32;
         self.text.push_str(text);
-        self.labels.push(Label { at: at.into(), text: start..self.text.len() as u32, ink: Ink::Muted });
+        self.labels.push(Label { at: at.into(), text: start..self.text.len() as u32, ink: Ink::Muted, clip: None });
         let last = self.labels.len() - 1;
         &mut self.labels[last]
     }
@@ -378,7 +392,7 @@ impl Drawing {
                 v.to_bits().hash(&mut h);
             }
             for s in &self.shapes {
-                (s.key, s.ink, s.mark).hash(&mut h);
+                (s.key, s.ink, s.mark, s.clip.map(|c| c.map(|p| (p.x.to_bits(), p.y.to_bits())))).hash(&mut h);
                 match s.form {
                     Form::Path(a, b) => (0u8, a, b).hash(&mut h),
                     Form::Rect(a, b) => (1u8, a.x.to_bits(), a.y.to_bits(), b.x.to_bits(), b.y.to_bits()).hash(&mut h),
@@ -398,7 +412,7 @@ impl Drawing {
                 }
             }
             for l in &self.labels {
-                (l.at.x.to_bits(), l.at.y.to_bits(), l.ink, &self.text[l.text.start as usize..l.text.end as usize]).hash(&mut h);
+                (l.at.x.to_bits(), l.at.y.to_bits(), l.ink, &self.text[l.text.start as usize..l.text.end as usize], l.clip.map(|c| c.map(|p| (p.x.to_bits(), p.y.to_bits())))).hash(&mut h);
             }
             h.finish()
         })
@@ -416,9 +430,15 @@ impl Drawing {
         (across(x, x0, x1, scale.width), across(y, y0, y1, scale.height))
     }
 
-    /// Its words, each with where it starts in a box drawn at `scale` and its ink.
-    pub fn labels<'d>(&'d self, scale: &'d Scale) -> impl Iterator<Item = (&'d str, (f32, f32), Ink)> {
-        self.labels.iter().map(move |l| (&self.text[l.text.start as usize..l.text.end as usize], self.place((l.at.x, l.at.y), scale), l.ink))
+    /// Its words, each with where it starts in a box drawn at `scale`, its ink and the box it is clipped to, in pixels as left, top, right and bottom.
+    pub fn labels<'d>(&'d self, scale: &'d Scale) -> impl Iterator<Item = (&'d str, (f32, f32), Ink, Option<[f32; 4]>)> {
+        self.labels.iter().map(move |l| (&self.text[l.text.start as usize..l.text.end as usize], self.place((l.at.x, l.at.y), scale), l.ink, self.limit(l.clip, scale)))
+    }
+
+    fn limit(&self, clip: Option<[Point; 2]>, scale: &Scale) -> Option<[f32; 4]> {
+        let [a, b] = clip?;
+        let (a, b) = (self.place((a.x, a.y), scale), self.place((b.x, b.y), scale));
+        Some([a.0.min(b.0), a.1.min(b.1), a.0.max(b.0), a.1.max(b.1)])
     }
 
     fn outline(&self, s: &Shape, scale: &Scale, out: &mut Vec<Command>) {
@@ -445,7 +465,7 @@ impl Drawing {
     pub fn hit(&self, scale: &Scale, at: (f32, f32), slop: f32) -> Option<u64> {
         let mut scratch = Scratch::new();
         let mut path = Vec::new();
-        self.shapes.iter().rev().find_map(|s| {
+        self.shapes.iter().rev().filter(|s| self.limit(s.clip, scale).is_none_or(|[x0, y0, x1, y1]| (x0..=x1).contains(&at.0) && (y0..=y1).contains(&at.1))).find_map(|s| {
             path.clear();
             self.outline(s, scale, &mut path);
             let near = |scratch: &mut Scratch, width: f32| HitTest::with_scratch(&path[..], scratch).style(Stroke::new(width)).test(at);
@@ -466,7 +486,9 @@ impl Drawing {
             Mark::Stroke(w) => swash::zeno::bounds(&path[..], Stroke::new(scale.weight(w)), None),
             Mark::Fill => swash::zeno::bounds(&path[..], swash::zeno::Fill::NonZero, None),
         };
-        Some([b.min.x, b.min.y, b.max.x - b.min.x, b.max.y - b.min.y])
+        let [x0, y0, x1, y1] = self.limit(s.clip, scale).unwrap_or([f32::MIN, f32::MIN, f32::MAX, f32::MAX]);
+        let (left, top, right, bottom) = (b.min.x.max(x0), b.min.y.max(y0), b.max.x.min(x1), b.max.y.min(y1));
+        Some([left, top, (right - left).max(0.0), (bottom - top).max(0.0)])
     }
 }
 
@@ -522,7 +544,8 @@ impl Raster {
         let mut scale = ScaleContext::new();
         let line = (size * 1.4).round();
         for d in &self.drawings {
-            for (words, (x, y), ink) in d.labels(&self.scale) {
+            for (words, (x, y), ink, clip) in d.labels(&self.scale) {
+                let limit = pixels(clip, (w, h));
                 let color = self.theme.get(ink);
                 let mut b = layouts.ranged_builder(&mut fonts.cx, words, 1.0, true);
                 b.push_default(StyleProperty::FontFamily(FontFamily::named(&mono)));
@@ -542,7 +565,7 @@ impl Raster {
                             Render::new(&[Source::Outline, Source::Bitmap(StrikeWith::BestFit)]).format(Format::Alpha).offset(Vector::new(gx - gx.floor(), 0.0)).render(&mut scaler, glyph.id as u16);
                         if let Some(image) = render {
                             let at = Placement { left: gx.floor() as i32 + image.placement.left, top: gy.round() as i32 - image.placement.top, ..image.placement };
-                            blend(out, (w, h), &image.data, at, color);
+                            blend(out, (w, h), &image.data, at, color, limit);
                         }
                     }
                 }
@@ -559,10 +582,11 @@ impl Raster {
         for d in &self.drawings {
             for s in &d.shapes {
                 let color = self.theme.get(s.ink);
+                let limit = pixels(d.limit(s.clip, &self.scale), (w, h));
                 if let (Form::Rect(a, b), Mark::Fill) = (s.form, s.mark) {
                     let (a, b) = (d.place((a.x, a.y), &self.scale), d.place((b.x, b.y), &self.scale));
-                    let span = |p: f32, q: f32, most: usize| (p.min(q).round().clamp(0.0, most as f32) as usize, p.max(q).round().clamp(0.0, most as f32) as usize);
-                    let ((x0, x1), (y0, y1)) = (span(a.0, b.0, w), span(a.1, b.1, h));
+                    let span = |p: f32, q: f32, least: i32, most: i32| (p.min(q).round().clamp(least as f32, most as f32) as usize, p.max(q).round().clamp(least as f32, most as f32) as usize);
+                    let ((x0, x1), (y0, y1)) = (span(a.0, b.0, limit[0], limit[2]), span(a.1, b.1, limit[1], limit[3]));
                     for y in y0..y1 {
                         for x in x0..x1 {
                             over(&mut out[(y * w + x) * 4..][..4], color, color[3]);
@@ -579,22 +603,29 @@ impl Raster {
                     mask.style(stroke);
                 }
                 let (data, at) = mask.render();
-                blend(&mut out, (w, h), &data, at, color);
+                blend(&mut out, (w, h), &data, at, color, limit);
             }
         }
         out
     }
 }
 
-fn blend(out: &mut [u8], (w, h): (usize, usize), mask: &[u8], at: Placement, color: Color) {
+/// The pixels a clip box leaves, as left, top, right and bottom, within a picture `w` by `h`.
+fn pixels(clip: Option<[f32; 4]>, (w, h): (usize, usize)) -> [i32; 4] {
+    let [x0, y0, x1, y1] = clip.unwrap_or([0.0, 0.0, w as f32, h as f32]);
+    let fit = |v: f32, most: usize| v.round().clamp(0.0, most as f32) as i32;
+    [fit(x0, w), fit(y0, h), fit(x1, w), fit(y1, h)]
+}
+
+fn blend(out: &mut [u8], (w, _): (usize, usize), mask: &[u8], at: Placement, color: Color, [x0, y0, x1, y1]: [i32; 4]) {
     for my in 0..at.height as i32 {
         let y = at.top + my;
-        if y < 0 || y as usize >= h {
+        if y < y0 || y >= y1 {
             continue;
         }
         for mx in 0..at.width as i32 {
             let x = at.left + mx;
-            if x < 0 || x as usize >= w {
+            if x < x0 || x >= x1 {
                 continue;
             }
             let cover = mask[(my * at.width as i32 + mx) as usize];

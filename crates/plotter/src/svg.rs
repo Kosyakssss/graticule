@@ -5,7 +5,7 @@ use ledger::{Field, Value};
 use crate::board::{Board, End, Ink, Kind};
 use crate::geometry::Bounds;
 
-/// The board as an SVG picture, every shape in its stacking order, in the light theme's inks, carrying the board itself in its metadata so [`Board::from_svg`] opens it again. An empty board is an empty picture.
+/// The board as an SVG picture, every shape in its stacking order, in the light theme's inks, what frames hold clipped to their edges, carrying the board itself in its metadata so [`Board::from_svg`] opens it again. An empty board is an empty picture.
 pub fn svg(board: &Board) -> String {
     let stacked = board.stacked();
     let area = stacked.iter().map(|s| s.bounds()).reduce(|a, b| a.union(&b)).unwrap_or_default().expand(16.0);
@@ -16,10 +16,14 @@ pub fn svg(board: &Board) -> String {
         r#"<defs><marker id="head" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs>"#
     );
     let _ = writeln!(out, "<metadata>{}{}</metadata>", MARK, base64(&board.value().to_bytes()));
-    for shape in stacked {
+    for (n, shape) in stacked.into_iter().enumerate() {
         let color = ink(shape.ink);
         let b = Bounds::new(shape.x, shape.y, shape.w, shape.h);
         let stroke = format!(r#"fill="none" stroke="{color}" stroke-width="2""#);
+        let window = board.window(shape);
+        if let Some(w) = window {
+            let _ = writeln!(out, r#"<clipPath id="window-{n}"><rect x="{}" y="{}" width="{}" height="{}"/></clipPath><g clip-path="url(#window-{n})">"#, num(w.x), num(w.y), num(w.w), num(w.h));
+        }
         let _ = match &shape.kind {
             Kind::Rect => writeln!(out, r#"<rect x="{}" y="{}" width="{}" height="{}" {stroke}/>"#, num(b.x), num(b.y), num(b.w), num(b.h)),
             Kind::Ellipse => writeln!(out, r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" {stroke}/>"#, num(b.center().x), num(b.center().y), num(b.w / 2.0), num(b.h / 2.0)),
@@ -34,7 +38,15 @@ pub fn svg(board: &Board) -> String {
                 let (a, z) = (shape.end(End::Start), shape.end(End::End));
                 writeln!(out, r#"<line x1="{}" y1="{}" x2="{}" y2="{}" {stroke} marker-end="url(#head)"/>"#, num(a.x), num(a.y), num(z.x), num(z.y))
             }
+            Kind::Frame(name) => {
+                let b = shape.bounds();
+                let _ = writeln!(out, r#"<rect x="{}" y="{}" width="{}" height="{}" {stroke}/>"#, num(b.x), num(b.y), num(b.w), num(b.h));
+                writeln!(out, r#"<text x="{}" y="{}" fill="{color}" font-family="IBM Plex Sans, sans-serif" font-size="12">{}</text>"#, num(b.x), num(b.y - 6.0), escape(name))
+            }
         };
+        if window.is_some() {
+            out.push_str("</g>\n");
+        }
     }
     out.push_str("</svg>\n");
     out

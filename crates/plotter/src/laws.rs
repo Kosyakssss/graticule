@@ -47,7 +47,7 @@ fn run(board: &mut Board, chosen: &mut Selection<Shape>, act: &Act, next: &mut u
     *next += 1;
     match *act {
         Act::Gesture(t, a, b, c, d, shift) => {
-            let tool = [Tool::Select, Tool::Rect, Tool::Ellipse, Tool::Arrow, Tool::Draw][t as usize % 5];
+            let tool = [Tool::Select, Tool::Rect, Tool::Ellipse, Tool::Arrow, Tool::Draw, Tool::Frame][t as usize % 6];
             let (from, to) = (Point::new(a, b), Point::new(c, d));
             let gesture = Gesture { from, to, trail: vec![from, to], moved: from.distance(to) > 3.0, shift };
             let intent = Intent::of(board, &Index::of(board), chosen, tool, &gesture, 1.0);
@@ -120,6 +120,15 @@ fn bound(board: &Board) -> Result<(), String> {
             return Err(format!("group {parent:?} is gone but still holds something"));
         }
     }
+    for s in board.shapes.iter() {
+        let Some(f) = s.frame else { continue };
+        if !board.shapes.find(f).is_some_and(|f| matches!(f.kind, Kind::Frame(_))) {
+            return Err(format!("{:?} is in {f:?}, which is not a frame on the board", s.id));
+        }
+        if board.frames(Some(f)).contains(&s.id) {
+            return Err(format!("{:?} is inside itself", s.id));
+        }
+    }
     for g in board.groups.iter() {
         let held = board.shapes.iter().filter(|s| s.group == Some(g.id)).count() + board.groups.iter().filter(|h| h.group == Some(g.id)).count();
         if held < 2 {
@@ -130,7 +139,7 @@ fn bound(board: &Board) -> Result<(), String> {
 }
 
 fn picture(board: &Board) -> Vec<(u128, String, String)> {
-    board.stacked().iter().map(|s| (s.id.raw(), format!("{:?} {} {} {} {} {:?} {:?}", s.kind, s.x, s.y, s.w, s.h, s.ink, s.group), s.index.clone())).collect()
+    board.stacked().iter().map(|s| (s.id.raw(), format!("{:?} {} {} {} {} {:?} {:?} {:?}", s.kind, s.x, s.y, s.w, s.h, s.ink, s.group, s.frame), s.index.clone())).collect()
 }
 
 proptest! {

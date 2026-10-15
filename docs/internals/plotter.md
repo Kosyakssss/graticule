@@ -12,7 +12,7 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **tldraw.** A shape record holds where it is (`x`, `y`, `rotation`, a `parentId` that is a page, a frame or a group), its place in the stacking order (`index`), whether it is locked, its opacity, and its own `props`. A `ShapeUtil` per type says how the shape is drawn, what its geometry is (`getGeometry`, built from `Geometry2d` pieces: rectangles, ellipses, polylines, arcs, groups of them), how it resizes, and whether it can be bound to.
 
-**Here.** `Shape` is one record with a `Kind` enum (rectangle, ellipse, text, a freehand stroke, an arrow), since Rust's enums give each kind its own data and a `match` is the one obvious place to say what each kind does. Geometry is a pure function of the shape (`Shape::geometry`), in page units as `f64`, used for bounds, hit testing, snapping and export alike, so what is hit is what is drawn.
+**Here.** `Shape` is one record with a `Kind` enum (rectangle, ellipse, text, a freehand stroke, an arrow, a frame), since Rust's enums give each kind its own data and a `match` is the one obvious place to say what each kind does. Geometry is a pure function of the shape (`Shape::geometry`), in page units as `f64`, used for bounds, hit testing, snapping and export alike, so what is hit is what is drawn.
 
 ## Order
 
@@ -81,6 +81,12 @@ Plotter's model is tldraw (spec §13.4). This page is the study the build plan a
 
 **Here.** A group is not a shape but its own record, `Group`, holding only the group it sits in, since it has no place, size or ink of its own: it is drawn as nothing and its box is its shapes'. A shape's `group` and a group's `group` maybe hold a key, and the lists follow those fields as they follow bindings (`docs/internals/ledger.md`), so finding what a group holds costs what it holds. Every gesture and command works on shapes, never on groups: `Board::whole` widens shapes to every shape in their outermost groups, and choosing, moving and copying go through it, so the chosen shapes always hold whole groups and nothing else needs to know groups exist. Going inside a group with a second click, and resizing a group as one box, are not built. `Board::delete` takes apart any group left holding one thing, in the same step, so undo puts it back whole.
 
+## Frames
+
+**tldraw.** A frame is a shape that is the parent of the shapes inside it: they are drawn clipped to it and move with it. A shape dragged into a frame becomes its child, and dragged out goes back to the page; a new frame drawn around shapes takes them in. Deleting a frame deletes what it holds.
+
+**Here.** A frame is a `Kind::Frame(name)` shape, and a shape's `frame` maybe holds the frame it is in, followed by the shapes list's links so a frame finds what it holds without looking at the board. Membership changes only where the tool knows where the pointer is: `Intent::of` asks the index for the topmost frame under the drop or under a new shape's middle, so the board never scans for frames, and the arrow keys move shapes without changing their frame. `Board::translate`, `excerpt` and `delete` take a frame's contents along (`Board::contents`), a locked frame holding its contents still. `Board::reframe` refuses to put a frame inside itself or what it holds. A frame is hit by its edge, not its inside, so the shapes it holds stay clickable whatever their place in the stack, and arrows don't hold to frames. Drawing clips each shape to `Board::window`, where its frames overlap: the kernel's canvas shapes and words take a clip box, and the SVG wraps them in a `clipPath`.
+
 ## Also in tldraw, later here
 
-Frames and pages; a read-only board, which waits on a way for an app to say that undo can't run, since undo would otherwise change a board meant to stay as it is; pasting or dropping images; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; and rotation. Export to SVG comes with the core, since a board must render without a screen.
+Pages; a read-only board, which waits on a way for an app to say that undo can't run, since undo would otherwise change a board meant to stay as it is; pasting or dropping images; side effects on record changes beyond bindings; pressure from a pen, which the stroke outline below already takes; and rotation. Export to SVG comes with the core, since a board must render without a screen.

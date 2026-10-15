@@ -18,7 +18,7 @@ ui.canvas("Visits this week", 8, |c| {
 });
 ```
 
-The canvas is as wide as its column and as many rows tall as it is given; given 0 rows, it takes the height the page has to spare, as an editor does. Its space runs from 0 to 1 across and down until `space` says otherwise; giving `y` from high to low makes it grow upward, as a chart's does. Lines and polylines are stroked in the style's line, and polygons, rectangles, dots and paths are filled, in ink, until told otherwise. A dot is round and the same size however the space is stretched.
+The canvas is as wide as its column and as many rows tall as it is given; given 0 rows, it takes the height the page has to spare, as an editor does. Its space runs from 0 to 1 across and down until `space` says otherwise; giving `y` from high to low makes it grow upward, as a chart's does. Lines and polylines are stroked in the style's line, and polygons, rectangles, dots and paths are filled, in ink, until told otherwise. A dot is round and the same size however the space is stretched. `.clip(from, to)` on a shape or words shows only the part inside that box of the space, as a frame on a board hides what reaches past its edge; only that part is hit.
 
 The shapes are drawn off the main thread into the canvas's own texture, and drawn again only when what the canvas holds, its size, the style or the theme changes. With many shapes, build a `Drawing` in a job and hand it over with `c.drawing(&drawing)`, so the view never builds them.
 

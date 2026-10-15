@@ -1,6 +1,6 @@
-# Bindery's development loop
+# Bindery
 
-`crates/bindery` is a command with two verbs so far; installing and updating apps and fetching the large fonts are build-plan item 25. It uses only the standard library and `cargo`.
+`crates/bindery` is a command: `new` and `dev` make apps and run the development loop, `install` and `update` put them on the computer and keep them current, `fonts` fetches the fonts too large for the repository, and `messages` gathers the words to translate. It uses the standard library, `dirs` for the system's folders, and the system's `cargo`, `git` and `curl`.
 
 ## `bindery new`
 
@@ -30,3 +30,17 @@ Patching code into the running process (Subsecond) was turned down in Feedreader
 ### Laws
 
 A reload keeps the state: `a_reload_keeps_the_state` in the kernel's laws restores what a runner kept after generated command sequences into a fresh runner and compares facts and whereabouts. A failed build never reaching the app and the window keeping its frame are checked by hand: the first with a stand-in program that hands its state over (it did, three builds in a row, and a failed build in between left the running one alone), the second needs one pass in a real window.
+
+## `bindery fonts`
+
+The Japanese, Korean and Chinese Plex fonts are pinned in the kernel's `assets/fonts/fetched.txt`, a URL at a fixed commit and a SHA-256 per file, which Bindery reads at compile time, so the kernel and Bindery can't disagree about which files are meant. Each is downloaded with `curl`, checked and then renamed into the shared `Graticule/Fonts` folder, so a half-written or changed file is never where an app looks. SHA-256 is Bindery's own, fifty lines checked against `sha256sum`, so fetching fonts adds no dependency; `--from` takes the files from a folder, for a machine that can't reach the internet.
+
+## `bindery install` and `update`
+
+`install` builds the app for release and puts it where this user's programs go: on macOS an `.app` in `~/Applications`, signed ad hoc with `codesign` so Gatekeeper runs it, with its command linked into `~/.local/bin`; on Linux the program in `~/.local/bin` and a desktop entry; on Windows the program in `Programs/Graticule` under local app data. A program that is running can't be replaced on Windows but can be renamed, so the old one is moved aside to `NAME.old.exe` and removed at the next install. The macOS and Linux paths are written but not yet tried on those systems.
+
+Bindery remembers each install in `Graticule/bindery/installed.txt`: the app, its source folder, the package and program it was built with, the commit it was built from and where it went. `update` brings each source up to date with `git pull --ff-only` when it follows an upstream (never merging: a source with work of its own is left for its owner), and builds and installs again any whose commit moved; `--offline` skips the pull, for a source updated by hand. Updating is what the user asks for, never a check on its own: when Bindery may look for new versions without being asked is open question 14, since that reaches the network.
+
+## What's new
+
+An update writes what changed, the subject line of each commit since the last install, into `news.txt` in the app's own data folder (`Graticule/NAME`, the folder the kernel keeps the app's facts in), newest first, keeping the last ten updates, and leaves a `news.unread` marker beside it. The kernel reads both when the app opens its folder: the built-in "Show what's new" opens a page of them, like the log, and is unavailable with a reason when there is nothing; the marker makes the message line say once that the app was updated, then goes. Nothing pops up. The words are the commits' own, so they are as plain as the commits are written.

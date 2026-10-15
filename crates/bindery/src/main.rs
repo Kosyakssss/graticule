@@ -1,4 +1,4 @@
-//! BD-01, Bindery: starts a Graticule app with `bindery new`, and with `bindery dev` rebuilds it on every saved change and swaps the running app for the new build in the same window frame and state.
+//! BD-01, Bindery: starts a Graticule app with `bindery new`, and with `bindery dev` rebuilds it on every saved change and swaps the running app for the new build in the same window frame and state. `bindery install` and `update` install apps from source and keep them current, and `bindery fonts` fetches the fonts too large for the repository.
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -8,6 +8,7 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
 
 mod fonts;
+mod install;
 mod sha256;
 
 const USAGE: &str = "BD-01 Bindery: starts Graticule apps and runs the development loop
@@ -26,6 +27,17 @@ const USAGE: &str = "BD-01 Bindery: starts Graticule apps and runs the developme
       in English to locales/en.ftl for translators, and says, for each
       translation beside it, which texts it lacks and which of its ids
       no longer have a source
+
+  bindery install [FOLDER] [-p PACKAGE] [--bin NAME]
+      builds the app for release and installs it for this user: on macOS
+      a signed app in ~/Applications with its command in ~/.local/bin,
+      on Linux the program in ~/.local/bin with a desktop entry, on
+      Windows the program in Programs/Graticule in local app data
+
+  bindery update [NAME] [--offline]
+      brings each installed app's source up to date (not with --offline),
+      builds again any whose source moved on and installs it, and writes
+      what changed for the app's What's new page
 
   bindery fonts [--from FOLDER]
       fetches the Plex fonts too large for the repository (Japanese,
@@ -52,7 +64,7 @@ fn main() {
             skip = false;
         } else if a == "-p" || a == "--bin" || a == "--from" {
             skip = true;
-        } else {
+        } else if !a.starts_with("--") {
             positional.push(a.as_str());
         }
     }
@@ -61,6 +73,8 @@ fn main() {
             Some(folder) => new(Path::new(folder)),
             None => Err("where? bindery new FOLDER".into()),
         },
+        Some("install") => install::install(Path::new(positional.first().copied().unwrap_or(".")), flag("-p").as_deref(), flag("--bin").as_deref()),
+        Some("update") => install::update(positional.first().copied(), args.iter().any(|a| a == "--offline")),
         Some("fonts") => fonts::fetch(flag("--from").as_deref().map(Path::new)),
         Some("messages") => messages(Path::new(positional.first().copied().unwrap_or("."))),
         Some("dev") => dev(Path::new(positional.first().copied().unwrap_or(".")), flag("-p").as_deref(), flag("--bin").as_deref(), &app_args),
@@ -216,7 +230,7 @@ fn messages(folder: &Path) -> Result<(), String> {
 
 fn dev(folder: &Path, package: Option<&str>, bin: Option<&str>, app_args: &[String]) -> Result<(), String> {
     let root = workspace_root(folder)?;
-    let mut built = build(folder, package, bin)?;
+    let mut built = build(folder, package, bin, false)?;
     let target = built.exe.parent().and_then(Path::parent).map(Path::to_path_buf).ok_or("the build put the app nowhere Bindery knows")?;
     let copies = built.exe.parent().map(|d| d.join("bindery")).unwrap_or_default();
     let handoff = copies.join(format!("{}.handoff", built.name));
@@ -242,7 +256,7 @@ fn dev(folder: &Path, package: Option<&str>, bin: Option<&str>, app_args: &[Stri
         }
         seen = now;
         let before = stamp(&built.exe);
-        built = match build(folder, package, bin) {
+        built = match build(folder, package, bin, false) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("bindery: {e}; the app keeps running the last build");
@@ -275,9 +289,13 @@ fn workspace_root(folder: &Path) -> Result<PathBuf, String> {
     manifest.parent().map(Path::to_path_buf).ok_or("cargo found no workspace".into())
 }
 
-fn build(folder: &Path, package: Option<&str>, bin: Option<&str>) -> Result<Built, String> {
+fn build(folder: &Path, package: Option<&str>, bin: Option<&str>, release: bool) -> Result<Built, String> {
     let mut cargo = Command::new("cargo");
-    cargo.args(["build", "--message-format", "json-render-diagnostics"]).current_dir(folder).stdout(Stdio::piped()).stderr(Stdio::inherit());
+    cargo.args(["build", "--message-format", "json-render-diagnostics"]);
+    if release {
+        cargo.arg("--release");
+    }
+    cargo.current_dir(folder).stdout(Stdio::piped()).stderr(Stdio::inherit());
     if let Some(p) = package {
         cargo.args(["-p", p]);
     }

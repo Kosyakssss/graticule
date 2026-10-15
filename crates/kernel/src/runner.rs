@@ -76,6 +76,7 @@ struct Asking {
 enum Sheet {
     Help,
     Log,
+    News,
 }
 
 /// One line of the help page.
@@ -283,6 +284,7 @@ pub struct Runner<A: App> {
     mode: Mode,
     sheet: Option<(Sheet, i32)>,
     done: VecDeque<(Moment, String)>,
+    news: Vec<(String, Vec<String>)>,
     inspecting: bool,
     naming: Option<String>,
     only_changed: bool,
@@ -387,6 +389,7 @@ impl<A: App> Runner<A> {
             mode: Mode::Normal,
             sheet: None,
             done: VecDeque::new(),
+            news: Vec::new(),
             inspecting: false,
             naming: None,
             only_changed: false,
@@ -447,6 +450,7 @@ impl<A: App> Runner<A> {
                 }
                 runner.keys_file = Some(folder.join(KEYMAP));
                 runner.read_keys();
+                runner.read_news(folder);
                 runner
             }
             Err(e) => {
@@ -486,6 +490,7 @@ impl<A: App> Runner<A> {
                 let lines = match sheet {
                     Sheet::Help => self.help_lines(&here),
                     Sheet::Log => self.log_lines(),
+                    Sheet::News => self.news_lines(),
                 };
                 let root = self.tree.root();
                 self.build_sheet(root, sheet, lines, top);
@@ -886,6 +891,34 @@ impl<A: App> Runner<A> {
         }
     }
 
+    fn news_lines(&self) -> Vec<Help> {
+        let mut lines = Vec::new();
+        for (when, changes) in &self.news {
+            lines.push(Help::Heading(format!("Updated {when}")));
+            match changes.len() {
+                0 => lines.push(Help::Doc("Built again, with no changes written down".into())),
+                _ => lines.extend(changes.iter().map(|c| Help::Doc(c.clone()))),
+            }
+        }
+        lines
+    }
+
+    fn read_news(&mut self, folder: &std::path::Path) {
+        let Ok(text) = std::fs::read_to_string(folder.join(NEWS)) else { return };
+        self.news = text
+            .split("\n\n")
+            .filter_map(|block| {
+                let mut lines = block.lines().map(str::trim).filter(|l| !l.is_empty());
+                let when = lines.next()?.to_string();
+                Some((when, lines.map(str::to_string).collect()))
+            })
+            .collect();
+        let unread = folder.join(UNREAD);
+        if !self.news.is_empty() && unread.exists() && std::fs::remove_file(&unread).is_ok() && self.said.is_none() {
+            self.said = Some(Said::Note(Message::from("This app was updated: “Show what's new” says what changed")));
+        }
+    }
+
     fn did(&mut self, what: String) {
         if self.done.len() == DONE_KEPT {
             self.done.pop_front();
@@ -929,6 +962,7 @@ impl<A: App> Runner<A> {
         let name = match sheet {
             Sheet::Help => "Help",
             Sheet::Log => "What was done, newest first",
+            Sheet::News => "What's new, newest first",
         };
         ui.page(Message::plain(format!("{name}, lines {} to {} of {}", top + 1, (top + shown).min(lines.len() as i32), lines.len())), |ui| {
             ui.column(crate::tree::Fill, |ui| {
@@ -1568,6 +1602,7 @@ impl<A: App> Runner<A> {
             Builtin::NextStyle if self.offered.styles < 2 => Available::No(Message::from("There is only one style")),
             Builtin::AbsoluteDates if self.offered.dates == Dates::Absolute => Available::No(Message::from("Dates are written as the day and time already")),
             Builtin::RelativeDates if self.offered.dates == Dates::Relative => Available::No(Message::from("Dates are written as how long ago already")),
+            Builtin::WhatsNew if self.news.is_empty() => Available::No(Message::from("Nothing is new since this app was installed")),
             Builtin::ChangedSettings if self.only_changed => Available::No(Message::from("Only the changed settings show already")),
             Builtin::AllSettings if !self.only_changed => Available::No(Message::from("Every setting shows already")),
             Builtin::EditKeys if self.keys_file.is_none() => Available::No(Message::from("This window keeps no files, so its keys can't be edited")),
@@ -3346,6 +3381,11 @@ impl<A: App> Runner<A> {
             }
             Builtin::Log => {
                 self.sheet = if matches!(self.sheet, Some((Sheet::Log, _))) { None } else { Some((Sheet::Log, 0)) };
+                self.stale = true;
+                true
+            }
+            Builtin::WhatsNew => {
+                self.sheet = if matches!(self.sheet, Some((Sheet::News, _))) { None } else { Some((Sheet::News, 0)) };
                 self.stale = true;
                 true
             }
@@ -5235,6 +5275,8 @@ fn done_as(label: &str) -> String {
 }
 
 const KEYMAP: &str = "keymap.txt";
+const NEWS: &str = "news.txt";
+const UNREAD: &str = "news.unread";
 const LAYOUT: &str = "layout.txt";
 
 fn watch_keys(file: &std::path::Path, waker: Waker) -> Option<(notify::RecommendedWatcher, mpsc::Receiver<()>)> {

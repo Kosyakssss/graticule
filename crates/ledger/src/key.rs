@@ -43,6 +43,13 @@ impl<T> Key<T> {
     }
 }
 
+/// The key no record is given, `Key::fixed(0)`: what a reference to a record reads as when facts saved before the reference existed are loaded.
+impl<T> Default for Key<T> {
+    fn default() -> Self {
+        Self::fixed(0)
+    }
+}
+
 impl<T> Clone for Key<T> {
     fn clone(&self) -> Self {
         *self

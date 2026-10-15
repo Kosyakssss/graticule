@@ -22,6 +22,7 @@ ledger = { path = "crates/ledger" }
 graticule-macros = { path = "crates/macros" }
 kernel = { path = "crates/kernel" }
 galley = { path = "crates/galley" }
+plotter = { path = "crates/plotter" }
 specimen = { path = "crates/specimen" }
 assay = { path = "crates/assay" }
 engraver = { path = "crates/engraver" }

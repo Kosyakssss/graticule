@@ -1,0 +1,16 @@
+[package]
+name = "plotter"
+description = "PL-01, Plotter: the canvas engine. Shapes and bindings as Ledger facts, geometry, order, camera, snapping and export; it needs no screen."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ledger.workspace = true
+graticule-macros.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

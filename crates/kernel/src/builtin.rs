@@ -18,6 +18,8 @@ pub enum Builtin {
     First,
     Last,
     SelectAll,
+    Expand,
+    Collapse,
     Cancel,
     Copy,
     LightAppearance,
@@ -39,7 +41,7 @@ pub enum Builtin {
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 30] = [
+    pub const ALL: [Builtin; 32] = [
         Builtin::Palette,
         Builtin::Undo,
         Builtin::Redo,
@@ -52,6 +54,8 @@ impl Builtin {
         Builtin::First,
         Builtin::Last,
         Builtin::SelectAll,
+        Builtin::Expand,
+        Builtin::Collapse,
         Builtin::Cancel,
         Builtin::Copy,
         Builtin::LightAppearance,
@@ -86,6 +90,8 @@ impl Builtin {
             Builtin::First => "first",
             Builtin::Last => "last",
             Builtin::SelectAll => "select-all",
+            Builtin::Expand => "open-branch",
+            Builtin::Collapse => "close-branch",
             Builtin::Cancel => "cancel",
             Builtin::Copy => "copy",
             Builtin::LightAppearance => "light-appearance",
@@ -121,6 +127,8 @@ impl Builtin {
             Builtin::First => "Go to the top of the list",
             Builtin::Last => "Go to the bottom of the list",
             Builtin::SelectAll => "Choose everything in the list",
+            Builtin::Expand => "Open the branch, or go into it",
+            Builtin::Collapse => "Close the branch, or go up to it",
             Builtin::Cancel => "Cancel",
             Builtin::Copy => "Copy the chosen text",
             Builtin::LightAppearance => "Use the light appearance",
@@ -195,6 +203,14 @@ impl Builtin {
             }
             Builtin::SelectAll => {
                 const K: &[Chord] = &[c(Key::Char('a'), false, true)];
+                K
+            }
+            Builtin::Expand => {
+                const K: &[Chord] = &[c(Key::Right, false, false)];
+                K
+            }
+            Builtin::Collapse => {
+                const K: &[Chord] = &[c(Key::Left, false, false)];
                 K
             }
             Builtin::Cancel => {

@@ -21,6 +21,7 @@ use crate::message::Message;
 use crate::metrics::Metrics;
 use crate::paint::Painter;
 use crate::shell::{Button, Face, Frame, Input, Mods, Seen, Waker};
+use crate::table::Branch;
 use crate::text::Text;
 use crate::tree::{Anchor, Holds, Id, Kind, ListInfo, NONE, Range32, Tree};
 use crate::ui::{Scroll, Scrolls, Ui};
@@ -1323,6 +1324,7 @@ impl<A: App> Runner<A> {
             Builtin::Up | Builtin::Down | Builtin::ExtendUp | Builtin::ExtendDown | Builtin::First | Builtin::Last | Builtin::SelectAll if self.tree.lists.is_empty() => {
                 Available::No(Message::from("There is no list here"))
             }
+            Builtin::Expand | Builtin::Collapse if self.current_list().is_none_or(|l| self.tree.ranks(&l).and_then(|r| r.nest(0)).is_none()) => Available::No(Message::from("There is no tree here")),
             Builtin::LightAppearance if self.offered.appearance == Choice::Light => Available::No(Message::from("The light appearance is in use already")),
             Builtin::DarkAppearance if self.offered.appearance == Choice::Dark => Available::No(Message::from("The dark appearance is in use already")),
             Builtin::SystemAppearance if self.offered.appearance == Choice::System => Available::No(Message::from("The system's appearance is followed already")),
@@ -2857,6 +2859,7 @@ impl<A: App> Runner<A> {
                 self.did(b.label().to_string());
                 true
             }
+            Builtin::Expand | Builtin::Collapse => self.branch(b == Builtin::Expand),
             _ => {
                 let Some(list) = self.current_list() else { return false };
                 let keys = |span| (list.keys)(&self.facts as &dyn Any, list.items, list.selection, self.tree.ranks(&list), Some(span));
@@ -2886,6 +2889,34 @@ impl<A: App> Runner<A> {
                     None => true,
                 }
             }
+        }
+    }
+
+    /// Opens or closes the focused row's branch in a tree, or moves into an open one or up to the row a row is inside.
+    fn branch(&mut self, open: bool) -> bool {
+        let Some(list) = self.current_list() else { return false };
+        let Some(focused) = list.focused else { return self.say(Message::from("No row is chosen")) };
+        let Some(ranks) = self.tree.ranks(&list) else { return false };
+        let Some((index, nest)) = ranks.position(focused).and_then(|i| Some((i, ranks.nest(i)?))) else { return false };
+        let twig = self.tree.nodes.iter().position(|n| matches!(n.kind, Kind::Twig { .. }) && matches!(self.tree.nodes[n.parent as usize].kind, Kind::ListRow { key, .. } if key == focused));
+        let to = match (open, nest.branch) {
+            (true, Branch::Closed) | (false, Branch::Open) => {
+                return match twig {
+                    Some(t) => self.fire_once(t as u32),
+                    None => false,
+                };
+            }
+            (true, Branch::Open) => ranks.key(index + 1),
+            (true, Branch::Leaf) => return self.say(Message::from("It holds nothing to open")),
+            (false, _) => match nest.parent {
+                Some(up) => ranks.key(up as usize),
+                None => return self.say(Message::from("It is at the top already")),
+            },
+        };
+        self.focus = Some(self.tree.nodes[list.node as usize].id);
+        match to {
+            Some(key) => self.select(&list, Choose::Only(key)),
+            None => false,
         }
     }
 

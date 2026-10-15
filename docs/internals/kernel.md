@@ -147,6 +147,8 @@ This is what keeps a 10,000-item to-do list at the same frame cost as five items
 
 A table is a list whose first child is a row of heads. The heads come from calling the row closure once more, for the top row shown, with the row builder making heads instead of cells, so the app names its columns in one place; an empty table has no heads. The order a table shows its rows in is not the kernel's: it is a derived value (§14) the app works out from the list and a `Sort` fact, which a head's press sets by an edit. The kernel only reads it, by key and by place, both for drawing and for the keys that move and choose, so sorting a million rows never runs on the main thread. A list shown in an order scrolls by place rather than by the key at its top, since after sorting again the key at the top is somewhere else. Column widths the user dragged are the window's, by the id of each head, which follows the head's name.
 
+A tree is the same list again. Its items are one flat list, each naming the item it is inside, and which branches are open is a fact the app keeps; `Order::tree` walks them into rows on another thread and gives each row its depth, whether it is an open or closed branch, and the place of the row it is inside. Each row's first child is a twig, indented by its depth, whose press sets the open branches by an edit with its key added or taken out. Right and Left are kernel commands with the platform's keys for trees: they press the focused row's twig, or move the selection into an open branch or up to the row it is inside, both read from the order rather than from what is built.
+
 ## 6. Layout in cells
 
 ### 6.1 Units

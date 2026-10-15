@@ -1,7 +1,7 @@
 window		0 0 120 30	
   page	Components	0 0 120 24	
     text	Every component in its default form, live: click it, type into it, use it from the keyboard. Open one for its page.	2 3 116 1	muted
-    list		2 5 116 18	72 items
+    list		2 5 116 18	73 items
       list item		2 5 114 1	
         group		2 5 114 1	
           column		2 5 14 1	

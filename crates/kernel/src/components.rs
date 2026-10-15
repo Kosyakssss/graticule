@@ -870,6 +870,12 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
         }
         (Layer::Over, Kind::Head { sorted, numeric, .. }) => head(p, &n, text, sorted, numeric, look),
         (Layer::Over, Kind::Cell { numeric, tone: t }) => cell(p, &n, text, numeric, tone(p, t)),
+        (Layer::Over, Kind::Twig { depth, branch }) if branch != crate::table::Branch::Leaf => {
+            let r = p.rect(Area::new(n.area.col + i32::from(depth) * 2, n.area.row, 2, 1));
+            let chevron = if branch == crate::table::Branch::Open { &crate::picture::icons::CHEVRON_DOWN } else { &crate::picture::icons::CHEVRON_RIGHT };
+            let muted = p.theme.muted;
+            draw_picture(p, r, chevron, Some(muted));
+        }
         (Layer::Over, Kind::Empty) => {}
         (Layer::Under, Kind::Text { .. } | Kind::Value { .. }) if look.chosen.0 < look.chosen.1 => chosen(p, &n, text, look.chosen.0 as usize..look.chosen.1 as usize),
         (Layer::Under, Kind::Swatch { ink }) => {

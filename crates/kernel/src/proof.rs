@@ -67,6 +67,14 @@ fn state<C>(tree: &Tree<C>, n: &Node) -> String {
         Kind::List { count, .. } => parts.push(format!("{count} items")),
         Kind::Gauge { filled, .. } => parts.push(format!("{} %", f32::from(filled) / 10.0)),
         Kind::Head { sorted: 1, .. } => parts.push("sorted".to_string()),
+        Kind::Twig { depth, branch } => {
+            parts.push(format!("depth {depth}"));
+            match branch {
+                crate::table::Branch::Open => parts.push("open".to_string()),
+                crate::table::Branch::Closed => parts.push("closed".to_string()),
+                crate::table::Branch::Leaf => {}
+            }
+        }
         Kind::Head { sorted: -1, .. } => parts.push("sorted, largest first".to_string()),
         Kind::Cell { tone: Tone::Ok, .. } => parts.push("ok".to_string()),
         Kind::Cell { tone: Tone::Danger, .. } => parts.push("danger".to_string()),

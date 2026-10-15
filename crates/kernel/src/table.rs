@@ -85,17 +85,40 @@ pub struct Order<T> {
     of: PhantomData<fn() -> T>,
 }
 
-/// The keys of an order's items, top to bottom, and where each one is.
+/// The keys of an order's items, top to bottom, and where each one is; in a tree, also how deep each one sits.
 #[derive(Debug, Default)]
 pub struct Ranks {
     keys: Vec<u128>,
     at: HashMap<u128, u32>,
+    nests: Vec<Nest>,
+}
+
+/// Whether a row of a tree holds others, and whether they show.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Branch {
+    #[default]
+    Leaf,
+    Closed,
+    Open,
+}
+
+/// Where a row of a tree sits: how deep, whether it is a branch, and the place of the row it is inside, if any.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Nest {
+    pub depth: u16,
+    pub branch: Branch,
+    pub parent: Option<u32>,
 }
 
 impl Ranks {
     fn new(keys: Vec<u128>) -> Ranks {
         let at = keys.iter().enumerate().map(|(i, &k)| (k, i as u32)).collect();
-        Ranks { keys, at }
+        Ranks { keys, at, nests: Vec::new() }
+    }
+
+    /// Where the row at `index` sits in its tree, when the order is a tree's.
+    pub fn nest(&self, index: usize) -> Option<Nest> {
+        self.nests.get(index).copied()
     }
 
     pub fn len(&self) -> usize {
@@ -130,6 +153,40 @@ impl<T: Record> Order<T> {
             keyed.sort_by(|a, b| a.0.cmp(&b.0));
         }
         Order::from_keys(keyed.into_iter().map(|(_, k)| k).collect())
+    }
+
+    /// The rows of a tree: each item under the one `parent` names, the items with none at the top, and the items inside a branch shown only while `open` holds its key. Items keep the list's order among their siblings.
+    pub fn tree(list: &List<T>, open: &[Key<T>], parent: impl Fn(&T) -> Option<Key<T>>) -> Order<T> {
+        let mut under: HashMap<u128, Vec<u128>> = HashMap::new();
+        let mut roots = Vec::new();
+        for t in list.iter() {
+            match parent(t).filter(|p| list.has(*p)) {
+                Some(p) => under.entry(p.raw()).or_default().push(t.key().raw()),
+                None => roots.push(t.key().raw()),
+            }
+        }
+        let open: std::collections::HashSet<u128> = open.iter().map(|k| k.raw()).collect();
+        let (mut keys, mut nests) = (Vec::with_capacity(list.len()), Vec::with_capacity(list.len()));
+        let mut stack: Vec<(u128, u16, Option<u32>)> = roots.into_iter().rev().map(|k| (k, 0, None)).collect();
+        while let Some((key, depth, up)) = stack.pop() {
+            let at = keys.len() as u32;
+            let inside = under.get(&key);
+            let branch = match (inside, open.contains(&key)) {
+                (None, _) => Branch::Leaf,
+                (Some(_), false) => Branch::Closed,
+                (Some(_), true) => Branch::Open,
+            };
+            keys.push(key);
+            nests.push(Nest { depth, branch, parent: up });
+            if branch == Branch::Open
+                && let Some(inside) = inside
+            {
+                stack.extend(inside.iter().rev().map(|&k| (k, depth + 1, Some(at))));
+            }
+        }
+        let mut ranks = Ranks::new(keys);
+        ranks.nests = nests;
+        Order { ranks: Arc::new(ranks), of: PhantomData }
     }
 
     /// Only the items `keep` says yes to, in this order.
@@ -198,6 +255,10 @@ impl<'a, T: Record> Rows<'a, T> {
             Some(r) => self.list.find(Key::from_raw(r.key(index)?)),
             None => self.list.get(index),
         }
+    }
+
+    pub(crate) fn nest(&self, index: usize) -> Option<Nest> {
+        self.ranks?.nest(index)
     }
 
     pub fn position(&self, key: Key<T>) -> Option<usize> {

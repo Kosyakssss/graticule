@@ -130,6 +130,8 @@ Apps can now draw. A canvas is a box with a space of its own, for charts and sma
 
 Tables have arrived. A table is a list with columns: a row of heads, then a row for each item, words on the left of their column and numbers on the right. Pressing a head sorts the table by that column, then the other way, then back. The sorting happens away from the thread that answers the keyboard, so a table of millions of rows sorts without the window stalling; until it is done the rows keep their old order. Dragging the gap after a head makes that column wider or narrower, and a narrow window leaves out the columns that don't fit, from the right.
 
+Trees came next: folders inside folders, an outline, places inside places. A branch opens and closes with a click on its arrow, or with the right and left arrow keys, which also move into a branch and back up out of it, the way trees work everywhere else on the computer.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

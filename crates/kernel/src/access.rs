@@ -12,6 +12,7 @@ fn role(kind: Kind) -> Role {
         Kind::Header => Role::Row,
         Kind::Head { .. } => Role::ColumnHeader,
         Kind::Cell { .. } => Role::Cell,
+        Kind::Twig { .. } => Role::DisclosureTriangle,
         Kind::ListRow { .. } => Role::ListItem,
         Kind::Field { holds: Holds::Lines { .. } } => Role::MultilineTextInput,
         Kind::Field { holds: Holds::Search } => Role::SearchInput,
@@ -75,9 +76,20 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 && tree.nodes[list as usize].first != NONE
                 && tree.nodes[tree.nodes[list as usize].first as usize].kind == Kind::Header
         };
+        let twig = |row: u32| row != NONE && tree.nodes[row as usize].first != NONE && matches!(tree.nodes[tree.nodes[row as usize].first as usize].kind, Kind::Twig { .. });
         match n.kind {
             Kind::List { .. } if table(i as u32) => node.set_role(Role::Table),
+            Kind::List { .. } if twig(n.first) => node.set_role(Role::Tree),
             Kind::ListRow { .. } if table(n.parent) => node.set_role(Role::Row),
+            Kind::ListRow { .. } if twig(i as u32) => {
+                node.set_role(Role::TreeItem);
+                if let Kind::Twig { depth, branch } = tree.nodes[n.first as usize].kind {
+                    node.set_level(usize::from(depth) + 1);
+                    if branch != crate::table::Branch::Leaf {
+                        node.set_expanded(branch == crate::table::Branch::Open);
+                    }
+                }
+            }
             _ => {}
         }
         let r = m.rect(n.area);

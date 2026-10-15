@@ -202,7 +202,47 @@ pub struct Catalog {
     sort: Sort,
     #[derived(City::order, from = [cities, sort])]
     order: Derived<Order<City>>,
+    #[session]
+    outline: List<Part>,
+    #[session]
+    reached: Selection<Part>,
+    #[session]
+    unfolded: Vec<Key<Part>>,
+    #[derived(Part::shown, from = [outline, unfolded])]
+    shown: Derived<Order<Part>>,
 }
+
+/// A row of the live example of a tree: a folder or a file, inside the folder it names.
+#[derive(Facts)]
+pub struct Part {
+    #[key]
+    id: Key<Part>,
+    name: String,
+    inside: Option<Key<Part>>,
+}
+
+impl Part {
+    fn shown(outline: &List<Part>, unfolded: &[Key<Part>]) -> Order<Part> {
+        Order::tree(outline, unfolded, |part| part.inside)
+    }
+}
+
+const OUTLINE: [(&str, u64); 14] = [
+    ("graticule", 0),
+    ("apps", 1),
+    ("todo", 2),
+    ("crates", 1),
+    ("kernel", 4),
+    ("src", 5),
+    ("ledger", 4),
+    ("specimen", 4),
+    ("docs", 1),
+    ("components", 9),
+    ("guide", 9),
+    ("internals", 9),
+    ("spec.md", 9),
+    ("README.md", 1),
+];
 
 /// A row of the live example of a table.
 #[derive(Facts)]
@@ -388,10 +428,11 @@ pub enum Component {
     Image,
     PaintHook,
     Table,
+    Tree,
 }
 
 impl Component {
-    const ALL: [Component; 72] = [
+    const ALL: [Component; 73] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -464,6 +505,7 @@ impl Component {
         Component::Image,
         Component::PaintHook,
         Component::Table,
+        Component::Tree,
     ];
 
     fn name(self) -> &'static str {
@@ -540,6 +582,7 @@ impl Component {
             Component::Image => "Image",
             Component::PaintHook => "Paint hook",
             Component::Table => "Table",
+            Component::Tree => "Tree",
         }
     }
 
@@ -617,6 +660,7 @@ impl Component {
             Component::Image => include_str!("../../../docs/components/image.md"),
             Component::PaintHook => include_str!("../../../docs/components/paint-hook.md"),
             Component::Table => include_str!("../../../docs/components/table.md"),
+            Component::Tree => include_str!("../../../docs/components/tree.md"),
         }
     }
 
@@ -752,6 +796,10 @@ impl Default for Catalog {
             picked: Selection::default(),
             sort: Sort::default(),
             order: Derived::default(),
+            outline: OUTLINE.iter().zip(1..).map(|(&(name, inside), n)| Part { id: Key::fixed(n), name: name.to_string(), inside: (inside > 0).then(|| Key::fixed(inside)) }).collect(),
+            reached: Selection::default(),
+            unfolded: vec![Key::fixed(1), Key::fixed(4)],
+            shown: Derived::default(),
         }
     }
 }
@@ -1196,6 +1244,9 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::Tree => {
+                ui.tree(self.shown.of(&self.outline), Catalog::reached, Catalog::unfolded, |ui, part| ui.text(&part.name)).height(8);
+            }
             Component::Table => {
                 ui.table(self.order.of(&self.cities), Catalog::picked, |row, city| {
                     row.cell("City", &city.name);

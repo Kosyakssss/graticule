@@ -188,6 +188,10 @@ impl<'t> Layout<'t> {
                 let c = self.cols(tree.str(n.text), false) + 2;
                 (c, c)
             }
+            Kind::Twig { depth, .. } => {
+                let c = i32::from(depth) * 2 + 2;
+                (c, c)
+            }
             Kind::Cell { numeric, .. } => {
                 let c = self.cols(tree.str(n.text), numeric).max(1);
                 (c.min(4), c)
@@ -477,7 +481,7 @@ impl<'t> Layout<'t> {
             }
             Kind::Value { value: Value::Error } => self.wrapped(tree.str(n.text), false, cols),
             Kind::Value { .. } => 1,
-            Kind::Header | Kind::Head { .. } | Kind::Cell { .. } => 1,
+            Kind::Header | Kind::Head { .. } | Kind::Cell { .. } | Kind::Twig { .. } => 1,
             Kind::Button
             | Kind::Action
             | Kind::Choice { .. }

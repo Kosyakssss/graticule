@@ -15,7 +15,7 @@ use crate::form::{Control, Item, Setting, Settings};
 use crate::ink::Ink;
 use crate::message::Message;
 use crate::picture::Picture;
-use crate::table::{Cell, Rows, Sort};
+use crate::table::{Branch, Cell, Rows, Sort};
 use crate::tree::{Board, Holds, Id, Kind, ListInfo, NONE, Span, Tone, Tree};
 use crate::value::{Integer, Value, grouped};
 
@@ -116,6 +116,14 @@ impl<C: 'static, S, T: 'static> Listed<'_, '_, C, S, T> {
     /// Rows can be dragged to a new place, which runs `cmd` with the row's key and the place, counted from the top of the list before the move: `Cmd::Move(#[subject] Key<Item>, usize)`. Give it the command itself, so it costs nothing to keep.
     pub fn on_move(self, cmd: impl Fn(Key<T>, usize) -> C + 'static) -> Self {
         self.ui.tree.moves.push((self.node, Box::new(move |key, to| cmd(Key::from_raw(key), to))));
+        self
+    }
+
+    /// How many rows tall it is when it sits among other things rather than filling the page.
+    pub fn height(self, rows: i32) -> Self {
+        if let Kind::List { rows: r, .. } = &mut self.ui.tree.nodes[self.node as usize].kind {
+            *r = rows.max(3);
+        }
         self
     }
 }
@@ -1183,14 +1191,43 @@ impl<'a, C, S> Ui<'a, C, S> {
     /// A list of `items`, scrolled by whole rows, whose selection lives at `selection`. `row` describes one item; it is called only for the rows that show, so a list of fifty million costs what a screenful does. `items` is a list, or a list in an order worked out in the background: `self.order.of(&self.files)`.
     #[track_caller]
     pub fn list<'r, T: Record, F: Field>(&mut self, items: impl Into<Rows<'r, T>>, selection: FactPath<F, Selection<T>>, mut row: impl FnMut(&mut Ui<'_, C, Key<T>>, &T)) -> Listed<'_, 'a, C, S, T> {
-        let i = self.rows(&items.into(), selection, Location::caller(), false, |ui, item, _| row(ui, item));
+        let i = self.rows(&items.into(), selection, Location::caller(), false, |_, _, _, _| {}, |ui, item, _| row(ui, item));
+        Listed { ui: self, node: i, items: PhantomData }
+    }
+
+    /// A tree of `items`: a list whose rows sit inside one another, each branch opened and closed by the keys in the `Vec` at `open`. Give it the rows in an order made by [`Order::tree`](crate::table::Order::tree) from the list and `open`, worked out in the background; `row` describes one item, after its twig. A click on a twig, or Right and Left on the focused row, opens and closes it; Right on an open branch goes into it and Left on a row inside one goes up to it.
+    #[track_caller]
+    pub fn tree<'r, T: Record, F: Field>(
+        &mut self,
+        items: impl Into<Rows<'r, T>>,
+        selection: FactPath<F, Selection<T>>,
+        open: FactPath<F, Vec<Key<T>>>,
+        mut row: impl FnMut(&mut Ui<'_, C, Key<T>>, &T),
+    ) -> Listed<'_, 'a, C, S, T> {
+        let at = Location::caller();
+        let items = items.into();
+        let now: Vec<Key<T>> = self.facts::<F>().and_then(|f| open.get(f)).cloned().unwrap_or_default();
+        let path = open.erased();
+        let twig = |ui: &mut Self, r: u32, index: usize, key: u128| {
+            let Some(nest) = items.nest(index) else { return };
+            let t = ui.tree.add(r, Kind::Twig { depth: nest.depth, branch: nest.branch }, Some(ui.tree.nodes[r as usize].id.mix(0x7419)), at);
+            ui.tree.nodes[t as usize].span = crate::tree::cols(i32::from(nest.depth) * 2 + 2);
+            let next: Vec<Key<T>> = match nest.branch {
+                Branch::Leaf => return,
+                Branch::Open => now.iter().copied().filter(|k| k.raw() != key).collect(),
+                Branch::Closed => now.iter().copied().chain([Key::from_raw(key)]).collect(),
+            };
+            let said = if nest.branch == Branch::Open { "Close the branch" } else { "Open the branch" };
+            ui.set(t, path, Field::value(&next), said.to_string());
+        };
+        let i = self.rows(&items, selection, at, false, twig, |ui, item, _| row(ui, item));
         Listed { ui: self, node: i, items: PhantomData }
     }
 
     /// A table of `items`: a list whose rows are cells in named columns under a row of heads. `row` gives an item's cells, `row.cell(t!("Size"), file.size)`, the same columns in the same order for every item; it is called only for the rows that show. Columns share the width, and the user can drag the gap after a head to make its column wider or narrower; in a narrow window the columns that don't fit are left out from the right. With `.sort(Files::sort)` pressing a head sorts by its column.
     #[track_caller]
     pub fn table<'r, T: Record, F: Field>(&mut self, items: impl Into<Rows<'r, T>>, selection: FactPath<F, Selection<T>>, mut row: impl FnMut(&mut Row<'_, '_, C, T>, &T)) -> Tabled<'_, 'a, C, S, T> {
-        let i = self.rows(&items.into(), selection, Location::caller(), true, |ui, item, heads| row(&mut Row { ui, heads, column: 0 }, item));
+        let i = self.rows(&items.into(), selection, Location::caller(), true, |_, _, _, _| {}, |ui, item, heads| row(&mut Row { ui, heads, column: 0 }, item));
         Tabled { ui: self, node: i, items: PhantomData }
     }
 
@@ -1200,6 +1237,7 @@ impl<'a, C, S> Ui<'a, C, S> {
         selection: FactPath<F, Selection<T>>,
         at: &'static Location<'static>,
         table: bool,
+        mut twig: impl FnMut(&mut Self, u32, usize, u128),
         mut row: impl FnMut(&mut Ui<'_, C, Key<T>>, &T, bool),
     ) -> u32 {
         let i = self.add(Kind::List { count: items.len() as u32, first: 0, shown: 0, rows: 0 }, at);
@@ -1226,6 +1264,7 @@ impl<'a, C, S> Ui<'a, C, S> {
             let r = self.tree.add(i, Kind::ListRow { key: raw, index: index as u32, selected, focused }, Some(row_id), at);
             self.tree.nodes[r as usize].subject = Some(raw);
             self.tree.nodes[r as usize].path = Some(erased);
+            twig(self, r, index, raw);
             row(&mut self.child(r, Some(raw)), item, false);
             shown = n as u32 + 1;
         }

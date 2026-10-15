@@ -39,20 +39,20 @@ impl Doc {
     }
 
     /// Replaces every place `needle` appears with `with`, as one change, and says how many there were.
-    pub fn replace_all(&mut self, needle: &str, with: &str, selections: &mut Selections) -> (usize, Outcome) {
+    pub fn replace_all(&mut self, needle: &str, with: &str) -> (usize, Outcome) {
         let found = self.find_all(needle);
         let changes = Changes::new(found.iter().map(|r| (r.clone(), with.to_string())));
-        (found.len(), self.change(&changes, selections))
+        (found.len(), self.change(&changes))
     }
-}
 
-impl Selections {
-    /// Selects every place `needle` appears, keeping the current selection when it appears nowhere.
-    pub fn select_all(&mut self, doc: &Doc, needle: &str) {
-        let found = doc.find_all(needle);
-        if !found.is_empty() {
-            *self = Selections::new(found.into_iter().map(|r| Span::new(r.start, r.end)).collect(), 0, doc.len());
+    /// Selects every place `needle` appears and says how many there were, keeping the selections as they are when it appears nowhere.
+    pub fn select_matches(&mut self, needle: &str) -> usize {
+        let found = self.find_all(needle);
+        let count = found.len();
+        if count > 0 {
+            self.select(Selections::new(found.into_iter().map(|r| Span::new(r.start, r.end)).collect(), 0, self.len()));
         }
+        count
     }
 }
 

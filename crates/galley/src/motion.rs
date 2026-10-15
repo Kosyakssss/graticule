@@ -2,7 +2,6 @@ use ropey::RopeSlice;
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
 use crate::doc::Doc;
-use crate::selection::{Selections, Span};
 
 /// A way to move through text. Left and right step over whole characters as a reader sees them, so an accented letter or an emoji with its modifiers is one step.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -118,16 +117,6 @@ impl Doc {
     fn blank(&self, line: usize) -> bool {
         let range = self.line(line);
         (range.start..range.end).all(|i| matches!(self.char(i), Some(' ' | '\t')))
-    }
-}
-
-impl Selections {
-    /// Every cursor moved by `motion`. Extending keeps where each began, so it selects what was passed over; otherwise each becomes a cursor where it lands.
-    pub fn moved(&mut self, doc: &Doc, motion: Motion, extend: bool) {
-        self.each(doc.len(), |s| {
-            let head = doc.motion(s.head, motion);
-            if extend { Span::new(s.anchor, head) } else { Span::cursor(head) }
-        });
     }
 }
 

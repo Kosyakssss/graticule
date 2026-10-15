@@ -1,23 +1,24 @@
 use std::fmt;
 use std::ops::Range;
 
-use ledger::{ErasedPath, Field, Op, Outcome, Step, Value};
+use ledger::{Change, Editable, ErasedPath, Field, Op, Outcome, Step, Travel, Typed, Value};
 use ropey::Rope;
 
 use crate::changes::Changes;
-use crate::motion;
+use crate::motion::{self, Motion};
 use crate::selection::{Selections, Span};
 
-/// Text of any length, kept in a rope so an edit anywhere costs the same in a line or in a hundred megabytes. It is a field of the facts: each edit is recorded as an operation, so undo reverses it and saving writes it.
+/// Text of any length with its cursors, kept in a rope so an edit anywhere costs the same in a line or in a hundred megabytes. It is a field of the facts: each edit is recorded as an operation, so undo reverses it, and the cursors move with the text and come back with undo. Positions are counted in characters.
 #[derive(Clone, Default)]
 pub struct Doc {
     rope: Rope,
+    selections: Selections,
     at: ErasedPath,
 }
 
 impl Doc {
     pub fn new(text: &str) -> Self {
-        Doc { rope: Rope::from_str(text), at: ErasedPath::ROOT }
+        Doc { rope: Rope::from_str(text), selections: Selections::default(), at: ErasedPath::ROOT }
     }
 
     /// How many characters it holds.
@@ -63,8 +64,35 @@ impl Doc {
         self.rope.slice(range.start.min(end)..end).to_string()
     }
 
-    /// Replaces a range of characters with new text. A range past the end changes nothing.
+    /// The cursors and selections.
+    pub fn selections(&self) -> &Selections {
+        &self.selections
+    }
+
+    /// Puts the cursors and selections somewhere else.
+    pub fn select(&mut self, selections: Selections) {
+        self.selections = Selections::new(selections.spans().to_vec(), selections.primary_index(), self.len());
+    }
+
+    /// Replaces a range of characters with new text, carrying the cursors with it. A range past the end changes nothing.
     pub fn replace(&mut self, range: Range<usize>, inserted: &str) -> Outcome {
+        self.change(&Changes::new([(range, inserted.to_string())]))
+    }
+
+    /// Makes all the changes at once and moves the cursors with the text under them.
+    pub fn change(&mut self, changes: &Changes) -> Outcome {
+        let mut outcome = Outcome::Nothing;
+        for (range, text) in changes.iter().rev() {
+            if self.splice(range.clone(), text).changed() {
+                outcome = Outcome::Changed;
+            }
+        }
+        let len = self.len();
+        self.selections.map(changes, len);
+        outcome
+    }
+
+    fn splice(&mut self, range: Range<usize>, inserted: &str) -> Outcome {
         if range.start > range.end || range.end > self.len() || (range.is_empty() && inserted.is_empty()) || self.rope.slice(range.clone()) == inserted {
             return Outcome::Nothing;
         }
@@ -78,58 +106,125 @@ impl Doc {
         Outcome::Changed
     }
 
-    /// Makes all the changes at once and moves the selections with the text under them.
-    pub fn change(&mut self, changes: &Changes, selections: &mut Selections) -> Outcome {
-        let mut outcome = Outcome::Nothing;
-        for (range, text) in changes.iter().rev() {
-            if self.replace(range.clone(), text).changed() {
-                outcome = Outcome::Changed;
-            }
-        }
-        selections.map(changes, self.len());
-        outcome
-    }
-
     /// Types text at every cursor, replacing what each selects, and leaves each cursor after it.
-    pub fn insert(&mut self, selections: &mut Selections, text: &str) -> Outcome {
-        let changes = Changes::new(selections.spans().iter().map(|s| (s.range(), text.to_string())));
-        let outcome = self.change(&changes, selections);
-        selections.each(self.len(), |s| Span::cursor(s.head.max(s.anchor)));
-        outcome
+    pub fn insert(&mut self, text: &str) -> Outcome {
+        let changes = Changes::new(self.selections.spans().iter().map(|s| (s.range(), text.to_string())));
+        self.typed(&changes, |s| s.range().end)
     }
 
     /// Starts a new line at every cursor, indented like the line it was on.
-    pub fn insert_line(&mut self, selections: &mut Selections) -> Outcome {
-        let changes = Changes::new(selections.spans().iter().map(|s| {
+    pub fn insert_line(&mut self) -> Outcome {
+        let changes = Changes::new(self.selections.spans().iter().map(|s| {
             let line = self.line(self.line_of(s.range().start));
             let indent: String = self.text(line).chars().take_while(|c| *c == ' ' || *c == '\t').collect();
             (s.range(), format!("\n{indent}"))
         }));
-        let outcome = self.change(&changes, selections);
-        selections.each(self.len(), |s| Span::cursor(s.head.max(s.anchor)));
+        self.typed(&changes, |s| s.range().end)
+    }
+
+    /// Deletes what each selection holds, or at each cursor the character or word before it, or after it when `forward`.
+    pub fn delete(&mut self, forward: bool, word: bool) -> Outcome {
+        let changes = Changes::new(self.selections.spans().iter().map(|s| {
+            let range = match (s.is_empty(), forward, word) {
+                (false, ..) => s.range(),
+                (true, false, false) => motion::before(self, s.head)..s.head,
+                (true, true, false) => s.head..motion::after(self, s.head),
+                (true, false, true) => self.motion(s.head, Motion::WordPrevious)..s.head,
+                (true, true, true) => s.head..self.motion(s.head, Motion::WordEnd),
+            };
+            (range, String::new())
+        }));
+        self.typed(&changes, |s| s.range().start)
+    }
+
+    fn typed(&mut self, changes: &Changes, rest: impl Fn(Span) -> usize) -> Outcome {
+        let outcome = self.change(changes);
+        let len = self.len();
+        self.selections.each(len, |s| Span::cursor(rest(s)));
         outcome
     }
 
-    /// Deletes what each selection holds, or the character before each cursor.
-    pub fn delete_back(&mut self, selections: &mut Selections) -> Outcome {
-        let changes = Changes::new(selections.spans().iter().map(|s| match s.is_empty() {
-            true => (motion::before(self, s.head)..s.head, String::new()),
-            false => (s.range(), String::new()),
-        }));
-        let outcome = self.change(&changes, selections);
-        selections.each(self.len(), |s| Span::cursor(s.head.min(s.anchor)));
-        outcome
+    /// Moves every cursor by `motion`. Extending keeps where each began, so it selects what was passed over; otherwise a selection moved left or right becomes a cursor at its start or end.
+    pub fn go(&mut self, motion: Motion, extend: bool) {
+        let doc = &*self;
+        let mut selections = self.selections.clone();
+        selections.each(doc.len(), |s| match (extend, motion) {
+            (false, Motion::Left) if !s.is_empty() => Span::cursor(s.range().start),
+            (false, Motion::Right) if !s.is_empty() => Span::cursor(s.range().end),
+            (true, _) => Span::new(s.anchor, doc.motion(s.head, motion)),
+            (false, _) => Span::cursor(doc.motion(s.head, motion)),
+        });
+        self.selections = selections;
     }
 
-    /// Deletes what each selection holds, or the character after each cursor.
-    pub fn delete_forward(&mut self, selections: &mut Selections) -> Outcome {
-        let changes = Changes::new(selections.spans().iter().map(|s| match s.is_empty() {
-            true => (s.head..motion::after(self, s.head), String::new()),
-            false => (s.range(), String::new()),
-        }));
-        let outcome = self.change(&changes, selections);
-        selections.each(self.len(), |s| Span::cursor(s.head.min(s.anchor)));
-        outcome
+    /// Puts a single cursor at `at`, or extends the primary selection to it.
+    pub fn place(&mut self, at: usize, extend: bool) {
+        let at = at.min(self.len());
+        let anchor = if extend { self.selections.primary().anchor } else { at };
+        self.selections = Selections::new(vec![Span::new(anchor, at)], 0, self.len());
+    }
+
+    /// Adds a cursor at `at` and makes it primary.
+    pub fn add_cursor(&mut self, at: usize) {
+        let len = self.len();
+        self.selections.add(Span::cursor(at), len);
+    }
+
+    pub fn select_all(&mut self) {
+        self.selections = Selections::new(vec![Span::new(0, self.len())], 0, self.len());
+    }
+
+    /// Keeps only the primary cursor or selection, and when that is all there is, lets go of what it selects.
+    pub fn collapse(&mut self) {
+        if self.selections.spans().len() > 1 {
+            self.selections.only_primary();
+        } else {
+            let head = self.selections.primary().head;
+            self.place(head, false);
+        }
+    }
+
+    /// Answers what was typed into an editor showing it.
+    pub fn typed_in(&mut self, typed: &Typed) -> Outcome {
+        let before = self.selections.clone();
+        let outcome = match typed {
+            Typed::Insert(text) => return self.insert(text),
+            Typed::NewLine => return self.insert_line(),
+            Typed::Delete { forward, word } => return self.delete(*forward, *word),
+            Typed::Move { to, extend } => {
+                let (motion, times) = match to {
+                    Travel::Left => (Motion::Left, 1),
+                    Travel::Right => (Motion::Right, 1),
+                    Travel::WordLeft => (Motion::WordPrevious, 1),
+                    Travel::WordRight => (Motion::WordEnd, 1),
+                    Travel::Up => (Motion::Up, 1),
+                    Travel::Down => (Motion::Down, 1),
+                    Travel::LineStart => (Motion::LineStart, 1),
+                    Travel::LineEnd => (Motion::LineEnd, 1),
+                    Travel::PageUp(n) => (Motion::Up, (*n).max(1)),
+                    Travel::PageDown(n) => (Motion::Down, (*n).max(1)),
+                    Travel::Start => (Motion::Start, 1),
+                    Travel::End => (Motion::End, 1),
+                };
+                for _ in 0..times {
+                    self.go(motion, *extend);
+                }
+                Outcome::Nothing
+            }
+            Typed::Place { at, extend } => {
+                self.place(*at, *extend);
+                Outcome::Nothing
+            }
+            Typed::SelectAll => {
+                self.select_all();
+                Outcome::Nothing
+            }
+            Typed::Collapse => {
+                self.collapse();
+                Outcome::Nothing
+            }
+        };
+        if self.selections != before { Outcome::Changed } else { outcome }
     }
 
     pub(crate) fn rope(&self) -> &Rope {
@@ -177,13 +272,18 @@ impl From<&str> for Doc {
 }
 
 impl Field for Doc {
-    type Snap = ();
+    type Snap = Selections;
 
-    fn snap(&self) {}
+    fn snap(&self) -> Selections {
+        self.selections.clone()
+    }
 
-    fn diff(&self, _: &(), at: ErasedPath, _: &mut Vec<Op>) {
+    fn diff(&self, before: &Selections, at: ErasedPath, out: &mut Vec<Op>) {
         if self.at != at {
             ledger::replaced(std::any::type_name::<Self>());
+        }
+        if self.selections != *before {
+            out.push(Op::Select { selection: at, before: before.value(), after: self.selections.value() });
         }
     }
 
@@ -221,17 +321,27 @@ impl Field for Doc {
                 self.rope.insert(start, inserted);
                 true
             }
+            ([], Op::Select { after, .. }) => match Selections::from_value(after) {
+                Some(selections) => {
+                    self.selections = selections;
+                    true
+                }
+                None => false,
+            },
             ([], Op::Set { after: Value::Str(s), .. }) => {
                 self.rope = Rope::from_str(s);
+                let len = self.len();
+                self.selections.each(len, |s| s);
                 true
             }
             _ => false,
         }
     }
 
-    fn edit(&mut self, steps: &[Step], change: &ledger::Change) -> Outcome {
+    fn edit(&mut self, steps: &[Step], change: &Change) -> Outcome {
         match (steps, change) {
-            ([], ledger::Change::Set(Value::Str(s))) => {
+            ([], Change::Typed(typed)) => self.typed_in(typed),
+            ([], Change::Set(Value::Str(s))) => {
                 let len = self.len();
                 self.replace(0..len, s)
             }
@@ -241,3 +351,34 @@ impl Field for Doc {
 }
 
 impl ledger::Document for Doc {}
+
+impl Editable for Doc {
+    fn line_count(&self) -> usize {
+        self.rope.len_lines()
+    }
+
+    fn line(&self, line: usize, each: &mut dyn FnMut(&str)) {
+        for chunk in self.rope.slice(Doc::line(self, line)).chunks() {
+            each(chunk);
+        }
+    }
+
+    fn line_start(&self, line: usize) -> usize {
+        Doc::line(self, line).start
+    }
+
+    fn line_of(&self, at: usize) -> usize {
+        Doc::line_of(self, at)
+    }
+
+    fn cursors(&self, out: &mut Vec<(usize, usize)>) -> usize {
+        let len = self.len();
+        out.extend(self.selections.spans().iter().map(|s| (s.anchor.min(len), s.head.min(len))));
+        self.selections.primary_index()
+    }
+
+    fn selected(&self) -> String {
+        let parts: Vec<String> = self.selections.spans().iter().filter(|s| !s.is_empty()).map(|s| self.text(s.range())).collect();
+        parts.join("\n")
+    }
+}

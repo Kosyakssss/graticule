@@ -261,6 +261,7 @@ pub struct Runner<A: App> {
     picks: HashMap<Id, crate::tree::Picking>,
     scrub: Option<(Id, i64)>,
     spans: HashMap<Id, i32>,
+    dragging: Option<(Id, crate::canvas::Drag, (f32, f32))>,
     aim: Option<(Id, u64)>,
     opened: Option<Id>,
     browse: Option<Id>,
@@ -364,6 +365,7 @@ impl<A: App> Runner<A> {
             picks: HashMap::new(),
             scrub: None,
             spans: HashMap::new(),
+            dragging: None,
             aim: None,
             opened: None,
             browse: None,
@@ -469,6 +471,7 @@ impl<A: App> Runner<A> {
         self.tree.picks.clone_from(&self.picks);
         self.tree.scrub = self.scrub;
         self.tree.spans.clone_from(&self.spans);
+        self.tree.dragging = self.dragging.as_ref().map(|(id, drag, _)| (*id, drag.clone()));
         self.tree.reveal = self.reveal;
         let root = self.tree.root();
         A::view(&self.facts, &mut Ui::new(&mut self.tree, &self.facts, &self.scrolls, root));
@@ -2944,16 +2947,90 @@ impl<A: App> Runner<A> {
         true
     }
 
-    fn canvas_hit(&self, frame: &Frame, i: u32) -> Option<u64> {
-        let (x, y) = frame.pointer?;
-        let n = self.tree.nodes[i as usize];
+    fn canvas_scale(&self, frame: &Frame, i: u32) -> Option<(crate::canvas::Scale, (f32, f32))> {
         let b = self.tree.canvases.iter().find(|b| b.node == i)?;
         let m = frame.metrics;
-        let r = m.rect(n.area);
+        let r = m.rect(self.tree.nodes[i as usize].area);
         let (w, h) = (r.w.round().max(1.0), r.h.round().max(1.0));
         let hair = m.hair();
-        let scale = crate::canvas::Scale { width: w as u32, height: h as u32, weights: [hair, hair, hair * 2.0], dot: (m.cell_h * 0.2).round().max(2.0) };
-        let at = (x - r.x.round(), y - r.y.round());
+        let space = b.camera.map(|(_, camera)| crate::components::camera_space(&camera, &m, w, h));
+        Some((crate::canvas::Scale { width: w as u32, height: h as u32, weights: [hair, hair, hair * 2.0], dot: (m.cell_h * 0.2).round().max(2.0), space }, (r.x.round(), r.y.round())))
+    }
+
+    fn canvas_point(&self, frame: &Frame, i: u32) -> Option<(f64, f64)> {
+        let (x, y) = frame.pointer?;
+        let b = self.tree.canvases.iter().find(|b| b.node == i)?;
+        let (scale, (left, top)) = self.canvas_scale(frame, i)?;
+        let [x0, x1, y0, y1] = scale.space.unwrap_or(b.space);
+        let (fx, fy) = ((x - left) / scale.width as f32, (y - top) / scale.height as f32);
+        Some((f64::from(x0 + fx * (x1 - x0)), f64::from(y0 + fy * (y1 - y0))))
+    }
+
+    fn drag_canvas(&self, col: i32, row: i32) -> Option<u32> {
+        let i = self.hit(col, row)?;
+        self.tree.drags.iter().any(|(n, _)| *n == i).then_some(i)
+    }
+
+    fn press_canvas(&mut self, frame: &Frame, i: u32) -> bool {
+        let (Some(at), Some(px)) = (self.canvas_point(frame, i), frame.pointer) else { return false };
+        let drag = crate::canvas::Drag { from: at, to: at, trail: vec![at], moved: false, shift: frame.mods.shift };
+        self.reading = None;
+        self.dragging = Some((self.tree.nodes[i as usize].id, drag, px));
+        self.stale = true;
+        true
+    }
+
+    fn drag_on(&mut self, frame: &Frame) -> bool {
+        let Some((id, _, from)) = self.dragging else { return false };
+        let Some(i) = self.tree.find(id) else { return false };
+        let (Some(at), Some((x, y))) = (self.canvas_point(frame, i), frame.pointer) else { return true };
+        let wobble = 3.0 * frame.metrics.scale;
+        let Some((_, drag, _)) = &mut self.dragging else { return true };
+        if drag.to == at {
+            return true;
+        }
+        drag.to = at;
+        drag.trail.push(at);
+        drag.moved |= (x - from.0).abs() > wobble || (y - from.1).abs() > wobble;
+        self.stale = true;
+        true
+    }
+
+    fn let_go(&mut self) -> bool {
+        let Some((id, drag, _)) = self.dragging.take() else { return false };
+        self.stale = true;
+        let cmd = self.tree.find(id).and_then(|i| self.tree.drags.iter().find(|(n, _)| *n == i)).map(|(_, cmd)| *cmd);
+        match cmd {
+            Some(cmd) => self.run(cmd(drag)),
+            None => true,
+        }
+    }
+
+    fn wheel_camera(&mut self, frame: &Frame, col: i32, row: i32, dx: f32, dy: f32) -> Option<bool> {
+        let i = self.hit(col, row)?;
+        let (path, camera) = self.tree.canvases.iter().find(|b| b.node == i)?.camera?;
+        let m = frame.metrics;
+        let (x, y) = frame.pointer?;
+        let r = m.rect(self.tree.nodes[i as usize].area);
+        let (to, said) = if frame.mods.primary && dy != 0.0 {
+            let around = (f64::from((x - r.x.round()) / m.scale), f64::from((y - r.y.round()) / m.scale));
+            let closer = dy > 0.0;
+            (camera.zoomed(if closer { 1.25 } else { 0.8 }, around), if closer { "Zoom in" } else { "Zoom out" })
+        } else if frame.mods.shift && dx == 0.0 {
+            (camera.panned(f64::from(dy / m.scale), 0.0), "Pan")
+        } else {
+            (camera.panned(f64::from(dx / m.scale), f64::from(dy / m.scale)), "Pan")
+        };
+        Some(to != camera && self.set_value(path, ledger::Field::value(&to), said.to_string()))
+    }
+
+    fn canvas_hit(&self, frame: &Frame, i: u32) -> Option<u64> {
+        let (x, y) = frame.pointer?;
+        let b = self.tree.canvases.iter().find(|b| b.node == i)?;
+        let m = frame.metrics;
+        let hair = m.hair();
+        let (scale, (left, top)) = self.canvas_scale(frame, i)?;
+        let at = (x - left, y - top);
         let key = b.drawings.iter().rev().find_map(|d| d.hit(&scale, at, (m.cell_h * 0.15).max(hair)))?;
         b.presses.iter().any(|p| p.0 == key).then_some(key)
     }
@@ -3551,6 +3628,10 @@ impl<A: App> Runner<A> {
             && let Some(done) = self.menu_key(chord)
         {
             return done;
+        }
+        if chord.key == Key::Escape && self.dragging.take().is_some() {
+            self.stale = true;
+            return true;
         }
         if chord.key == Key::Escape && chord.mods == Mods::default() && self.opened.is_some() {
             return self.close_opened();
@@ -4761,6 +4842,9 @@ impl<A: App> Runner<A> {
         }
         match input {
             Input::Moved { .. } => {
+                if self.dragging.is_some() {
+                    return self.drag_on(frame);
+                }
                 if self.carried(frame) {
                     return true;
                 }
@@ -4849,6 +4933,9 @@ impl<A: App> Runner<A> {
                 }
                 if let Some((x, y)) = frame.pointer {
                     let (col, row) = frame.metrics.cell_at(x, y);
+                    if let Some(i) = self.drag_canvas(col, row) {
+                        return self.press_canvas(frame, i);
+                    }
                     if let Some(head) = self.column_edge(col, row) {
                         let n = self.tree.nodes[head as usize];
                         self.resizing = Some(Resizing { id: n.id, from: col, width: n.area.cols, sign: 1, most: i32::MAX });
@@ -4945,6 +5032,9 @@ impl<A: App> Runner<A> {
                 true
             }
             Input::Release { button: Button::Left } => {
+                if self.dragging.is_some() {
+                    return self.let_go();
+                }
                 self.drag = None;
                 self.placing = None;
                 if self.resizing.take().is_some() {
@@ -4996,6 +5086,9 @@ impl<A: App> Runner<A> {
             Input::Wheel { dx, dy } => {
                 let Some((x, y)) = frame.pointer else { return false };
                 let (col, row) = frame.metrics.cell_at(x, y);
+                if let Some(done) = self.wheel_camera(frame, col, row, dx, dy) {
+                    return done;
+                }
                 if let Some(done) = self.wheel_axis(frame, col, row, dx, dy) {
                     return done;
                 }

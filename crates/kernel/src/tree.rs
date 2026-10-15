@@ -652,6 +652,9 @@ pub struct ListInfo {
 /// The command a file dropped from the system makes.
 pub type Takes<C> = fn(crate::app::Path) -> C;
 
+/// The command a drag on a canvas makes when it is let go.
+pub type Drags<C> = fn(crate::canvas::Drag) -> C;
+
 /// The command a row dragged to a new place makes, from its key and the place.
 pub type Mover<C> = Box<dyn Fn(u128, usize) -> C>;
 
@@ -687,6 +690,10 @@ pub struct Tree<C> {
     pub shades: Vec<(u32, crate::color::Oklch, crate::color::Channel)>,
     /// The canvases, each with what it draws and the shapes that run a command when pressed.
     pub canvases: Vec<Board>,
+    /// The canvases that take drags, each with the command a drag makes when it is let go.
+    pub drags: Vec<(u32, Drags<C>)>,
+    /// The drag under way on a canvas, by the canvas's id.
+    pub dragging: Option<(Id, crate::canvas::Drag)>,
     /// The shape the keyboard has reached in a canvas, by the canvas's id and the shape's key.
     pub aim: Option<(Id, u64)>,
     /// The raster images, each with the node that shows it.
@@ -766,6 +773,10 @@ pub struct Board {
     pub paint: Option<std::sync::Arc<dyn crate::canvas::Paint>>,
     pub drawings: Vec<std::sync::Arc<crate::canvas::Drawing>>,
     pub presses: Vec<(u64, u32)>,
+    /// The camera it looks through, with where it is in the facts.
+    pub camera: Option<(ledger::ErasedPath, crate::canvas::Camera)>,
+    /// Its own space, for a canvas without a camera: left, right, top and bottom.
+    pub space: [f32; 4],
 }
 
 impl<C> Default for Tree<C> {
@@ -789,6 +800,8 @@ impl<C> Default for Tree<C> {
             months: HashMap::new(),
             shades: Vec::new(),
             canvases: Vec::new(),
+            drags: Vec::new(),
+            dragging: None,
             aim: None,
             images: Vec::new(),
             orders: Vec::new(),
@@ -823,6 +836,7 @@ impl<C> Tree<C> {
         self.numbers.clear();
         self.shades.clear();
         self.canvases.clear();
+        self.drags.clear();
         self.images.clear();
         self.orders.clear();
         self.marks.clear();

@@ -1281,16 +1281,17 @@ impl<'a, C, S> Ui<'a, C, S> {
         }
     }
 
-    /// A box `rows` tall and as wide as it may be, with a space of its own, holding what `f` draws. `label` says what it shows, for screen readers. It is drawn off the main thread, and again only when what it holds changes.
+    /// A box `rows` tall, or with 0 as tall as the page has room for, and as wide as it may be, with a space of its own, holding what `f` draws. `label` says what it shows, for screen readers. It is drawn off the main thread, and again only when what it holds changes.
     #[track_caller]
     pub fn canvas(&mut self, label: impl AsRef<str>, rows: i32, f: impl FnOnce(&mut Canvas<'_, 'a, C, S>)) {
         let i = self.add(Kind::Canvas { rows, pressable: false }, Location::caller());
         let r = self.tree.put(label.as_ref());
         let n = &mut self.tree.nodes[i as usize];
         (n.name, n.span) = (r, crate::tree::Fill);
-        let mut canvas = Canvas { ui: self, drawing: Drawing::new(), board: Board { node: i, paint: None, drawings: Vec::new(), presses: Vec::new() } };
+        let mut canvas = Canvas { ui: self, drawing: Drawing::new(), board: Board { node: i, paint: None, drawings: Vec::new(), presses: Vec::new(), camera: None, space: [0.0, 1.0, 0.0, 1.0] } };
         f(&mut canvas);
         let Canvas { ui, drawing, mut board } = canvas;
+        board.space = drawing.bounds_of_space();
         if !drawing.is_empty() {
             board.drawings.push(Arc::new(drawing));
         }
@@ -1752,6 +1753,24 @@ impl<C, S> Canvas<'_, '_, C, S> {
     /// Draws `drawing` too, under what is drawn on the canvas itself. A drawing made in a job is handed over this way, so the view never builds its shapes.
     pub fn drawing(&mut self, drawing: &Arc<Drawing>) {
         self.board.drawings.push(drawing.clone());
+    }
+
+    /// Draws in page units through the camera at `path`, which the wheel pans and, with the primary key held, zooms around the pointer, each as one change to it.
+    pub fn camera<F: Field>(&mut self, path: FactPath<F, crate::canvas::Camera>) {
+        if let Some(camera) = self.ui.facts::<F>().and_then(|f| path.get(f)).copied() {
+            self.board.camera = Some((path.erased(), camera));
+        }
+    }
+
+    /// Runs `cmd` with each drag on the canvas, a press and a let-go with any moves between, when it is let go: `canvas.on_drag(Cmd::Drew)`. Escape drops a drag under way.
+    pub fn on_drag(&mut self, cmd: crate::tree::Drags<C>) {
+        self.ui.tree.drags.push((self.board.node, cmd));
+    }
+
+    /// The drag under way on this canvas, for showing what letting it go would do.
+    pub fn drag(&self) -> Option<&crate::canvas::Drag> {
+        let id = self.ui.tree.nodes[self.board.node as usize].id;
+        self.ui.tree.dragging.as_ref().filter(|(at, _)| *at == id).map(|(_, d)| d)
     }
 
     /// Runs `cmd` when the shape named `key` is pressed: by a click, or by the arrows and Return once the canvas is reached.

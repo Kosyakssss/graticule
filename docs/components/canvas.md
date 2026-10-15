@@ -18,13 +18,27 @@ ui.canvas("Visits this week", 8, |c| {
 });
 ```
 
-The canvas is as wide as its column and as many rows tall as it is given. Its space runs from 0 to 1 across and down until `space` says otherwise; giving `y` from high to low makes it grow upward, as a chart's does. Lines and polylines are stroked in the style's line, and polygons, rectangles, dots and paths are filled, in ink, until told otherwise. A dot is round and the same size however the space is stretched.
+The canvas is as wide as its column and as many rows tall as it is given; given 0 rows, it takes the height the page has to spare, as an editor does. Its space runs from 0 to 1 across and down until `space` says otherwise; giving `y` from high to low makes it grow upward, as a chart's does. Lines and polylines are stroked in the style's line, and polygons, rectangles, dots and paths are filled, in ink, until told otherwise. A dot is round and the same size however the space is stretched.
 
 The shapes are drawn off the main thread into the canvas's own texture, and drawn again only when what the canvas holds, its size, the style or the theme changes. With many shapes, build a `Drawing` in a job and hand it over with `c.drawing(&drawing)`, so the view never builds them.
 
 ## Pressing shapes
 
 A shape is named by its key, its place in the drawing until `.key()` names it. `c.press(key, cmd)` runs a command when that shape is pressed. Shapes are hit against their outlines, and a thin line counts a little around it, so it can be hit.
+
+## Endless pages and drags
+
+```rust
+ui.canvas("Board", 0, |c| {
+    c.camera(Board::camera);
+    c.on_drag(Cmd::Drew);
+    if let Some(drag) = c.drag() {
+        c.line(at(drag.from), at(drag.to)).ink(Ink::Muted);
+    }
+});
+```
+
+With `c.camera(path)` the canvas looks through a `Camera` fact onto an endless page: what it draws is in page units, one to a screen point at zoom 1, the wheel pans the camera and the wheel with the primary key zooms it around the pointer, each one change to the fact. With `c.on_drag(cmd)`, a press, any moves and a let-go on the canvas run `cmd` with a `Drag` when it is let go: where it was pressed and let go and every place between, in the canvas's space, whether it moved further than a click's wobble and whether Shift was held. `c.drag()` gives the drag under way, so the view can show what letting go would do; Escape drops it. Plotter's whiteboard is built this way.
 
 ## Keys
 

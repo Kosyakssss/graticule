@@ -6,7 +6,125 @@ use std::sync::{Arc, OnceLock};
 
 use swash::zeno::{Cap, Command, HitTest, Join, Mask, PathBuilder, Placement, Point, Scratch, Stroke};
 
+use ledger::{Field, Value};
+
 use crate::ink::{Color, Ink, Theme};
+
+/// Where a canvas looks on an endless page: the page point at its top left corner, and how many of the screen's points one page unit takes. Keep it in the facts, as `#[session] camera: Camera`, and give it to `Canvas::camera`: what the canvas draws is then in page units, the wheel pans it and, with the primary key held, zooms around the pointer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Camera {
+    pub x: f64,
+    pub y: f64,
+    pub zoom: f64,
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Camera { x: 0.0, y: 0.0, zoom: 1.0 }
+    }
+}
+
+impl Camera {
+    /// The least and most a camera zooms.
+    pub const ZOOMS: (f64, f64) = (0.05, 16.0);
+
+    /// The page point under a point of the canvas, in points from its top left.
+    pub fn to_page(&self, (x, y): (f64, f64)) -> (f64, f64) {
+        (self.x + x / self.zoom, self.y + y / self.zoom)
+    }
+
+    /// Where a page point shows on the canvas, in points from its top left.
+    pub fn to_screen(&self, (x, y): (f64, f64)) -> (f64, f64) {
+        ((x - self.x) * self.zoom, (y - self.y) * self.zoom)
+    }
+
+    /// The camera moved by a distance in points, as a drag or the wheel pans it.
+    pub fn panned(&self, dx: f64, dy: f64) -> Camera {
+        Camera { x: self.x - dx / self.zoom, y: self.y - dy / self.zoom, ..*self }
+    }
+
+    /// The camera zoomed by `factor` around a point of the canvas, which stays over the same page point.
+    pub fn zoomed(&self, factor: f64, around: (f64, f64)) -> Camera {
+        let zoom = (self.zoom * factor).clamp(Self::ZOOMS.0, Self::ZOOMS.1);
+        let page = self.to_page(around);
+        Camera { x: page.0 - around.0 / zoom, y: page.1 - around.1 / zoom, zoom }
+    }
+
+    /// The part of the page a canvas `width` by `height` points shows: left, right, top and bottom.
+    pub fn showing(&self, width: f64, height: f64) -> [f64; 4] {
+        [self.x, self.x + width / self.zoom, self.y, self.y + height / self.zoom]
+    }
+}
+
+impl Field for Camera {
+    ledger::register!(Camera);
+    fn same(&self, other: &Self) -> bool {
+        self == other
+    }
+    fn value(&self) -> Value {
+        Value::List(vec![Value::Float(self.x), Value::Float(self.y), Value::Float(self.zoom)])
+    }
+    fn from_value(value: &Value) -> Option<Self> {
+        match value {
+            Value::List(parts) => match parts.as_slice() {
+                [Value::Float(x), Value::Float(y), Value::Float(zoom)] => Some(Camera { x: *x, y: *y, zoom: zoom.clamp(Self::ZOOMS.0, Self::ZOOMS.1) }),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+impl ledger::Document for Camera {}
+
+/// A press on a canvas, dragged and let go, in the canvas's own space (the page, when it has a camera). `Canvas::on_drag` runs a command with it when it is let go, and `Canvas::drag` gives the one under way, for the view to show what letting go would do.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Drag {
+    /// Where it was pressed.
+    pub from: (f64, f64),
+    /// Where it is now, or was let go.
+    pub to: (f64, f64),
+    /// Every place it passed through, from the press on.
+    pub trail: Vec<(f64, f64)>,
+    /// Whether it went further than a click's wobble.
+    pub moved: bool,
+    /// Whether Shift was held when it was pressed.
+    pub shift: bool,
+}
+
+impl Field for Drag {
+    ledger::register!(Drag);
+    fn same(&self, other: &Self) -> bool {
+        self == other
+    }
+    fn value(&self) -> Value {
+        let point = |(x, y): (f64, f64)| Value::List(vec![Value::Float(x), Value::Float(y)]);
+        Value::Map(vec![
+            ("from".into(), point(self.from)),
+            ("to".into(), point(self.to)),
+            ("trail".into(), Value::List(self.trail.iter().copied().map(point).collect())),
+            ("moved".into(), Value::Bool(self.moved)),
+            ("shift".into(), Value::Bool(self.shift)),
+        ])
+    }
+    fn from_value(value: &Value) -> Option<Self> {
+        let point = |v: &Value| match v {
+            Value::List(p) => match p.as_slice() {
+                [Value::Float(x), Value::Float(y)] => Some((*x, *y)),
+                _ => None,
+            },
+            _ => None,
+        };
+        let Value::Map(fields) = value else { return None };
+        let get = |name: &str| fields.iter().find(|(k, _)| k == name).map(|(_, v)| v);
+        let trail = match get("trail")? {
+            Value::List(points) => points.iter().map(point).collect::<Option<_>>()?,
+            _ => return None,
+        };
+        let flag = |name: &str| matches!(get(name), Some(Value::Bool(true)));
+        Some(Drag { from: point(get("from")?)?, to: point(get("to")?)?, trail, moved: flag("moved"), shift: flag("shift") })
+    }
+}
+impl ledger::Document for Drag {}
 
 /// How heavy a line on a canvas is, in the style's weights.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -140,13 +258,14 @@ impl Default for Drawing {
     }
 }
 
-/// The sizes a drawing is drawn at: the box in pixels, the style's weights and a dot's radius.
+/// The sizes a drawing is drawn at: the box in pixels, the style's weights and a dot's radius, and the part of its space the box shows when a camera decides it rather than the drawing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Scale {
     pub width: u32,
     pub height: u32,
     pub weights: [f32; 3],
     pub dot: f32,
+    pub space: Option<[f32; 4]>,
 }
 
 impl Scale {
@@ -155,7 +274,7 @@ impl Scale {
     }
 
     fn hash(&self, h: &mut impl Hasher) {
-        (self.width, self.height, self.dot.to_bits()).hash(h);
+        (self.width, self.height, self.dot.to_bits(), self.space.map(|s| s.map(f32::to_bits))).hash(h);
         for w in self.weights {
             w.to_bits().hash(h);
         }
@@ -283,20 +402,25 @@ impl Drawing {
         })
     }
 
-    /// Where a point of its space lands in a box `width` by `height` pixels, from the box's top left.
-    pub fn place(&self, (x, y): (f32, f32), width: f32, height: f32) -> (f32, f32) {
-        let across = |v: f32, (a, b): (f32, f32), size: f32| if b == a { 0.0 } else { (v - a) / (b - a) * size };
-        (across(x, self.x, width), across(y, self.y, height))
+    /// Its space: left, right, top and bottom.
+    pub fn bounds_of_space(&self) -> [f32; 4] {
+        [self.x.0, self.x.1, self.y.0, self.y.1]
     }
 
-    /// Its words, each with where it starts in a box `width` by `height` pixels and its ink.
-    pub fn labels(&self, width: f32, height: f32) -> impl Iterator<Item = (&str, (f32, f32), Ink)> {
-        self.labels.iter().map(move |l| (&self.text[l.text.start as usize..l.text.end as usize], self.place((l.at.x, l.at.y), width, height), l.ink))
+    /// Where a point of its space lands in a box drawn at `scale`, in pixels from the box's top left.
+    pub fn place(&self, (x, y): (f32, f32), scale: &Scale) -> (f32, f32) {
+        let [x0, x1, y0, y1] = scale.space.unwrap_or(self.bounds_of_space());
+        let across = |v: f32, a: f32, b: f32, size: u32| if b == a { 0.0 } else { (v - a) / (b - a) * size as f32 };
+        (across(x, x0, x1, scale.width), across(y, y0, y1, scale.height))
+    }
+
+    /// Its words, each with where it starts in a box drawn at `scale` and its ink.
+    pub fn labels<'d>(&'d self, scale: &'d Scale) -> impl Iterator<Item = (&'d str, (f32, f32), Ink)> {
+        self.labels.iter().map(move |l| (&self.text[l.text.start as usize..l.text.end as usize], self.place((l.at.x, l.at.y), scale), l.ink))
     }
 
     fn outline(&self, s: &Shape, scale: &Scale, out: &mut Vec<Command>) {
-        let (w, h) = (scale.width as f32, scale.height as f32);
-        let at = |p: Point| Point::from(self.place((p.x, p.y), w, h));
+        let at = |p: Point| Point::from(self.place((p.x, p.y), scale));
         match s.form {
             Form::Path(a, b) => out.extend(self.commands[a as usize..b as usize].iter().map(|c| match *c {
                 Command::MoveTo(p) => Command::MoveTo(at(p)),
@@ -380,7 +504,7 @@ impl Raster {
             for s in &d.shapes {
                 let color = self.theme.get(s.ink);
                 if let (Form::Rect(a, b), Mark::Fill) = (s.form, s.mark) {
-                    let (a, b) = (d.place((a.x, a.y), w as f32, h as f32), d.place((b.x, b.y), w as f32, h as f32));
+                    let (a, b) = (d.place((a.x, a.y), &self.scale), d.place((b.x, b.y), &self.scale));
                     let span = |p: f32, q: f32, most: usize| (p.min(q).round().clamp(0.0, most as f32) as usize, p.max(q).round().clamp(0.0, most as f32) as usize);
                     let ((x0, x1), (y0, y1)) = (span(a.0, b.0, w), span(a.1, b.1, h));
                     for y in y0..y1 {

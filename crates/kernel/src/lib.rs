@@ -51,7 +51,7 @@ pub mod value;
 
 pub use accesskit;
 pub use app::{App, Cx, Effect, Failure, Jobs, Moment, Path, Reply, Said, States};
-pub use canvas::{Drawing, Paint, PaintHook, Target, Weight};
+pub use canvas::{Camera, Drag, Drawing, Paint, PaintHook, Target, Weight};
 pub use chart::{Candle, Plot};
 pub use color::{Channel, Oklch};
 pub use command::{Arg, Argument, Available, Commands, Entry, Form, Subject, no_if, read_arg};

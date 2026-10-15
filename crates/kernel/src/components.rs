@@ -623,14 +623,20 @@ pub fn hook_texture(id: crate::tree::Id) -> u32 {
 /// The sizes a canvas `w` by `h` pixels is drawn at.
 pub fn canvas_scale(p: &Painter, w: f32, h: f32) -> crate::canvas::Scale {
     let line = p.style.line(p.m);
-    crate::canvas::Scale { width: w as u32, height: h as u32, weights: [p.m.hair(), line, line * 2.0], dot: (p.m.cell_h * 0.2).round().max(2.0) }
+    crate::canvas::Scale { width: w as u32, height: h as u32, weights: [p.m.hair(), line, line * 2.0], dot: (p.m.cell_h * 0.2).round().max(2.0), space: None }
+}
+
+/// The part of the page a canvas `w` by `h` pixels shows through `camera`.
+pub fn camera_space(camera: &crate::canvas::Camera, m: &crate::metrics::Metrics, w: f32, h: f32) -> [f32; 4] {
+    camera.showing(f64::from(w / m.scale), f64::from(h / m.scale)).map(|v| v as f32)
 }
 
 fn canvas<C>(p: &mut Painter, tree: &Tree<C>, i: u32, n: &Node, look: Look) {
     let Some(board) = tree.canvases.iter().find(|b| b.node == i) else { return };
     let r = p.rect(n.area);
     let (x, y, w, h) = (r.x.round(), r.y.round(), r.w.round().max(1.0), r.h.round().max(1.0));
-    let scale = canvas_scale(p, w, h);
+    let mut scale = canvas_scale(p, w, h);
+    scale.space = board.camera.map(|(_, camera)| camera_space(&camera, &p.m, w, h));
     let id = texture(n.id);
     let clip = p.clip();
     if let Some(paint) = &board.paint {
@@ -643,7 +649,7 @@ fn canvas<C>(p: &mut Painter, tree: &Tree<C>, i: u32, n: &Node, look: Look) {
     let saved = p.clip_to(Rect::new(x, y, w, h));
     let mono = p.m.mono();
     for d in &board.drawings {
-        for (words, (lx, ly), ink) in d.labels(w, h) {
+        for (words, (lx, ly), ink) in d.labels(&scale) {
             let color = p.theme.get(ink);
             p.text(words, mono, (x + lx, (y + ly - p.m.cell_h / 2.0).round()), None, color);
         }

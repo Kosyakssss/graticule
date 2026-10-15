@@ -1565,7 +1565,17 @@ impl<'a, C, S> Ui<'a, C, S> {
     /// An editor of the text at `path`, as tall as it is given. Only the lines that show are read, so it costs the same for one line or a hundred megabytes. What is typed, deleted, moved or clicked in it arrives in `update` as an `Edit`, by the platform's own conventions, and the text decides what each means at its cursors: `Cmd::Edit(edit) => edit.apply(self)`. It scrolls by the wheel and follows the primary cursor as it moves.
     #[track_caller]
     pub fn editor<F: Field, D: Editable>(&mut self, label: impl AsRef<str>, path: FactPath<F, D>) -> Placed<'_, 'a, C, S> {
-        let at = Location::caller();
+        self.editor_at(label, path, "", Location::caller())
+    }
+
+    /// An editor, as [`editor`](Self::editor) makes it, that underlines every place the `Text` at `find` appears on the lines that show. Finding the next place is the app's, as a command run in a job, since it may be anywhere in the text.
+    #[track_caller]
+    pub fn editor_with_find<F: Field, D: Editable>(&mut self, label: impl AsRef<str>, path: FactPath<F, D>, find: FactPath<F, Text>) -> Placed<'_, 'a, C, S> {
+        let words = self.facts::<F>().and_then(|f| find.get(f)).map(|t| t.as_str().to_string()).unwrap_or_default();
+        self.editor_at(label, path, &words, Location::caller())
+    }
+
+    fn editor_at<F: Field, D: Editable>(&mut self, label: impl AsRef<str>, path: FactPath<F, D>, find: &str, at: &'static Location<'static>) -> Placed<'_, 'a, C, S> {
         let erased = path.erased();
         let i = self.tree.add(self.parent, Kind::Editor { count: 1, first: 0, head: 0, single: true }, Some(Id::ROOT.mix(erased.hash64())), at);
         let r = self.tree.put(label.as_ref());
@@ -1609,6 +1619,7 @@ impl<'a, C, S> Ui<'a, C, S> {
             let start = doc.line_start(line);
             let s = &self.tree.text[text.start as usize..text.end as usize];
             let end = start + s.chars().count();
+            let found: Vec<(u32, u32)> = if find.is_empty() { Vec::new() } else { s.match_indices(find).map(|(b, m)| (b as u32, (b + m.len()) as u32)).collect() };
             let byte = |at: usize| s.char_indices().nth(at - start).map_or(s.len(), |(b, _)| b) as u32;
             let mut marks = Vec::new();
             let mut carets = Vec::new();
@@ -1625,6 +1636,9 @@ impl<'a, C, S> Ui<'a, C, S> {
             (line, used) = (line + 1, used + rows);
             if !marks.is_empty() {
                 self.tree.marks.push((n, marks));
+            }
+            if !found.is_empty() {
+                self.tree.found.push((n, found));
             }
             self.tree.carets.extend(carets);
         }

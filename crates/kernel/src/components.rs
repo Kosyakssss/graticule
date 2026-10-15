@@ -1001,6 +1001,22 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             for (k, row) in crate::field::rows(text, width).enumerate().take(a.rows.max(0) as usize) {
                 p.cells((r.x, r.y + k as f32 * cell_h), a.cols, &text[row], style, theme.ink);
             }
+            if let Some((_, found)) = tree.found.iter().find(|m| m.0 == i) {
+                let t = p.style.line(p.m);
+                for &(s, e) in found {
+                    let (s, e) = (s as usize, e as usize);
+                    for (k, row) in crate::field::rows(text, width).enumerate().take(a.rows.max(0) as usize) {
+                        let (from, to) = (s.max(row.start), e.min(row.end));
+                        if from >= to {
+                            continue;
+                        }
+                        let x0 = r.x + cells_in(&text[row.start..from]) as f32 * p.m.cell_w;
+                        let x1 = r.x + cells_in(&text[row.start..to]) as f32 * p.m.cell_w;
+                        let y = (r.y + k as f32 * cell_h + cell_h * 0.86).round();
+                        p.fill(Rect::new(x0.round(), y, (x1 - x0).round().max(t), t), theme.ink);
+                    }
+                }
+            }
             if look.focused {
                 let bar = (p.m.scale * 2.0).round().max(1.0);
                 for &(_, byte, primary) in tree.carets.iter().filter(|c| c.0 == i) {

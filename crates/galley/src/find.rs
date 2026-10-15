@@ -157,6 +157,24 @@ impl Doc {
         Some(Next { start: found.start, end: found.end, revision: Some(self.revision()) })
     }
 
+    /// Where `needle` appears next after the primary selection, or last before it when `back`, coming round at either end; `None` when it appears nowhere. It looks through the whole text, so run it on a copy in a job.
+    pub fn find_from(&self, needle: &str, back: bool) -> Option<Next> {
+        let primary = self.selections().primary().range();
+        let all = self.find_all(needle);
+        let found = if back { all.iter().rev().find(|r| r.end <= primary.start).or(all.last()) } else { all.iter().find(|r| r.start >= primary.end).or(all.first()) }?;
+        Some(Next { start: found.start, end: found.end, revision: Some(self.revision()) })
+    }
+
+    /// Selects the match `next` found in place of every selection. Refused when the text changed after it was found.
+    pub fn go_to(&mut self, next: &Next) -> Result<(), Stale> {
+        let len = self.len();
+        if next.revision.is_some_and(|r| r != self.revision()) || next.end > len || next.start > next.end {
+            return Err(Stale);
+        }
+        self.select(Selections::new(vec![Span::new(next.start, next.end)], 0, len));
+        Ok(())
+    }
+
     /// Selects the match `next` found, as another selection made primary, and says whether it wasn't selected already. Refused when the text changed after it was found.
     pub fn take_next(&mut self, next: &Next) -> Result<bool, Stale> {
         let len = self.len();

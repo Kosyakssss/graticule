@@ -1,30 +1,34 @@
-window		0 0 75 16	
-  page	Galley	0 0 75 11	
-    group		2 3 71 1	
-      group		2 3 53 1	
-        text field	File	2 3 41 1	
-        button	Choose…	45 3 10 1	
-      button	Open	57 3 7 1	unavailable (Choose a file first)
-      button	Save	66 3 7 1	unavailable (Choose a file first)
-    editor	Text	2 5 71 3	
-      line	Dear reader,	2 5 71 1	
-      line		2 6 71 1	
-      line	The text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.	2 7 71 1	
-    group		2 9 71 1	
+window		0 0 114 16	
+  page	Galley	0 0 114 11	
+    group		2 3 110 1	
+      group		2 3 92 1	
+        text field	File	2 3 80 1	
+        button	Choose…	84 3 10 1	
+      button	Open	96 3 7 1	unavailable (Choose a file first)
+      button	Save	105 3 7 1	unavailable (Choose a file first)
+    editor	Text	2 5 110 3	
+      line	Dear reader,	2 5 110 1	
+      line		2 6 110 1	
+      line	The text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.	2 7 110 1	
+    group		2 9 110 1	
       text field	Find	2 9 16 1	
       text field	Replace with	20 9 16 1	
-      button	Select every match	38 9 19 1	unavailable (Type what to find first)
-      button	Replace all	59 9 14 1	unavailable (Type what to find first)
-  alert		2 11 71 1	
-  status		2 12 71 1	
-  toolbar		2 13 71 3	
+      button	Find the previous	38 9 19 1	unavailable (Type what to find first)
+      button	Find the next	59 9 16 1	unavailable (Type what to find first)
+      button	Select every match	77 9 19 1	unavailable (Type what to find first)
+      button	Replace all	98 9 14 1	unavailable (Type what to find first)
+  alert		2 11 110 1	
+  status		2 12 110 1	
+  toolbar		2 13 110 3	
     button	Open	2 13 6 1	unavailable (Choose a file first)
     button	Save	10 13 6 1	unavailable (Choose a file first)
     button	Select every match	18 13 17 1	unavailable (Type what to find first)
-    button	Add a cursor above	37 13 28 1	unavailable (The cursor is on the first line)
-    button	Add a cursor below	2 14 28 1	
-    button	Add the next match	32 14 24 1	unavailable (Select some text first)
-    button	Replace all	58 14 11 1	unavailable (Type what to find first)
+    button	Find the next	37 13 19 1	unavailable (Type what to find first)
+    button	Find the previous	58 13 28 1	unavailable (Type what to find first)
+    button	Add a cursor above	2 14 28 1	unavailable (The cursor is on the first line)
+    button	Add a cursor below	32 14 28 1	
+    button	Add the next match	62 14 24 1	unavailable (Select some text first)
+    button	Replace all	88 14 11 1	unavailable (Type what to find first)
     button	Undo	2 15 13 1	unavailable (Nothing to undo)
     button	Redo	17 15 19 1	unavailable (Nothing to redo)
     button	Open the palette	38 15 28 1	

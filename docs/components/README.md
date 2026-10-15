@@ -111,7 +111,7 @@ These are the components of spec §6.1 that professional apps need and that neit
 
 | Graticule | HeroUI | Blueprint | Notes |
 |---|---|---|---|
-| Find | | | find and replace in a document (§7.4): Galley finds, selects every match and replaces all, and the Galley face puts fields and buttons for them under its editor; a find bar of its own, stepping from match to match, is not done |
+| Find | | | find and replace in a document (§7.4): Galley finds, selects every match and replaces all, and the Galley face puts fields and buttons for them under its editor; the editor underlines every match that shows, and Find the next and Find the previous step from match to match, worked out in a job |
 | Code and text view | | | the editor is done; syntax, folding and typesetting come with item 27 |
 
 ## Not components

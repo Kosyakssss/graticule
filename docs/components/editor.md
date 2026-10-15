@@ -21,13 +21,15 @@ Cmd::Edit(edit) => edit.apply(self),
 
 The text is a `galley::Doc`, a field of the facts. What is typed, deleted, moved or clicked in the editor arrives in `update` as an `Edit`, and the `Doc` decides what it means at each of its cursors. Every change is a Ledger operation, so undo takes it back with the cursors where they were, and saving writes it. The app's own commands change the same `Doc`: `select_matches` and `replace_all` are how the Galley face finds and replaces.
 
+`ui.editor_with_find(t!("Text"), Galley::text, Galley::find)` also underlines every place the `Text` at `find` appears on the lines that show. Going to the next one is the app's command, since it may be anywhere in the text: `Doc::find_from` works it out in a job on a copy and `Doc::go_to` selects it, refused if the text changed meanwhile.
+
 The editor is as tall as the room it is given, at least three rows, and builds only the lines that show, so a very long file costs no more on screen than a short one. It follows the primary cursor as it moves.
 
 ## Mouse and keys
 
 A click puts the cursor there and Shift with a click selects up to it; dragging selects. The wheel scrolls. Once it has the focus, the keys are the platform's own: the arrows move by a character or a line, with the word keys by a word, Home and End to the ends of a line, the line keys or Page Up and Page Down by a screenful, Shift with any of them selects, Backspace and Delete delete a character or a word, Return starts a new line with the line's indent, Escape keeps only the primary cursor and then lets go of the selection, and select all, copy, cut and paste work as everywhere else. Typing words is one undo step per word.
 
-Up and Down move by whole lines, not by the rows a long line wraps into. Showing what an input method is composing, more cursors from the keyboard, and finding inside the editor itself are not done.
+Up and Down move by the rows a long line wraps into, keeping the column; Page Up and Page Down count whole lines. Showing what an input method is composing is not done.
 
 ## Narrow windows
 

@@ -24,6 +24,12 @@ enum Cmd {
     Saved(Result<Path, Failure>),
     #[label("Select every match")]
     SelectMatches,
+    #[label("Find the next")]
+    FindNext,
+    #[label("Find the previous")]
+    FindPrevious,
+    #[internal]
+    Found(Option<galley::Next>),
     #[label("Add a cursor above")]
     AddCursorAbove,
     #[label("Add a cursor below")]
@@ -46,11 +52,11 @@ impl App for Galley {
     fn available(&self, cmd: &Cmd) -> Available {
         match cmd {
             Cmd::Open | Cmd::Save => no_if(self.file.is_empty(), t!("Choose a file first")),
-            Cmd::SelectMatches | Cmd::ReplaceAll => no_if(self.find.is_empty(), t!("Type what to find first")),
+            Cmd::SelectMatches | Cmd::ReplaceAll | Cmd::FindNext | Cmd::FindPrevious => no_if(self.find.is_empty(), t!("Type what to find first")),
             Cmd::AddCursorAbove => no_if(self.text.line_of(self.text.selections().primary().head) == 0, t!("The cursor is on the first line")),
             Cmd::AddCursorBelow => no_if(self.text.line_of(self.text.selections().primary().head) + 1 >= self.text.lines(), t!("The cursor is on the last line")),
             Cmd::AddNextMatch => no_if(self.text.selections().primary().is_empty(), t!("Select some text first")),
-            Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Replaced(_) | Cmd::NextFound(_) | Cmd::Edit(_) => Yes,
+            Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Replaced(_) | Cmd::NextFound(_) | Cmd::Found(_) | Cmd::Edit(_) => Yes,
         }
     }
 
@@ -74,6 +80,19 @@ impl App for Galley {
             Cmd::SelectMatches => match self.text.select_matches(self.find.as_str()) {
                 0 => cx.say(t!("Nothing matches")),
                 count => cx.say(t!("Selected {count} matches")),
+            },
+            Cmd::FindNext | Cmd::FindPrevious => {
+                let (text, find, back) = (self.text.clone(), self.find.to_string(), matches!(cmd, Cmd::FindPrevious));
+                cx.job(t!("Finding “{find}”"), move || text.find_from(&find, back), Cmd::Found);
+                Outcome::Nothing
+            }
+            Cmd::Found(None) => cx.say(t!("Nothing matches")),
+            Cmd::Found(Some(next)) => match self.text.go_to(&next) {
+                Ok(()) => {
+                    let line = self.text.line_of(self.text.selections().primary().head) + 1;
+                    cx.say(t!("Found on line {line}"))
+                }
+                Err(_) => cx.say(t!("The text changed while it was being searched")),
             },
             Cmd::AddCursorAbove | Cmd::AddCursorBelow => {
                 let before = self.text.selections().spans().len();
@@ -124,10 +143,12 @@ impl App for Galley {
                 ui.button(Cmd::Open);
                 ui.button(Cmd::Save);
             });
-            ui.editor(t!("Text"), Galley::text);
+            ui.editor_with_find(t!("Text"), Galley::text, Galley::find);
             ui.row(|ui| {
                 ui.field(Galley::find, t!("Find"));
                 ui.field(Galley::with, t!("Replace with"));
+                ui.button(Cmd::FindPrevious);
+                ui.button(Cmd::FindNext);
                 ui.button(Cmd::SelectMatches);
                 ui.button(Cmd::ReplaceAll);
             });
@@ -143,6 +164,7 @@ impl App for Galley {
                 let _ = galley.text.select_matches("the");
                 galley
             })
+            .add("Finding a word", Galley { find: Text::from("the"), ..Galley::with_text(LETTER) })
             .add("A long file", Galley::with_text(&(1..=100_000).map(|n| format!("Line {n}\n")).collect::<String>()))
     }
 }

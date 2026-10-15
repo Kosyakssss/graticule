@@ -712,6 +712,8 @@ pub struct Tree<C> {
     pub marks: Vec<(u32, Vec<(u32, u32)>)>,
     /// The cursors of an editor's lines: the line's node, the byte in its text the cursor is before, and whether it is the primary one.
     pub carets: Vec<(u32, u32, bool)>,
+    /// Where what an editor is asked to find appears on each of its lines, as byte ranges, by the line's node.
+    pub found: Vec<(u32, Vec<(u32, u32)>)>,
     /// What the kernel needs from the text each editor shows, without knowing its type.
     pub editors: Vec<EditorInfo>,
     /// Where an editor's cursors are while its lines are made, kept so making them allocates nothing.
@@ -811,6 +813,7 @@ impl<C> Default for Tree<C> {
             picks: HashMap::new(),
             marks: Vec::new(),
             carets: Vec::new(),
+            found: Vec::new(),
             editors: Vec::new(),
             cursors: Vec::new(),
             rulers: Vec::new(),
@@ -841,6 +844,7 @@ impl<C> Tree<C> {
         self.orders.clear();
         self.marks.clear();
         self.carets.clear();
+        self.found.clear();
         self.editors.clear();
         self.rulers.clear();
         self.scales.clear();
@@ -1004,6 +1008,9 @@ impl<C> Tree<C> {
         }
         if let Some((_, marks)) = self.marks.iter().find(|m| m.0 == i as u32) {
             marks.hash(&mut h);
+        }
+        if let Some((_, found)) = self.found.iter().find(|m| m.0 == i as u32) {
+            found.hash(&mut h);
         }
         if let Some((_, image)) = self.images.iter().find(|m| m.0 == i as u32) {
             image.hash(&mut h);

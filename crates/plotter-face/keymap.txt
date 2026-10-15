@@ -4,5 +4,9 @@ o: ellipse
 a: arrow
 d: draw
 delete: remove
+left: move-left
+right: move-right
+up: move-up
+down: move-down
 primary+a: choose-all
 primary+shift+p: palette

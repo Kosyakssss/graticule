@@ -1,5 +1,5 @@
 window		0 0 120 30	
-  page	Plotter	0 0 120 26	
+  page	Plotter	0 0 120 25	
     group		2 3 116 1	
       group		2 3 46 1	
         toggle button	Choose	2 3 9 1	unavailable (Choosing already)
@@ -9,28 +9,33 @@ window		0 0 120 30
         toggle button	Draw	41 3 7 1	
       button	Remove	50 3 9 1	
       button	Show everything	61 3 18 1	
-    canvas	Board, 9 shapes	2 5 116 18	
-    group		2 24 116 1	
-      group		2 24 98 1	
-        text field	File	2 24 86 1	
-        button	Choose…	90 24 10 1	
-      button	Open	102 24 7 1	unavailable (Choose a file first)
-      button	Save	111 24 7 1	unavailable (Choose a file first)
-  alert		2 26 116 1	
-  status		2 27 116 1	
-  toolbar		2 28 116 2	
-    button	Choose	2 28 10 1	unavailable (Choosing already)
-    button	Rectangle	14 28 12 1	
-    button	Ellipse	28 28 9 1	
-    button	Arrow	39 28 9 1	
-    button	Draw	50 28 8 1	
-    button	Remove	60 28 16 1	
-    button	Choose everything	78 28 23 1	
-    button	Bring to front	103 28 12 1	
-    button	Send to back	2 29 12 1	
-    button	Show everything	16 29 15 1	
-    button	Open	33 29 6 1	unavailable (Choose a file first)
-    button	Save	41 29 6 1	unavailable (Choose a file first)
-    button	Undo	49 29 13 1	unavailable (Nothing to undo)
-    button	Redo	64 29 19 1	unavailable (Nothing to redo)
-    button	Open the palette	85 29 28 1	
+    canvas	Board, 9 shapes	2 5 116 17	
+    group		2 23 116 1	
+      group		2 23 98 1	
+        text field	File	2 23 86 1	
+        button	Choose…	90 23 10 1	
+      button	Open	102 23 7 1	unavailable (Choose a file first)
+      button	Save	111 23 7 1	unavailable (Choose a file first)
+  alert		2 25 116 1	
+  status		2 26 116 1	
+  toolbar		2 27 116 3	
+    button	Choose	2 27 10 1	unavailable (Choosing already)
+    button	Rectangle	14 27 12 1	
+    button	Ellipse	28 27 9 1	
+    button	Arrow	39 27 9 1	
+    button	Draw	50 27 8 1	
+    button	Remove	60 27 16 1	
+    button	Move left	78 27 11 1	
+    button	Move right	91 27 12 1	
+    button	Move up	105 27 11 1	
+    button	Move down	2 28 13 1	
+    button	Choose everything	17 28 23 1	
+    button	Bring to front	42 28 12 1	
+    button	Send to back	56 28 12 1	
+    button	Show everything	70 28 15 1	
+    button	Open	87 28 6 1	unavailable (Choose a file first)
+    button	Save	95 28 6 1	unavailable (Choose a file first)
+    button	Export a picture	103 28 14 1	unavailable (Choose a file first)
+    button	Undo	2 29 13 1	unavailable (Nothing to undo)
+    button	Redo	17 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	38 29 28 1	

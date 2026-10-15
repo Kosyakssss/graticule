@@ -105,6 +105,13 @@ impl Shape {
         }
     }
 
+    /// A freehand stroke's outline, to fill: see [`crate::freehand`]. Other shapes have none.
+    pub fn stroke(&self) -> Option<Vec<Point>> {
+        let Kind::Draw(points) = &self.kind else { return None };
+        let points: Vec<Point> = points.chunks_exact(2).map(|p| Point::new(self.x + p[0], self.y + p[1])).collect();
+        Some(crate::freehand::outline(&points, crate::freehand::SIZE))
+    }
+
     fn place_end(&mut self, end: End, at: Point) {
         let (start, finish) = match end {
             End::Start => (at, self.end(End::End)),

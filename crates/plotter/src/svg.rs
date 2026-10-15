@@ -26,9 +26,9 @@ pub fn svg(board: &Board) -> String {
             Kind::Text(text) => {
                 writeln!(out, r#"<text x="{}" y="{}" fill="{color}" font-family="IBM Plex Sans, sans-serif" font-size="16" dominant-baseline="hanging">{}</text>"#, num(b.x), num(b.y), escape(text))
             }
-            Kind::Draw(points) => {
-                let path: Vec<String> = points.chunks_exact(2).map(|p| format!("{},{}", num(shape.x + p[0]), num(shape.y + p[1]))).collect();
-                writeln!(out, r#"<polyline points="{}" {stroke} stroke-linecap="round" stroke-linejoin="round"/>"#, path.join(" "))
+            Kind::Draw(_) => {
+                let path: Vec<String> = shape.stroke().unwrap_or_default().iter().map(|p| format!("{},{}", num(p.x), num(p.y))).collect();
+                writeln!(out, r#"<polygon points="{}" fill="{color}"/>"#, path.join(" "))
             }
             Kind::Arrow => {
                 let (a, z) = (shape.end(End::Start), shape.end(End::End));

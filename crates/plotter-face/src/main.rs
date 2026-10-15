@@ -2,7 +2,8 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use graticule::kernel::canvas::Weight;
+use graticule::kernel::canvas::{Raster, Scale, Weight};
+use graticule::kernel::ink::{Appearance, Theme};
 use graticule::kernel::{Camera, Drag, Drawing};
 use graticule::prelude::*;
 use plotter::{Board, Bounds, End, Gesture, Index, Intent, Kind, Point, Shape, Tool};
@@ -55,6 +56,9 @@ struct Layers {
 const SLICE: usize = 512;
 const SMALL: usize = 4_096;
 
+/// How far the arrow keys move the chosen shapes, in page units.
+const STEP: f64 = 10.0;
+
 /// The most a canvas shows, in points: what is in sight through the camera on the largest screen.
 const SIGHT: (f64, f64) = (3_840.0, 2_160.0);
 
@@ -91,6 +95,14 @@ enum Cmd {
     Draw,
     #[label("Remove")]
     Remove,
+    #[label("Move left")]
+    MoveLeft,
+    #[label("Move right")]
+    MoveRight,
+    #[label("Move up")]
+    MoveUp,
+    #[label("Move down")]
+    MoveDown,
     #[label("Choose everything")]
     ChooseAll,
     #[label("Bring to front")]
@@ -107,6 +119,8 @@ enum Cmd {
     Save,
     #[internal]
     Saved(Result<Path, Failure>),
+    #[label("Export a picture")]
+    ExportPicture,
     #[internal]
     Drew(Drag),
     #[internal]
@@ -118,10 +132,11 @@ impl App for Whiteboard {
 
     fn available(&self, cmd: &Cmd) -> Available {
         match cmd {
-            Cmd::Remove | Cmd::ToFront | Cmd::ToBack => no_if(self.chosen.is_empty(), t!("Choose a shape first")),
+            Cmd::Remove | Cmd::MoveLeft | Cmd::MoveRight | Cmd::MoveUp | Cmd::MoveDown | Cmd::ToFront | Cmd::ToBack => no_if(self.chosen.is_empty(), t!("Choose a shape first")),
             Cmd::ChooseAll if self.chosen.len() == self.board.shapes.len() && !self.board.shapes.is_empty() => No(t!("Everything is chosen already")),
             Cmd::ChooseAll | Cmd::ShowAll => no_if(self.board.shapes.is_empty(), t!("The board is empty")),
-            Cmd::Open | Cmd::Save => no_if(self.file.is_empty(), t!("Choose a file first")),
+            Cmd::ExportPicture if self.board.shapes.is_empty() => No(t!("The board is empty")),
+            Cmd::Open | Cmd::Save | Cmd::ExportPicture => no_if(self.file.is_empty(), t!("Choose a file first")),
             Cmd::Select => no_if(self.tool == Tool::Select, t!("Choosing already")),
             Cmd::Rect => no_if(self.tool == Tool::Rect, t!("Drawing rectangles already")),
             Cmd::Ellipse => no_if(self.tool == Tool::Ellipse, t!("Drawing ellipses already")),
@@ -138,6 +153,10 @@ impl App for Whiteboard {
             Cmd::Ellipse => self.hold(Tool::Ellipse),
             Cmd::Arrow => self.hold(Tool::Arrow),
             Cmd::Draw => self.hold(Tool::Draw),
+            Cmd::MoveLeft => self.nudge(-STEP, 0.0, cx),
+            Cmd::MoveRight => self.nudge(STEP, 0.0, cx),
+            Cmd::MoveUp => self.nudge(0.0, -STEP, cx),
+            Cmd::MoveDown => self.nudge(0.0, STEP, cx),
             Cmd::Remove => {
                 let keys: Vec<_> = self.chosen.iter().collect();
                 let _ = self.chosen.choose(&ledger::Choose::Clear);
@@ -194,6 +213,11 @@ impl App for Whiteboard {
                 Outcome::Nothing
             }
             Cmd::Saved(Ok(path)) => cx.say(t!("Saved to {path}")),
+            Cmd::ExportPicture => {
+                let path = std::path::Path::new(self.file.to_string().as_str()).with_extension("png");
+                cx.write(Path(path), |facts: &Whiteboard| picture(&facts.board), Cmd::Saved);
+                Outcome::Nothing
+            }
             Cmd::Drew(drag) => {
                 let intent = Intent::of(&self.board, &self.index_now(), &self.chosen, self.tool, &gesture(&drag), self.camera.zoom);
                 let made = matches!(intent, Intent::Create { .. });
@@ -307,6 +331,14 @@ impl Whiteboard {
         }
     }
 
+    fn nudge(&mut self, dx: f64, dy: f64, cx: &mut Cx<Cmd>) -> Outcome {
+        let keys: Vec<_> = self.chosen.iter().collect();
+        match self.board.translate(&keys, dx, dy) {
+            Outcome::Nothing => cx.say(t!("The chosen shapes are locked")),
+            moved => moved,
+        }
+    }
+
     fn hold(&mut self, tool: Tool) -> Outcome {
         self.tool = tool;
         Outcome::Changed
@@ -327,11 +359,16 @@ impl Whiteboard {
             keys.push(key);
         }
         for (x, y, label) in boxes {
-            let _ = w.board.add(Shape::new(Key::from_raw(next()), Kind::Text(label.to_string()), Bounds::new(if y > 100.0 { x + 56.0 } else { x + 16.0 }, y + 32.0, 120.0, 16.0)));
+            let _ = w.board.add(Shape::new(
+                Key::from_raw(next()),
+                Kind::Text(label.to_string()),
+                Bounds::new(if y > 100.0 { x + 56.0 } else { x + 16.0 }, if y > 100.0 { y + 18.0 } else { y + 12.0 }, 120.0, 16.0),
+            ));
         }
         let (facts, commands, view) = (keys[0], keys[1], keys[2]);
         for (from, to) in [(commands, facts), (facts, view)] {
-            let (Some(a), Some(b)) = (w.board.shapes.find(from).map(|s| s.bounds().center()), w.board.shapes.find(to).map(|s| s.bounds().center())) else { continue };
+            let below_label = |s: &Shape| s.bounds().center() + Point::new(0.0, 20.0);
+            let (Some(a), Some(b)) = (w.board.shapes.find(from).map(below_label), w.board.shapes.find(to).map(below_label)) else { continue };
             let drawn = Gesture { from: a, to: b, trail: vec![a, b], moved: true, shift: false };
             let intent = Intent::of(&w.board, &Index::of(&w.board), &w.chosen, Tool::Arrow, &drawn, 1.0);
             let _ = w.board.perform(&mut w.chosen, intent, &mut next);
@@ -380,6 +417,25 @@ fn ink(ink: plotter::Ink) -> Ink {
     }
 }
 
+/// How many pixels a page unit takes in an exported picture, the most pixels along its longer side, and how much room it leaves around the shapes.
+const PICTURE_SCALE: f64 = 2.0;
+const PICTURE_MOST: f64 = 8_192.0;
+const PICTURE_MARGIN: f64 = 24.0;
+
+fn picture(board: &Board) -> Vec<u8> {
+    let Some(area) = board.shapes.iter().map(Shape::bounds).reduce(|a, b| a.union(&b)) else { return Vec::new() };
+    let area = area.expand(PICTURE_MARGIN);
+    let fit = PICTURE_SCALE.min(PICTURE_MOST / area.w.max(area.h));
+    let mut drawing = Drawing::new();
+    for shape in board.stacked() {
+        draw(&mut drawing, shape);
+    }
+    let space = [area.x as f32, (area.x + area.w) as f32, area.y as f32, (area.y + area.h) as f32];
+    let hair = fit as f32;
+    let scale = Scale { width: (area.w * fit).ceil() as u32, height: (area.h * fit).ceil() as u32, weights: [hair, hair, hair * 2.0], dot: (hair * 3.0).max(2.0), space: Some(space) };
+    Raster { id: 0, scale, drawings: vec![Arc::new(drawing)], theme: *Theme::of(Appearance::Light) }.png(14.0 * hair)
+}
+
 fn draw(canvas: &mut Drawing, shape: &Shape) {
     let color = ink(shape.ink);
     let b = Bounds::new(shape.x, shape.y, shape.w, shape.h);
@@ -405,8 +461,8 @@ fn draw(canvas: &mut Drawing, shape: &Shape) {
         Kind::Text(text) => {
             canvas.text(at(b.x, b.y + b.h / 2.0), text).ink(color);
         }
-        Kind::Draw(points) => {
-            canvas.polyline(points.chunks_exact(2).map(|p| at(shape.x + p[0], shape.y + p[1]))).ink(color).stroke(Weight::Bold);
+        Kind::Draw(_) => {
+            canvas.polygon(shape.stroke().unwrap_or_default().iter().map(|p| at(p.x, p.y))).ink(color);
         }
         Kind::Arrow => {
             let (a, z) = (shape.end(End::Start), shape.end(End::End));

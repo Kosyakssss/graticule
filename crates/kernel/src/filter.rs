@@ -131,6 +131,7 @@ fn plain(value: &Value) -> &Value {
 fn words(value: &Value) -> String {
     match plain(value) {
         Value::Str(s) => s.clone(),
+        Value::Shared(s) => s.text(),
         Value::Bool(b) => if *b { "yes" } else { "no" }.to_string(),
         Value::Int(n) => n.to_string(),
         Value::UInt(n) => n.to_string(),

@@ -17,6 +17,10 @@ Every write happens on a thread named `ledger`. The main thread sends the entry 
 
 The log keeps growing: it is the command log as well as the crash record, and the `ledger` command (item 21) reads it to show history and replay it. Trimming it is left for when its size matters.
 
+## Long text in values
+
+A `Value` is made whenever a whole field goes into an operation or the command log: a record inserted into a list, a job's reply. For a document that means its whole text, and copying a 65 MB rope into a `String` took about 30 ms, twice for opening a file (once for the reply in the log, once for the inserted record undo keeps). `Value::Shared` holds text where it already is, behind a `Source` that reads it out: Galley's `Doc` hands over a clone of its rope, which costs nothing, and takes it back without reading it when the value comes back as the same kind of source. The text is read out only off the main thread, where the store writes it, or by tools that show or compare values. It is written as a `Str`, so files are unchanged, and a `Shared` equals a `Str` with the same text, so a value read back from disk compares equal to the one that was written.
+
 ## Migrations
 
 The snapshot carries `shape`, the number of migrations the app had when it was written (missing means 0). A migration works on the `Value`, not on Rust types, because the old types are gone once the code changes; renaming a field is moving a map entry. Only the snapshot is migrated. Log records are operations on paths of the old shape and can't be translated in general, so when a migration runs the records after the snapshot are skipped, the new snapshot is written with its log offset at the log's end so they are never applied, and the app's trouble line says how many were left. A clean close always snapshots, so this happens only after a crash in the old version. The kept facts in `proofs/<app>/facts/<shape>/` are what makes the law real: without them nothing would notice a field renamed without a migration until a user's facts failed to load. Specimen's approve writes the current shape and never touches older folders.

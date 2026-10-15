@@ -156,7 +156,7 @@ enum Cmd {
     #[label("Open")]
     Open,
     #[internal]
-    Opened(Result<String, Failure>),
+    Opened(Result<Box<Doc>, Failure>),
     #[label("Save")]
     Save,
     #[internal]
@@ -256,12 +256,12 @@ impl App for Galley {
         match cmd {
             Cmd::Open => {
                 let file = self.file.to_string();
-                cx.job(t!("Opening {file}"), move || std::fs::read_to_string(&file).map_err(|e| Failure::new(e.to_string())), Cmd::Opened);
+                cx.job(t!("Opening {file}"), move || std::fs::read_to_string(&file).map(|text| Box::new(Doc::new(&text))).map_err(|e| Failure::new(e.to_string())), Cmd::Opened);
                 Outcome::Nothing
             }
             Cmd::Opened(Ok(text)) => {
                 let name = std::path::Path::new(self.file.as_str()).file_name().map_or_else(|| self.file.to_string(), |n| n.to_string_lossy().into_owned());
-                self.open(Buffer { id: cx.key(), name, text: Doc::new(&text) })
+                self.open(Buffer { id: cx.key(), name, text: *text })
             }
             Cmd::Opened(Err(failure)) | Cmd::Saved(Err(failure)) => cx.say_failure(failure),
             Cmd::Save => {

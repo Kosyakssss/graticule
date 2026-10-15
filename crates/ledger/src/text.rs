@@ -142,6 +142,7 @@ impl Field for Text {
     fn from_value(value: &Value) -> Option<Self> {
         match value {
             Value::Str(s) => Some(Text::new(s.clone())),
+            Value::Shared(s) => Some(Text::new(s.text())),
             _ => None,
         }
     }

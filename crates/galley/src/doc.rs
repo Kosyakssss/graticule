@@ -1,13 +1,25 @@
 use std::fmt;
 use std::ops::Range;
 
-use ledger::{Change, Editable, ErasedPath, Field, Op, Outcome, Step, Travel, Typed, Value};
+use ledger::{Change, Editable, ErasedPath, Field, Op, Outcome, Shared, Source, Step, Travel, Typed, Value};
 use ropey::Rope;
 
 use crate::changes::Changes;
 use crate::fold::Folds;
 use crate::motion::{self, Motion};
 use crate::selection::{Selections, Span};
+
+struct Words(Rope);
+
+impl Source for Words {
+    fn text(&self) -> String {
+        self.0.to_string()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
 
 /// Text of any length with its cursors, kept in a rope so an edit anywhere costs the same in a line or in a hundred megabytes. It is a field of the facts: each edit is recorded as an operation, so undo reverses it, and the cursors move with the text and come back with undo. Positions are counted in characters.
 #[derive(Clone, Default)]
@@ -327,12 +339,16 @@ impl Field for Doc {
     }
 
     fn value(&self) -> Value {
-        Value::Str(self.to_string())
+        Value::Shared(Shared::new(Words(self.rope.clone())))
     }
 
     fn from_value(value: &Value) -> Option<Self> {
         match value {
             Value::Str(s) => Some(Doc::new(s)),
+            Value::Shared(s) => match s.source().downcast_ref::<Words>() {
+                Some(Words(rope)) => Some(Doc { rope: rope.clone(), ..Doc::default() }),
+                None => Some(Doc::new(&s.text())),
+            },
             _ => None,
         }
     }

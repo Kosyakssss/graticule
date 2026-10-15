@@ -33,4 +33,4 @@ pub use selection::{Choose, Selection};
 pub use store::{Migration, Opened, Stopped, Store, entries, fresh_replica, migrate, note_failures, read, stopped_session};
 pub use text::Text;
 pub use typed::{Editable, Travel, Typed};
-pub use value::{Malformed, Value};
+pub use value::{Malformed, Shared, Source, Value};

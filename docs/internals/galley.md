@@ -6,6 +6,10 @@
 
 A `Doc` keeps its text in a rope (ropey, MIT), so inserting into a hundred-megabyte file costs what inserting into a line does. It is a Ledger field like `Text`: every replacement records an `Op::Splice` while a transaction is open, and undo, redo, saving and replays work on those operations without knowing about ropes. Splices name places in bytes, as `Text`'s do, because that is what Ledger's operations already carry; `Doc` turns them back into characters when it applies one and refuses one that doesn't land on character boundaries or doesn't find the text it expects to remove, so a stale operation fails rather than corrupting the text. Saving writes the whole text as one string, which is fine for the sizes the demo apps keep in their facts; a file-backed document would save the file instead.
 
+## Large files
+
+A file is read and its rope built in the job that opens it, so the main thread only takes in a finished `Doc`; its value in the command log and in history is the rope itself (`ledger::Value::Shared`), not a copy. Opening 65 MB takes about 20 µs on the main thread on the Windows machine, where it took over 100 ms, and jumping to either end, paging and typing cost the same frame there as in 20 kB, since the editor builds only the lines that show and the rope finds a line in logarithmic time. What still grows with the text happens elsewhere: the store writes the text on its own thread, finding and replacing and marking run in jobs on a copy, and typesetting runs in a derived value.
+
 ## Positions and selections
 
 Everything the app sees counts characters, not bytes, so a position never falls inside a character. Motions step over grapheme clusters, what a reader sees as one character (an accented letter written as two code points, an emoji with a skin tone), by running `unicode-segmentation`'s grapheme cursor over the rope's chunks; words are runs of one class (letters and digits, punctuation, space), the way Helix and Vim see them.

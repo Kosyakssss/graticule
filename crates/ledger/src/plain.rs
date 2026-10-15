@@ -116,6 +116,7 @@ impl Field for String {
     fn from_value(value: &Value) -> Option<Self> {
         match value {
             Value::Str(s) => Some(s.clone()),
+            Value::Shared(s) => Some(s.text()),
             _ => None,
         }
     }

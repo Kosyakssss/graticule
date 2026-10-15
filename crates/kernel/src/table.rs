@@ -447,6 +447,7 @@ impl Cell for Plain {
     fn shown(&self) -> String {
         match &self.0 {
             Value::Str(s) => s.clone(),
+            Value::Shared(s) => s.text(),
             Value::Bool(b) => if *b { "Yes" } else { "No" }.to_string(),
             Value::Int(n) => crate::value::grouped(*n),
             Value::UInt(n) => crate::value::grouped(*n),

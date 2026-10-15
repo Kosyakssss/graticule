@@ -1,7 +1,9 @@
+use std::any::Any;
 use std::fmt;
+use std::sync::Arc;
 
 /// A self-describing value: how facts are saved, compared across versions and shown. Fields are kept by name, so a newer version can add a field and still read what an older one saved.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Value {
     Unit,
     Bool(bool),
@@ -15,6 +17,60 @@ pub enum Value {
     List(Vec<Value>),
     Map(Vec<(String, Value)>),
     Variant(String, Box<Value>),
+    /// Text held where it already is, such as a document's rope, so making the value costs nothing however long the text; it is read out only when the value is written, shown or compared, and it is written and compared as a `Str`.
+    Shared(Shared),
+}
+
+/// Where a [`Value::Shared`] reads its text from.
+pub trait Source: Any + Send + Sync {
+    fn text(&self) -> String;
+    fn as_any(&self) -> &dyn Any;
+}
+
+/// Text a [`Value`] holds by reference.
+#[derive(Clone)]
+pub struct Shared(Arc<dyn Source>);
+
+impl Shared {
+    pub fn new(source: impl Source) -> Self {
+        Shared(Arc::new(source))
+    }
+
+    pub fn text(&self) -> String {
+        self.0.text()
+    }
+
+    /// What it reads from, to take back what was put in without reading it out.
+    pub fn source(&self) -> &dyn Any {
+        self.0.as_any()
+    }
+}
+
+impl fmt::Debug for Shared {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Shared({:?})", self.text())
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Value) -> bool {
+        match (self, other) {
+            (Value::Shared(a), Value::Shared(b)) => Arc::ptr_eq(&a.0, &b.0) || a.text() == b.text(),
+            (Value::Shared(a), Value::Str(s)) | (Value::Str(s), Value::Shared(a)) => a.text() == *s,
+            (Value::Unit, Value::Unit) | (Value::None, Value::None) => true,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::UInt(a), Value::UInt(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Str(a), Value::Str(b)) => a == b,
+            (Value::Key(a), Value::Key(b)) => a == b,
+            (Value::Some(a), Value::Some(b)) => a == b,
+            (Value::List(a), Value::List(b)) => a == b,
+            (Value::Map(a), Value::Map(b)) => a == b,
+            (Value::Variant(a, x), Value::Variant(b, y)) => a == b && x == y,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,6 +160,10 @@ impl Value {
             Value::Str(s) => {
                 out.push(6);
                 put_str(out, s);
+            }
+            Value::Shared(s) => {
+                out.push(6);
+                put_str(out, &s.text());
             }
             Value::Key(k) => {
                 out.push(7);
@@ -198,6 +258,7 @@ impl fmt::Display for Value {
             Value::UInt(u) => write!(f, "{u}"),
             Value::Float(x) => write!(f, "{x}"),
             Value::Str(s) => write!(f, "{s:?}"),
+            Value::Shared(s) => write!(f, "{:?}", s.text()),
             Value::Key(k) => write!(f, "⟨{:x}:{}⟩", (k >> 64) as u64, *k as u64),
             Value::None => f.write_str("none"),
             Value::Some(v) => write!(f, "{v}"),

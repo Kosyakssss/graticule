@@ -239,7 +239,7 @@ impl Spot {
             V::Int(_) => 'i',
             V::UInt(_) => 'u',
             V::Float(_) => 'f',
-            V::Str(_) => 's',
+            V::Str(_) | V::Shared(_) => 's',
             V::Variant(_, inner) if **inner == V::Unit => 'v',
             _ => return None,
         };
@@ -319,6 +319,7 @@ fn fact_lines(value: &ledger::Value, depth: usize, name: &str, at: Spot, paths: 
         V::UInt(n) => n.to_string(),
         V::Float(f) => f.to_string(),
         V::Str(s) => format!("“{}”", one_line(s)),
+        V::Shared(s) => format!("“{}”", one_line(&s.text())),
         V::Key(k) => format!("{k:x}"),
         V::None => "none".into(),
         V::Some(inner) => {

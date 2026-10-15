@@ -99,6 +99,7 @@ Several names on either side are the same component. They are merged into one ro
 | Typed filter | | | wave 6: `people>1000000 country:spain` against a record's own fields, offering them as they are typed; days and times are not done |
 | Table from data | | | wave 6: a column for each of a record's fields, sorted by the field a column is named for; forms from data are `ui.form` |
 | Time axis | | | wave 6: a ruler counted in numbers, seconds or bars and beats over tracks whose lanes are canvases in time; the playhead snaps to the marks; zoom and scroll by the wheel |
+| Chart | | | wave 6: lines, bars and candles on a canvas with scales on whole cells, sized in rows; sparklines in table cells; readouts under the pointer are not done |
 | Split panes | | | wave 6: panes side by side with dividers dragged or moved by the arrows, the widths kept with the window, stacked when narrow; docking and layouts saved as files are not done |
 
 ## Wave 6: beyond both kits
@@ -109,7 +110,6 @@ These are the components of spec §6.1 that professional apps need and that neit
 |---|---|---|---|
 | Docking | | | panes that move between places; layouts saved as files |
 | Find | | | find and replace in a document, with Galley (§7.4) |
-| Charts | | | lines, bars, candles, sparklines in cells |
 | Node graph | | | with automatic layout |
 | Diff view | | | |
 | Code and text view | | | Galley (§7.3, §13.3) |

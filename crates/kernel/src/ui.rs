@@ -1474,6 +1474,32 @@ impl<'a, C, S> Ui<'a, C, S> {
         f(&mut Axis { ui: self, node: i, view: shown, playhead, cols });
     }
 
+    /// A chart of `plot`, as tall as the plot says and as wide as it is given, with its scale up the left and along the bottom, each label on whole cells. Make the plot in a derived value when it has many points, so it is drawn off the main thread: `#[derived(Prices::plot, from = [prices])] plot: Derived<Plot>`.
+    #[track_caller]
+    pub fn chart(&mut self, label: impl AsRef<str>, plot: &crate::chart::Plot) {
+        let (at, rows) = (Location::caller(), plot.rows());
+        let i = self.add(Kind::Chart, at);
+        let width = plot.y_labels().iter().map(|(_, s)| s.chars().count() as i32).max().unwrap_or(1) + 1;
+        let top = self.tree.add(i, Kind::Row, None, at);
+        let ys = self.tree.add(top, Kind::Scale { vertical: true, rows: rows.max(1) }, None, at);
+        self.scale(ys, plot.y_labels(), crate::tree::cols(width));
+        let subject = self.subject;
+        let drawing = plot.drawing().clone();
+        self.child::<S>(top, subject).canvas(label, rows, |c| c.drawing(&drawing));
+        let bottom = self.tree.add(i, Kind::Row, None, at);
+        let gap = self.tree.add(bottom, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, None, at);
+        self.tree.nodes[gap as usize].span = crate::tree::cols(width);
+        let xs = self.tree.add(bottom, Kind::Scale { vertical: false, rows: 1 }, None, at);
+        self.scale(xs, plot.x_labels(), crate::tree::Fill);
+    }
+
+    fn scale(&mut self, node: u32, labels: &[(f32, String)], span: Span) {
+        let words: Vec<&str> = labels.iter().map(|(_, s)| s.as_str()).collect();
+        let r = self.tree.put(&words.join(", "));
+        (self.tree.nodes[node as usize].text, self.tree.nodes[node as usize].span) = (r, span);
+        self.tree.scales.push((node, labels.to_vec()));
+    }
+
     fn rows<T: Record, F: Field>(
         &mut self,
         items: &Rows<'_, T>,
@@ -1689,6 +1715,38 @@ impl<C, T> Row<'_, '_, C, T> {
         let r = tree.put(label.as_str());
         tree.nodes[i as usize].name = r;
         Celled { tree, node: i, sign: value.sign(), heads: false }
+    }
+}
+
+impl<C, T> Row<'_, '_, C, T> {
+    /// A sparkline in the column named `label`: `values` as small bars from the lowest to the highest, as a trend reads at a glance.
+    #[track_caller]
+    pub fn spark(&mut self, label: impl Into<Message>, values: &[f64]) {
+        let label = label.into();
+        let at = Location::caller();
+        let column = self.column;
+        self.column += 1;
+        let tree = &mut *self.ui.tree;
+        let parent = self.ui.parent;
+        if self.heads {
+            let id = tree.nodes[parent as usize].id.named(label.as_str());
+            let i = tree.add(parent, Kind::Head { sorted: 0, sortable: false, numeric: false }, Some(id), at);
+            let r = tree.put(label.as_str());
+            tree.nodes[i as usize].text = r;
+            let wide = label.as_str().chars().count() as i32 + 2;
+            tree.nodes[i as usize].span = tree.resized.get(&id).map_or(crate::tree::cols(wide.max(12)).min(wide.min(6)), |&w| crate::tree::cols(w));
+            return;
+        }
+        let i = tree.add(parent, Kind::Spark, Some(tree.nodes[parent as usize].id.mix(u64::from(column))), at);
+        let said = match (values.first(), values.last()) {
+            (Some(a), Some(b)) => format!("{} values, from {a} to {b}", values.len()),
+            _ => "No values".to_string(),
+        };
+        let r = tree.put(&said);
+        tree.nodes[i as usize].text = r;
+        let r = tree.put(label.as_str());
+        tree.nodes[i as usize].name = r;
+        tree.sparks.push((i, crate::chart::spark_heights(values)));
     }
 }
 

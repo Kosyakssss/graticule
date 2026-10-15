@@ -11,45 +11,53 @@ window		0 0 120 30
           column		18 6 98 8	
             list		18 6 98 8	12 items
               column heads		18 6 96 1	
-                column head	City	18 6 35 1	
-                column head	Country	55 6 35 1	
-                column head	People	92 6 10 1	
-                column head	Change	104 6 10 1	
+                column head	City	18 6 28 1	
+                column head	Country	48 6 28 1	
+                column head	People	78 6 10 1	
+                column head	Change	90 6 10 1	
+                column head	Trend	102 6 12 1	
               list item		18 7 96 1	
-                cell	Amsterdam	18 7 35 1	
-                cell	Netherlands	55 7 35 1	
-                cell	931,000	92 7 10 1	
-                cell	8,200	104 7 10 1	ok
+                cell	Amsterdam	18 7 28 1	
+                cell	Netherlands	48 7 28 1	
+                cell	931,000	78 7 10 1	
+                cell	8,200	90 7 10 1	ok
+                sparkline	12 values, from 949.62 to 1025.855	102 7 12 1	
               list item		18 8 96 1	
-                cell	Athens	18 8 35 1	
-                cell	Greece	55 8 35 1	
-                cell	643,000	92 8 10 1	
-                cell	−2,100	104 8 10 1	danger
+                cell	Athens	18 8 28 1	
+                cell	Greece	48 8 28 1	
+                cell	643,000	78 8 10 1	
+                cell	−2,100	90 8 10 1	danger
+                sparkline	12 values, from 646.215 to 629.545	102 8 12 1	
               list item		18 9 96 1	
-                cell	Berlin	18 9 35 1	
-                cell	Germany	55 9 35 1	
-                cell	3,880,000	92 9 10 1	
-                cell	21,500	104 9 10 1	ok
+                cell	Berlin	18 9 28 1	
+                cell	Germany	48 9 28 1	
+                cell	3,880,000	78 9 10 1	
+                cell	21,500	90 9 10 1	ok
+                sparkline	12 values, from 3899.4 to 4174.7	102 9 12 1	
               list item		18 10 96 1	
-                cell	Lisbon	18 10 35 1	
-                cell	Portugal	55 10 35 1	
-                cell	545,000	92 10 10 1	
-                cell	3,900	104 10 10 1	ok
+                cell	Lisbon	18 10 28 1	
+                cell	Portugal	48 10 28 1	
+                cell	545,000	78 10 10 1	
+                cell	3,900	90 10 10 1	ok
+                sparkline	12 values, from 547.725 to 596.0749999999999	102 10 12 1	
               list item		18 11 96 1	
-                cell	London	18 11 35 1	
-                cell	United Kingdom	55 11 35 1	
-                cell	8,870,000	92 11 10 1	
-                cell	61,000	104 11 10 1	ok
+                cell	London	18 11 28 1	
+                cell	United Kingdom	48 11 28 1	
+                cell	8,870,000	78 11 10 1	
+                cell	61,000	90 11 10 1	ok
+                sparkline	12 values, from 8914.35 to 9674.05	102 11 12 1	
               list item		18 12 96 1	
-                cell	Madrid	18 12 35 1	
-                cell	Spain	55 12 35 1	
-                cell	3,330,000	92 12 10 1	
-                cell	37,400	104 12 10 1	ok
+                cell	Madrid	18 12 28 1	
+                cell	Spain	48 12 28 1	
+                cell	3,330,000	78 12 10 1	
+                cell	37,400	90 12 10 1	ok
+                sparkline	12 values, from 3346.65 to 3791.35	102 12 12 1	
               list item		18 13 96 1	
-                cell	Oslo	18 13 35 1	
-                cell	Norway	55 13 35 1	
-                cell	717,000	92 13 10 1	
-                cell	6,800	104 13 10 1	ok
+                cell	Oslo	18 13 28 1	
+                cell	Norway	48 13 28 1	
+                cell	717,000	78 13 10 1	
+                cell	6,800	90 13 10 1	ok
+                sparkline	12 values, from 731.34 to 795.385	102 13 12 1	
       list item		2 14 114 1	
       list item		2 15 114 1	
         heading	Use it for	2 15 7 1	strong

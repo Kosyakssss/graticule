@@ -196,6 +196,9 @@ pub enum Kind {
     Match { chosen: bool },
     TimeAxis,
     Ruler,
+    Chart,
+    Scale { vertical: bool, rows: i32 },
+    Spark,
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -278,6 +281,7 @@ impl Kind {
                 | Kind::Matches { .. }
                 | Kind::Match { .. }
                 | Kind::TimeAxis
+                | Kind::Chart
         )
     }
 
@@ -300,6 +304,9 @@ impl Kind {
             Kind::Match { .. } => "match",
             Kind::TimeAxis => "time axis",
             Kind::Ruler => "ruler",
+            Kind::Chart => "chart",
+            Kind::Scale { .. } => "scale",
+            Kind::Spark => "sparkline",
             Kind::ListRow { .. } => "list item",
             Kind::Field { holds: Holds::Lines { .. } } => "text area",
             Kind::Field { holds: Holds::Search } => "search field",
@@ -538,6 +545,10 @@ pub struct Tree<C> {
     pub scrub: Option<(Id, i64)>,
     /// How many columns wide each ruler was last laid out, by its id, so its lanes know how much time they show.
     pub spans: HashMap<Id, i32>,
+    /// The labels of charts' scales, each with where it falls from 0 to 1, by the scale's node.
+    pub scales: Vec<(u32, Vec<(f32, String)>)>,
+    /// The heights of sparklines' bars, from 0 to 1, by the sparkline's node.
+    pub sparks: Vec<(u32, Vec<f32>)>,
 }
 
 /// A time axis's ruler: how its time is counted, what it shows, where the playhead is and the facts it sets.
@@ -598,6 +609,8 @@ impl<C> Default for Tree<C> {
             rulers: Vec::new(),
             scrub: None,
             spans: HashMap::new(),
+            scales: Vec::new(),
+            sparks: Vec::new(),
         }
     }
 }
@@ -618,6 +631,8 @@ impl<C> Tree<C> {
         self.orders.clear();
         self.marks.clear();
         self.rulers.clear();
+        self.scales.clear();
+        self.sparks.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;
@@ -751,6 +766,16 @@ impl<C> Tree<C> {
             b.presses.hash(&mut h);
             b.paint.as_ref().map(|p| p.stamp()).hash(&mut h);
             self.aim.filter(|a| a.0 == n.id).hash(&mut h);
+        }
+        if let Some((_, labels)) = self.scales.iter().find(|s| s.0 == i as u32) {
+            for (at, label) in labels {
+                (at.to_bits(), label).hash(&mut h);
+            }
+        }
+        if let Some((_, heights)) = self.sparks.iter().find(|s| s.0 == i as u32) {
+            for v in heights {
+                v.to_bits().hash(&mut h);
+            }
         }
         if let Some(r) = self.rulers.iter().find(|r| r.node == i as u32) {
             (r.clock, r.view, r.playhead).hash(&mut h);

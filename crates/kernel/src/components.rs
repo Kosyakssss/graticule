@@ -702,6 +702,45 @@ fn knob(p: &mut Painter, n: &Node, x: f32, cell: Rect, look: Look) {
     border(p, knob, if look.focused { t * 2.0 } else { t }, ink);
 }
 
+fn scale(p: &mut Painter, n: &Node, labels: &[(f32, String)], vertical: bool) {
+    let (a, style, muted) = (n.area, p.m.mono(), p.theme.muted);
+    let mut taken = -1;
+    for (at, label) in labels {
+        let len = label.chars().count() as i32;
+        if vertical {
+            let row = (((1.0 - at) * a.rows as f32).floor() as i32).clamp(0, a.rows - 1);
+            if row == taken || len > a.cols {
+                continue;
+            }
+            taken = row;
+            p.write(Area::new(a.right() - len - 1, a.row + row, len, 1), label, style, muted);
+        } else {
+            let col = ((at * a.cols as f32).round() as i32 - len / 2).clamp(0, (a.cols - len).max(0));
+            if col <= taken || col + len > a.cols {
+                continue;
+            }
+            taken = col + len;
+            p.write(Area::new(a.col + col, a.row, len, 1), label, style, muted);
+        }
+    }
+}
+
+fn spark(p: &mut Painter, n: &Node, heights: &[f32]) {
+    let r = p.rect(n.area);
+    if heights.is_empty() || r.w <= 0.0 {
+        return;
+    }
+    let ink = p.theme.muted;
+    let slot = r.w / heights.len() as f32;
+    let width = (slot * 0.7).max(1.0).round();
+    let tall = r.h * 0.8;
+    for (k, h) in heights.iter().enumerate() {
+        let x = (r.x + k as f32 * slot).round();
+        let bar = (tall * h).round().max(1.0);
+        p.fill(Rect::new(x, (r.y + r.h * 0.9 - bar).round(), width, bar), ink);
+    }
+}
+
 fn ruler(p: &mut Painter, n: &Node, r: &crate::tree::Ruler, look: Look) {
     let rect = p.rect(n.area);
     let (view, clock) = (r.view, r.clock);
@@ -790,6 +829,16 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             wrapped(p, n.area, text, mono, weight, color);
             if let Some((_, marks)) = tree.marks.iter().find(|m| m.0 == i) {
                 marked(p, n.area, text, mono, weight, marks, color);
+            }
+        }
+        (Layer::Over, Kind::Scale { vertical, .. }) => {
+            if let Some((_, labels)) = tree.scales.iter().find(|s| s.0 == i) {
+                scale(p, &n, labels, vertical);
+            }
+        }
+        (Layer::Over, Kind::Spark) => {
+            if let Some((_, heights)) = tree.sparks.iter().find(|s| s.0 == i) {
+                spark(p, &n, heights);
             }
         }
         (Layer::Over, Kind::Ruler) => {

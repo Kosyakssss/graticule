@@ -2,7 +2,7 @@ use graticule_macros::{Choice, Commands, Facts, Form};
 use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
-use kernel::{App, Available, Channel, Clock, Cx, Day, Derived, Failure, Image, Ink, Message, Oklch, Order, PaintHook, Path, Sort, States, Time, TimeView, Ui};
+use kernel::{App, Available, Channel, Clock, Cx, Day, Derived, Failure, Image, Ink, Message, Oklch, Order, PaintHook, Path, Plot, Sort, States, Time, TimeView, Ui};
 use ledger::{Edit, Key, List, Outcome, Selection, Text};
 
 use crate::style::{self, Mark, Mix, Nudge, Reach, Reaches, Side, Weight};
@@ -297,6 +297,38 @@ impl City {
 
 const BEAT: i64 = 96;
 
+const RAIN: [(&str, f64, f64); 12] = [
+    ("Jan", 78.0, 4.1),
+    ("Feb", 61.0, 4.6),
+    ("Mar", 57.0, 7.4),
+    ("Apr", 49.0, 10.2),
+    ("May", 55.0, 13.9),
+    ("Jun", 47.0, 16.8),
+    ("Jul", 51.0, 18.9),
+    ("Aug", 59.0, 18.6),
+    ("Sep", 54.0, 15.7),
+    ("Oct", 73.0, 11.9),
+    ("Nov", 81.0, 7.6),
+    ("Dec", 84.0, 4.9),
+];
+
+fn candles() -> Vec<kernel::Candle> {
+    let mut price = 100.0;
+    (0..24)
+        .map(|k| {
+            let swing = ((k * 37 % 11) as f64 - 5.0) * 0.8;
+            let open = price;
+            price += swing;
+            kernel::Candle { open, high: open.max(price) + 1.5, low: open.min(price) - 1.2, close: price }
+        })
+        .collect()
+}
+
+fn trend(city: &City) -> Vec<f64> {
+    let base = f64::from(city.people) / 1000.0;
+    (0..12).map(|k| base + f64::from(city.change) / 1000.0 * f64::from(k) + ((k * 7 + city.name.len() as i32) % 5) as f64 * base / 200.0).collect()
+}
+
 type Clip = (i64, i64, &'static str);
 
 const TRACKS: [(&str, &[Clip]); 3] =
@@ -469,10 +501,11 @@ pub enum Component {
     TypedFilter,
     Records,
     TimeAxis,
+    Chart,
 }
 
 impl Component {
-    const ALL: [Component; 78] = [
+    const ALL: [Component; 79] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -551,6 +584,7 @@ impl Component {
         Component::TypedFilter,
         Component::Records,
         Component::TimeAxis,
+        Component::Chart,
     ];
 
     fn name(self) -> &'static str {
@@ -633,6 +667,7 @@ impl Component {
             Component::TypedFilter => "Typed filter",
             Component::Records => "Table from data",
             Component::TimeAxis => "Time axis",
+            Component::Chart => "Chart",
         }
     }
 
@@ -716,6 +751,7 @@ impl Component {
             Component::TypedFilter => include_str!("../../../docs/components/typed-filter.md"),
             Component::Records => include_str!("../../../docs/components/table-from-data.md"),
             Component::TimeAxis => include_str!("../../../docs/components/time-axis.md"),
+            Component::Chart => include_str!("../../../docs/components/chart.md"),
         }
     }
 
@@ -1314,6 +1350,14 @@ impl Catalog {
                 ui.color_slider(Catalog::accent, Channel::Hue);
             }
             Component::ColorPicker => ui.color_picker(Catalog::accent),
+            Component::Chart => {
+                let rain = Plot::new(6)
+                    .bars(RAIN.iter().enumerate().map(|(k, m)| (k as f64, m.1)), Ink::Selection)
+                    .line(RAIN.iter().enumerate().map(|(k, m)| (k as f64, m.2 * 4.0)), Ink::Link)
+                    .names(RAIN.iter().map(|m| m.0));
+                ui.chart("Rain in millimetres, and four times the warmth in degrees, by month", &rain);
+                ui.chart("A price, day by day", &Plot::new(6).candles(candles()));
+            }
             Component::TimeAxis => ui.time_axis(Clock::Beats { per_beat: BEAT, beats_per_bar: 4 }, Catalog::timeline, Catalog::playhead, |axis| {
                 for (name, clips) in TRACKS {
                     axis.track(name, 2, |lane| {
@@ -1368,6 +1412,7 @@ impl Catalog {
                     row.cell("Country", &city.country);
                     row.cell("People", city.people);
                     row.cell("Change", city.change).tone_by_sign();
+                    row.spark("Trend", &trend(city));
                 })
                 .sort(Catalog::sort)
                 .height(8);

@@ -1,5 +1,6 @@
 //! AS-01, Assay: the checks every Graticule app is held to. The universal laws drive an app through generated command sequences; the taste laws look at every named state; the budgets time every frame and every `available`. [`report`] runs them all and prints what it found, like Clippy for Graticule apps; [`assay`] returns the same as data, for an app's own laws.
 
+mod saved;
 mod screen;
 mod taste;
 mod universal;
@@ -9,6 +10,7 @@ mod laws;
 
 use std::fmt::Write as _;
 
+pub use saved::{keep, proofs};
 pub use universal::Step;
 
 /// The longest a frame may take, in microseconds: a 1000 Hz display's refresh.
@@ -95,6 +97,8 @@ pub struct Assayed {
     pub allocations: Option<u64>,
     /// How many bytes the running program takes on disk, when it could be read.
     pub size: Option<u64>,
+    /// How many kept facts, of this shape and older ones, were checked to still load.
+    pub kept: usize,
 }
 
 /// Times measured, in microseconds for frames and nanoseconds for `available`: how many, the slowest 1%, the slowest and where it happened.
@@ -138,6 +142,8 @@ pub fn assay<A: kernel::App>(plan: Plan) -> Assayed {
     let mut findings = std::mem::take(&mut universal.findings);
     let taste = taste::run(&starts);
     findings.extend(taste.findings);
+    let (unloaded, kept) = saved::check::<A>(&proofs().join("facts"));
+    findings.extend(unloaded);
     let frames = Measured::of(universal.frames);
     if judged() && frames.slowest_percent > FRAME_BUDGET {
         findings.push(Finding {
@@ -165,7 +171,7 @@ pub fn assay<A: kernel::App>(plan: Plan) -> Assayed {
     findings.sort_by(|a, b| a.law.cmp(&b.law).then_with(|| a.from.cmp(&b.from)));
     let allocations = cfg!(feature = "count-allocations").then(|| taste.allocations.iter().map(|(_, n)| n).sum());
     let size = std::env::current_exe().and_then(std::fs::metadata).ok().map(|m| m.len());
-    Assayed { findings, frames, available, states: starts.len(), sequences: plan.sequences, steps: plan.steps, allocations, size }
+    Assayed { findings, frames, available, states: starts.len(), sequences: plan.sequences, steps: plan.steps, allocations, size, kept }
 }
 
 /// Runs every check over an app and prints a report. Fails when anything was found, so a check can stop on it.
@@ -187,6 +193,10 @@ pub fn written(a: &Assayed) -> String {
         "Assay drove the app through {} command sequences of {} steps, from {} starting states, and looked at each state at its normal and smallest size.",
         a.sequences, a.steps, a.states
     );
+    let _ = match a.kept {
+        0 => writeln!(out, "No facts are kept among the proofs yet, so loading older saves wasn't checked; approving in Specimen keeps them."),
+        n => writeln!(out, "It loaded the {n} facts kept from this version and older ones, through the app's migrations."),
+    };
     for f in &a.findings {
         let _ = writeln!(out, "\nfound: {}", f.law.name());
         let _ = writeln!(out, "  {}", f.said);

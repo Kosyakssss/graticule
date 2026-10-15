@@ -26,6 +26,6 @@ pub use outcome::Outcome;
 pub use path::{DEPTH, Derivation, ErasedPath, FactPath, Facts, Field, FieldInfo, Find, Kind, Moving, Record, Step, Work};
 pub use plain::Document;
 pub use selection::{Choose, Selection};
-pub use store::{Opened, Store, entries, fresh_replica, read};
+pub use store::{Migration, Opened, Store, entries, fresh_replica, migrate, read};
 pub use text::Text;
 pub use value::{Malformed, Value};

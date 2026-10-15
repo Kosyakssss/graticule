@@ -31,6 +31,11 @@ pub trait App: Facts + Send {
         States::new()
     }
 
+    /// How facts saved by older versions of the app are carried forward, oldest first. When a version changes the facts' shape (a field renamed, a type changed), add a migration at the end that takes the facts as the version before saved them, as a value, to the new shape; never change or remove one. Assay checks that every named state of every older shape still loads.
+    fn migrations() -> &'static [ledger::Migration] {
+        &[]
+    }
+
     /// The app's translations, each a language's tag and its Fluent source: `&[("de", include_str!("../locales/de.ftl"))]`. The one for the system's language is used; English is written in the source and needs none. `bindery messages` writes the English template and says what each translation lacks.
     fn translations() -> crate::language::Translations {
         &[]

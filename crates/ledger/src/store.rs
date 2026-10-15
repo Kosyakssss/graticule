@@ -12,6 +12,9 @@ use crate::value::Value;
 const SNAPSHOT_EVERY: u64 = 2000;
 const VERSION: u64 = 1;
 
+/// Carries saved facts one shape forward: the facts as an older version of the app wrote them, as the next version reads them. An app lists its migrations in order; how many there are is the shape its facts have now.
+pub type Migration = fn(Value) -> Value;
+
 /// Where an app keeps its facts on this device: a snapshot, a log of every change since, and where the user was. Writing happens on Ledger's own thread, so the main thread only hands over what changed.
 pub struct Store {
     send: mpsc::Sender<Message>,
@@ -45,22 +48,27 @@ struct Files {
     snapshot_at: u64,
     since: u64,
     counter: u64,
+    shape: u64,
 }
 
 impl Store {
-    /// Opens the store in `folder`, making it if needed: loads the last snapshot, applies the log written after it and starts Ledger's thread. `fresh` makes the facts for a first launch.
-    pub fn open<F: Field + Send>(folder: &Path, fresh: impl FnOnce() -> F) -> io::Result<(Store, Opened<F>)> {
+    /// Opens the store in `folder`, making it if needed: loads the last snapshot, carries it forward through `migrations` if an older version wrote it, applies the log written after it and starts Ledger's thread. `fresh` makes the facts for a first launch.
+    pub fn open<F: Field + Send>(folder: &Path, fresh: impl FnOnce() -> F, migrations: &[Migration]) -> io::Result<(Store, Opened<F>)> {
         fs::create_dir_all(folder)?;
         let replica = replica(folder)?;
         let mut trouble = None;
-        let (mut facts, snapshot_at, mut counter) = match fs::read(folder.join("facts")) {
-            Ok(bytes) => match read_snapshot::<F>(&bytes) {
-                Some(found) => found,
-                None => {
-                    let aside = folder.join(format!("facts unreadable {}", now_ms()));
+        let mut migrated = false;
+        let (mut facts, mut snapshot_at, mut counter) = match fs::read(folder.join("facts")) {
+            Ok(bytes) => match read_snapshot::<F>(&bytes, migrations) {
+                Ok(found) => {
+                    migrated = found.shape < migrations.len() as u64;
+                    (found.facts, found.log, found.counter)
+                }
+                Err(why) => {
+                    let aside = folder.join(format!("facts set aside {}", now_ms()));
                     fs::rename(folder.join("facts"), &aside)?;
                     let _ = fs::rename(folder.join("log"), aside.with_extension("log"));
-                    trouble = Some(format!("The saved facts couldn't be read, so they were set aside in {}", aside.display()));
+                    trouble = Some(format!("The saved facts {why}, so they were set aside in {}", aside.display()));
                     (fresh(), 0, 0)
                 }
             },
@@ -74,6 +82,15 @@ impl Store {
             Err(e) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
             Err(e) => return Err(e),
         };
+        if migrated {
+            let left = records(&bytes, snapshot_at.min(bytes.len() as u64) as usize).count();
+            if left > 0 {
+                trouble = Some(format!("{left} changes made just before this version couldn't be carried into it; they stay in the log"));
+            }
+            snapshot_at = bytes.len() as u64;
+            let snapshot = snapshot_value(migrations.len() as u64, snapshot_at, counter, &facts);
+            write_atomic(&folder.join("facts"), &snapshot.to_bytes())?;
+        }
         let (end, since, last) = apply_log(&mut facts, &bytes, snapshot_at);
         counter = counter.max(last);
         if end < bytes.len() as u64 && trouble.is_none() {
@@ -84,7 +101,7 @@ impl Store {
         let mut log = OpenOptions::new().append(true).open(&log_path)?;
         log.flush()?;
         let place = fs::read(folder.join("place")).ok().and_then(|b| Value::from_bytes(&b).ok());
-        let mut files = Files { folder: folder.to_path_buf(), log, end, snapshot_at, since, counter };
+        let mut files = Files { folder: folder.to_path_buf(), log, end, snapshot_at, since, counter, shape: migrations.len() as u64 };
         let mut copy = facts.clone();
         let (send, receive) = mpsc::channel();
         let shared = Arc::new(Mutex::new(None));
@@ -167,8 +184,7 @@ impl Files {
 
     fn snapshot<F: Field>(&mut self, facts: &F) -> io::Result<()> {
         self.log.flush()?;
-        let snapshot =
-            Value::Map(vec![("version".into(), Value::UInt(VERSION)), ("log".into(), Value::UInt(self.end)), ("counter".into(), Value::UInt(self.counter)), ("facts".into(), facts.value())]);
+        let snapshot = snapshot_value(self.shape, self.end, self.counter, facts);
         write_atomic(&self.folder.join("facts"), &snapshot.to_bytes())?;
         self.snapshot_at = self.end;
         self.since = 0;
@@ -191,10 +207,14 @@ fn apply_log<F: Field>(facts: &mut F, bytes: &[u8], from: u64) -> (u64, u64, u64
     (end, since, counter)
 }
 
-/// Reads the facts a store in `folder` holds, as the app would open them, without writing anything: the last snapshot and every whole change logged after it. `fresh` makes the facts when no snapshot was written yet.
-pub fn read<F: Field>(folder: &Path, fresh: impl FnOnce() -> F) -> io::Result<F> {
+/// Reads the facts a store in `folder` holds, as the app would open them, without writing anything: the last snapshot and every whole change logged after it. `fresh` makes the facts when no snapshot was written yet. Changes logged by an older version after its last snapshot are left out, as opening leaves them out.
+pub fn read<F: Field>(folder: &Path, fresh: impl FnOnce() -> F, migrations: &[Migration]) -> io::Result<F> {
     let mut facts = match fs::read(folder.join("facts")) {
-        Ok(bytes) => read_snapshot::<F>(&bytes).map(|(facts, at, _)| (facts, at)).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "the snapshot can't be read"))?,
+        Ok(bytes) => match read_snapshot::<F>(&bytes, migrations) {
+            Ok(s) if s.shape < migrations.len() as u64 => (s.facts, u64::MAX),
+            Ok(s) => (s.facts, s.log),
+            Err(why) => return Err(io::Error::new(io::ErrorKind::InvalidData, format!("the saved facts {why}"))),
+        },
         Err(e) if e.kind() == io::ErrorKind::NotFound => (fresh(), 0),
         Err(e) => return Err(e),
     };
@@ -214,13 +234,41 @@ fn report(problems: &Mutex<Option<String>>, done: io::Result<()>) {
     }
 }
 
-fn read_snapshot<F: Field>(bytes: &[u8]) -> Option<(F, u64, u64)> {
-    let value = Value::from_bytes(bytes).ok()?;
+fn snapshot_value<F: Field>(shape: u64, log: u64, counter: u64, facts: &F) -> Value {
+    Value::Map(vec![
+        ("version".into(), Value::UInt(VERSION)),
+        ("shape".into(), Value::UInt(shape)),
+        ("log".into(), Value::UInt(log)),
+        ("counter".into(), Value::UInt(counter)),
+        ("facts".into(), facts.value()),
+    ])
+}
+
+struct Snapshot<F> {
+    facts: F,
+    shape: u64,
+    log: u64,
+    counter: u64,
+}
+
+fn read_snapshot<F: Field>(bytes: &[u8], migrations: &[Migration]) -> Result<Snapshot<F>, &'static str> {
+    let value = Value::from_bytes(bytes).map_err(|_| "couldn't be read")?;
     let (Some(Value::UInt(VERSION)), Some(Value::UInt(log)), Some(Value::UInt(counter)), Some(facts)) = (value.field("version"), value.field("log"), value.field("counter"), value.field("facts"))
     else {
-        return None;
+        return Err("couldn't be read");
     };
-    Some((F::from_value(facts)?, *log, *counter))
+    let shape = match value.field("shape") {
+        Some(Value::UInt(shape)) => *shape,
+        _ => 0,
+    };
+    let later = migrations.get(shape as usize..).ok_or("were written by a newer version of the app")?;
+    let facts = F::from_value(&migrate(facts.clone(), later)).ok_or("don't fit this version of the app")?;
+    Ok(Snapshot { facts, shape, log: *log, counter: *counter })
+}
+
+/// Carries facts saved in an older shape through the migrations after it, in order.
+pub fn migrate(facts: Value, migrations: &[Migration]) -> Value {
+    migrations.iter().fold(facts, |facts, m| m(facts))
 }
 
 fn read_record(record: &[u8]) -> Option<(Vec<Op>, u64)> {

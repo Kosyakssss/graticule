@@ -153,12 +153,7 @@ impl Changes {
 
 /// Where an app's approved proofs are kept: `proofs/<app>/<platform>` in the workspace Specimen runs in, found by walking up to the folder with `Cargo.lock`, or in the app's data folder outside a workspace. Each platform has its own, because keys are written differently on each and the bar's layout follows.
 pub fn folder() -> PathBuf {
-    let app = std::env::current_exe().ok().and_then(|exe| exe.file_stem().map(|s| s.to_string_lossy().into_owned())).unwrap_or_else(|| "app".to_string());
-    let workspace = std::env::current_dir().ok().and_then(|dir| dir.ancestors().find(|d| d.join("Cargo.lock").is_file()).map(FilePath::to_path_buf));
-    match workspace {
-        Some(root) => root.join("proofs").join(app).join(std::env::consts::OS),
-        None => kernel::runner::folder().join("Proofs").join(std::env::consts::OS),
-    }
+    assay::proofs().join(std::env::consts::OS)
 }
 
 /// Draws every named state of an app at its normal and smallest size and compares each with its approved proof in `folder`.

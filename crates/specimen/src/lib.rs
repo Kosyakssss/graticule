@@ -379,7 +379,7 @@ pub fn changes<A: App>() -> Result<(), String> {
     }
 }
 
-/// Approves every named state of an app as it renders now, writing its proofs.
+/// Approves every named state of an app as it renders now, writing its proofs, and keeps each state's facts as this version saves them, so later versions are checked to still load them.
 pub fn approve<A: App>() -> Result<(), String> {
     let folder = changes::folder();
     std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
@@ -387,7 +387,8 @@ pub fn approve<A: App>() -> Result<(), String> {
     for sheet in &sheets {
         std::fs::write(&sheet.file, &sheet.now).map_err(|e| format!("{} couldn't be saved: {e}", sheet.file))?;
     }
-    println!("Approved {} sheets in {}", sheets.len(), folder.display());
+    let kept = assay::keep::<A>().map_err(|e| format!("the facts couldn't be kept: {e}"))?;
+    println!("Approved {} sheets in {} and kept the facts of {kept} states", sheets.len(), folder.display());
     Ok(())
 }
 

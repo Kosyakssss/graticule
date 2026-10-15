@@ -429,7 +429,7 @@ impl<A: App> Runner<A> {
 
     /// Opens the facts kept in `folder`, or makes them with `fresh` on the first launch, puts the user back where they were and saves every change there from now on. If the folder can't be used, the app runs unsaved and the message line says why.
     pub fn open(folder: &std::path::Path, fresh: impl Fn() -> A) -> Self {
-        match Store::open(folder, &fresh) {
+        match Store::open(folder, &fresh, A::migrations()) {
             Ok((store, opened)) => {
                 let mut runner = Self::new(opened.facts);
                 runner.save_to(store, opened.counter);

@@ -42,7 +42,7 @@ pub fn ledger<A: kernel::App + Default>(args: &[String]) -> Result<(), String> {
             let entries = entries()?;
             let mut runner = Runner::new(A::default());
             let whole = runner.replay(&entries);
-            let saved = ledger::read(&from, A::default).map_err(|e| format!("{}: {e}", from.display()))?;
+            let saved = ledger::read(&from, A::default, A::migrations()).map_err(|e| format!("{}: {e}", from.display()))?;
             let differences = differ(&saved.value(), &runner.facts.value(), "facts");
             match (whole, differences.is_empty()) {
                 (true, true) => println!("Replaying the {} changes in the log gives exactly the facts the app saved.", entries.len()),
@@ -61,8 +61,8 @@ pub fn ledger<A: kernel::App + Default>(args: &[String]) -> Result<(), String> {
         }
         ["compare", other] => {
             let other = Path::new(other);
-            let here = ledger::read(&from, A::default).map_err(|e| format!("{}: {e}", from.display()))?;
-            let there = ledger::read(other, A::default).map_err(|e| format!("{}: {e}", other.display()))?;
+            let here = ledger::read(&from, A::default, A::migrations()).map_err(|e| format!("{}: {e}", from.display()))?;
+            let there = ledger::read(other, A::default, A::migrations()).map_err(|e| format!("{}: {e}", other.display()))?;
             let differences = differ(&here.value(), &there.value(), "facts");
             if differences.is_empty() {
                 println!("Both hold the same facts.");

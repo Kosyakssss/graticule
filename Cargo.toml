@@ -21,6 +21,7 @@ messages = { path = "crates/messages" }
 ledger = { path = "crates/ledger" }
 graticule-macros = { path = "crates/macros" }
 kernel = { path = "crates/kernel" }
+audio = { path = "crates/audio" }
 galley = { path = "crates/galley" }
 plotter = { path = "crates/plotter" }
 specimen = { path = "crates/specimen" }

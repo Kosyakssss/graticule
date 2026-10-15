@@ -1,0 +1,13 @@
+[package]
+name = "audio"
+description = "The audio service: playback and recording on a real-time thread, through the system's audio devices, with sounds read from and written to WAV files."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kernel.workspace = true
+cpal = "0.18.2"

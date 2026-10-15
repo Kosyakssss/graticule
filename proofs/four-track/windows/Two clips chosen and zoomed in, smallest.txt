@@ -1,0 +1,83 @@
+window		0 0 108 31	
+  page	Four-track	0 0 108 26	
+    group		2 3 104 1	
+      button	Play	2 3 7 1	
+      button	Record	11 3 9 1	
+      button	Go to the start	22 3 18 1	unavailable (At the start already)
+      button	Zoom in	42 3 10 1	
+      button	Zoom out	54 3 11 1	
+      group		67 3 18 1	
+        text	Snap to	67 3 6 1	
+        cycling choice	Beats	75 3 10 1	
+      button	Bounce the song to a file…	87 3 19 1	
+    group		2 5 104 1	
+      text	Stopped at 1.1	2 5 11 1	
+      text	The audio engine hasn't started	15 5 24 1	muted
+    time axis		2 7 104 9	
+      group		2 7 104 1	
+        text		2 7 16 1	
+        ruler	Playhead	20 7 86 1	playhead at 1.1.1, from 2.4.1
+      group		2 8 104 2	
+        text	Drums	2 8 16 1	
+        canvas	Drums	20 8 86 2	
+      group		2 10 104 2	
+        text	Bass	2 10 16 1	
+        canvas	Bass	20 10 86 2	
+      group		2 12 104 2	
+        text	Keys	2 12 16 1	
+        canvas	Keys	20 12 86 2	
+      group		2 14 104 2	
+        text	Lead	2 14 16 1	
+        canvas	Lead	20 14 86 2	
+    split		2 17 104 8	
+      pane	Tracks	2 17 104 4	
+        list		2 17 104 3	4 items
+          list item		2 17 102 1	chosen, focused
+            text	Drums	2 17 5 1	
+            link	Mute	9 17 4 1	
+          list item		2 18 102 1	
+            text	Bass	2 18 4 1	
+            link	Mute	8 18 4 1	
+          list item		2 19 102 1	
+            text	Keys	2 19 4 1	
+            link	Mute	8 19 4 1	
+        group		2 20 104 1	
+          button	Add a drum loop	2 20 18 1	
+          button	Add a bass loop	22 20 18 1	
+          button	Add a keys loop	42 20 18 1	
+          button	Add a lead loop	62 20 18 1	
+      pane	Clips	2 21 104 4	
+        list		2 21 104 3	10 items
+          list item		2 21 102 1	
+            text	Drums on Drums, 1.1 to 3.1	2 21 21 1	
+            link	Remove	25 21 7 1	
+          list item		2 22 102 1	
+            text	Drums on Drums, 3.1 to 5.1	2 22 21 1	
+            link	Remove	25 22 7 1	
+          list item		2 23 102 1	
+            text	Drums on Drums, 5.1 to 7.1	2 23 21 1	
+            link	Remove	25 23 7 1	
+        group		2 24 104 1	
+          button	Repeat the chosen clips	2 24 26 1	
+          button	Split the chosen clips at the playhead	30 24 41 1	unavailable (The playhead isn't inside a chosen clip)
+  alert		2 26 104 1	
+  status		2 27 104 1	
+  toolbar		2 28 104 3	
+    button	Play	2 28 12 1	
+    button	Stop	16 28 6 1	unavailable (Stopped already)
+    button	Record	24 28 8 1	
+    button	Go to the start	34 28 13 1	unavailable (At the start already)
+    button	Add a drum loop	49 28 15 1	
+    button	Add a bass loop	66 28 14 1	
+    button	Add a keys loop	82 28 14 1	
+    button	Add a lead loop	2 29 14 1	
+    button	Repeat the chosen clips	18 29 20 1	
+    button	Split the chosen clips at the playhead	40 29 30 1	unavailable (The playhead isn't inside a chosen clip)
+    button	Mute the track	72 29 13 1	
+    button	Unmute the track	87 29 15 1	unavailable (Not muted)
+    button	Zoom in	2 30 9 1	
+    button	Zoom out	13 30 10 1	
+    button	Bounce the song to a file…	25 30 22 1	
+    button	Undo	49 30 13 1	unavailable (Nothing to undo)
+    button	Redo	64 30 19 1	unavailable (Nothing to redo)
+    button	Open the palette	85 30 15 1	

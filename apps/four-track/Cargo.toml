@@ -1,0 +1,13 @@
+[package]
+name = "four-track"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+graticule.workspace = true
+audio.workspace = true

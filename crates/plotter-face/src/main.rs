@@ -27,7 +27,7 @@ struct Whiteboard {
     around: Derived<Chosen>,
 }
 
-/// The box around the chosen shapes, and whether it has corners to drag: only one shape that isn't an arrow does.
+/// The box around the chosen shapes, and whether it has handles to drag: only one shape that isn't an arrow does.
 #[derive(Default)]
 struct Chosen(Option<(Bounds, bool)>);
 
@@ -93,6 +93,8 @@ enum Cmd {
     Arrow,
     #[label("Draw")]
     Draw,
+    #[label("Write…")]
+    Write { words: String },
     #[label("Remove")]
     Remove,
     #[label("Move left")]
@@ -142,6 +144,7 @@ impl App for Whiteboard {
             Cmd::Ellipse => no_if(self.tool == Tool::Ellipse, t!("Drawing ellipses already")),
             Cmd::Arrow => no_if(self.tool == Tool::Arrow, t!("Drawing arrows already")),
             Cmd::Draw => no_if(self.tool == Tool::Draw, t!("Drawing freehand already")),
+            Cmd::Write { .. } => no_if(self.chosen.len() > 1, t!("Choose one shape at most")),
             Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Drew(_) | Cmd::Edit(_) => Yes,
         }
     }
@@ -157,6 +160,7 @@ impl App for Whiteboard {
             Cmd::MoveRight => self.nudge(STEP, 0.0, cx),
             Cmd::MoveUp => self.nudge(0.0, -STEP, cx),
             Cmd::MoveDown => self.nudge(0.0, STEP, cx),
+            Cmd::Write { words } => self.write(words.trim(), cx),
             Cmd::Remove => {
                 let keys: Vec<_> = self.chosen.iter().collect();
                 let _ = self.chosen.choose(&ledger::Choose::Clear);
@@ -331,6 +335,31 @@ impl Whiteboard {
         }
     }
 
+    /// Gives the chosen text new words, or puts new text inside the one chosen shape, or at the top left of the view when none is.
+    fn write(&mut self, words: &str, cx: &mut Cx<Cmd>) -> Outcome {
+        if words.is_empty() {
+            return cx.say(t!("There are no words to write"));
+        }
+        let one = match self.chosen.len() {
+            1 => self.chosen.iter().next().and_then(|key| self.board.shapes.find(key)).cloned(),
+            _ => None,
+        };
+        let at = match &one {
+            Some(shape) if matches!(shape.kind, Kind::Text(_)) => {
+                let key = shape.id;
+                return match self.board.write(key, words) {
+                    Outcome::Nothing => cx.say(t!("That text is locked or says this already")),
+                    written => written,
+                };
+            }
+            Some(shape) => Point::new(shape.x + 16.0, shape.y + 12.0),
+            None => Point::new(self.camera.x + 40.0, self.camera.y + 40.0),
+        };
+        let shape = Shape::new(Key::default(), Kind::Text(words.to_string()), Bounds::new(at.x, at.y, plotter::text_width(words), plotter::LINE));
+        let intent = Intent::Create { shape: self.index_now().above(shape), start: None, end: None };
+        self.board.perform(&mut self.chosen, intent, || cx.key::<Shape>().raw())
+    }
+
     fn nudge(&mut self, dx: f64, dy: f64, cx: &mut Cx<Cmd>) -> Outcome {
         let keys: Vec<_> = self.chosen.iter().collect();
         match self.board.translate(&keys, dx, dy) {
@@ -487,8 +516,8 @@ fn outline(canvas: &mut Drawing, b: Bounds, corners: bool) {
     let b = b.expand(4.0);
     canvas.polyline([at(b.x, b.y), at(b.right(), b.y), at(b.right(), b.bottom()), at(b.x, b.bottom()), at(b.x, b.y)]).ink(Ink::Link).stroke(Weight::Hair);
     if corners {
-        for (x, y) in [(b.x, b.y), (b.right(), b.y), (b.right(), b.bottom()), (b.x, b.bottom())] {
-            canvas.dot(at(x, y)).ink(Ink::Link);
+        for (fx, fy) in plotter::HANDLES {
+            canvas.dot(at(b.x + fx * b.w, b.y + fy * b.h)).ink(Ink::Link);
         }
     }
 }

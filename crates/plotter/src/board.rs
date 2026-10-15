@@ -41,6 +41,14 @@ pub enum Kind {
     Arrow,
 }
 
+/// How tall a line of a text shape is, in page units.
+pub const LINE: f64 = 16.0;
+
+/// How wide `words` are in a text shape, in page units: monospace, so a letter is always as wide.
+pub fn text_width(words: &str) -> f64 {
+    words.chars().count() as f64 * 8.4
+}
+
 /// The semantic ink a shape is drawn in; the theme decides the color.
 #[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Ink {
@@ -142,6 +150,18 @@ impl Board {
         let top = self.shapes.iter().map(|s| s.index.as_str()).max().map(str::to_string);
         shape.index = order::between(top.as_deref(), None);
         self.shapes.push(shape)
+    }
+
+    /// Gives a text shape new words, as wide as they need. Nothing happens to a locked shape, a shape that holds no text, or words it already holds.
+    pub fn write(&mut self, key: Key<Shape>, words: &str) -> Outcome {
+        let writable = self.shapes.find(key).is_some_and(|s| !s.locked && matches!(&s.kind, Kind::Text(t) if t != words));
+        if !writable {
+            return Outcome::Nothing;
+        }
+        self.shapes.change(key, |s| {
+            s.kind = Kind::Text(words.to_string());
+            s.w = text_width(words);
+        })
     }
 
     /// Moves shapes by `dx` and `dy`, leaving locked ones where they are.

@@ -18,11 +18,12 @@ window		0 0 81 16
     button	Ellipse	28 11 9 1	
     button	Arrow	39 11 9 1	
     button	Draw	50 11 8 1	
-    button	Remove	60 11 16 1	unavailable (Choose a shape first)
-    button	Move left	2 12 11 1	unavailable (Choose a shape first)
-    button	Move right	15 12 12 1	unavailable (Choose a shape first)
-    button	Move up	29 12 11 1	unavailable (Choose a shape first)
-    button	Move down	42 12 13 1	unavailable (Choose a shape first)
+    button	Write…	60 11 10 1	
+    button	Remove	2 12 16 1	unavailable (Choose a shape first)
+    button	Move left	20 12 11 1	unavailable (Choose a shape first)
+    button	Move right	33 12 12 1	unavailable (Choose a shape first)
+    button	Move up	47 12 11 1	unavailable (Choose a shape first)
+    button	Move down	60 12 13 1	unavailable (Choose a shape first)
     button	Choose everything	2 13 23 1	unavailable (The board is empty)
     button	Bring to front	27 13 12 1	unavailable (Choose a shape first)
     button	Send to back	41 13 12 1	unavailable (Choose a shape first)

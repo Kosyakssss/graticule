@@ -12,9 +12,9 @@ mod tool;
 #[cfg(test)]
 mod laws;
 
-pub use board::{Binding, Board, End, Ink, Kind, Shape};
+pub use board::{Binding, Board, End, Ink, Kind, LINE, Shape, text_width};
 pub use geometry::{Bounds, Geometry, Point};
 pub use index::{Entry, Index};
 pub use snap::{Guide, Snapped, snap};
 pub use svg::svg;
-pub use tool::{Gesture, Intent, Tool};
+pub use tool::{Gesture, HANDLES, Intent, Tool};

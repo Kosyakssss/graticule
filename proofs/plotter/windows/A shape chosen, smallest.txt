@@ -18,11 +18,12 @@ window		0 0 81 16
     button	Ellipse	28 11 9 1	
     button	Arrow	39 11 9 1	
     button	Draw	50 11 8 1	
-    button	Remove	60 11 16 1	
-    button	Move left	2 12 11 1	
-    button	Move right	15 12 12 1	
-    button	Move up	29 12 11 1	
-    button	Move down	42 12 13 1	
+    button	Write…	60 11 10 1	
+    button	Remove	2 12 16 1	
+    button	Move left	20 12 11 1	
+    button	Move right	33 12 12 1	
+    button	Move up	47 12 11 1	
+    button	Move down	60 12 13 1	
     button	Choose everything	2 13 23 1	
     button	Bring to front	27 13 12 1	
     button	Send to back	41 13 12 1	

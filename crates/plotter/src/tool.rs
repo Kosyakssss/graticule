@@ -40,13 +40,13 @@ pub enum Intent {
     Translate { keys: Vec<Key<Shape>>, dx: f64, dy: f64, guides: Vec<Guide> },
     /// Choose the shapes wholly inside a box, which are `keys`, with `adding` as well as the chosen ones.
     Brush { area: Bounds, keys: Vec<Key<Shape>>, adding: bool },
-    /// Give a shape a new box by dragging one of its corners.
+    /// Give a shape a new box by dragging one of its handles: a corner, or the middle of a side, which moves only that side.
     Resize { key: Key<Shape>, to: Bounds },
     /// Put a new shape on the board, and hold an arrow's ends to the shapes they start and finish on.
     Create { shape: Shape, start: Option<Key<Shape>>, end: Option<Key<Shape>> },
 }
 
-/// How close, in screen points, the pointer must be to a line or a corner to take it, and how close an edge must come to snap.
+/// How close, in screen points, the pointer must be to a line or a handle to take it, and how close an edge must come to snap.
 const REACH: f64 = 6.0;
 const SNAP: f64 = 8.0;
 const NEW: f64 = 100.0;
@@ -58,9 +58,17 @@ impl Intent {
         let (from, to) = (gesture.from, gesture.to);
         match tool {
             Tool::Select => {
-                if let Some((key, opposite)) = handle(board, chosen, from, reach) {
+                if let Some((key, b, (fx, fy))) = handle(board, chosen, from, reach) {
+                    let span = |f: f64, start: f64, size: f64, at: f64| match f {
+                        0.5 => (start, start + size),
+                        _ => {
+                            let fixed = start + (1.0 - f) * size;
+                            (fixed.min(at), fixed.max(at))
+                        }
+                    };
+                    let ((x0, x1), (y0, y1)) = (span(fx, b.x, b.w, to.x), span(fy, b.y, b.h, to.y));
                     return match gesture.moved {
-                        true => Intent::Resize { key, to: Bounds::around(opposite, to) },
+                        true => Intent::Resize { key, to: Bounds::new(x0, y0, x1 - x0, y1 - y0) },
                         false => Intent::Choose { shape: Some(key), adding: false },
                     };
                 }
@@ -185,14 +193,16 @@ impl Board {
     }
 }
 
-fn handle(board: &Board, chosen: &Selection<Shape>, p: Point, reach: f64) -> Option<(Key<Shape>, Point)> {
+/// Where a shape's handles are, as fractions of its box across and down: the corners and the middle of each side.
+pub const HANDLES: [(f64, f64); 8] = [(0.0, 0.0), (0.5, 0.0), (1.0, 0.0), (1.0, 0.5), (1.0, 1.0), (0.5, 1.0), (0.0, 1.0), (0.0, 0.5)];
+
+fn handle(board: &Board, chosen: &Selection<Shape>, p: Point, reach: f64) -> Option<(Key<Shape>, Bounds, (f64, f64))> {
     let mut keys = chosen.iter();
     let (key, None) = (keys.next()?, keys.next()) else { return None };
     let shape = board.shapes.find(key).filter(|s| s.kind != Kind::Arrow && !s.locked)?;
     let b = shape.bounds();
-    let corners = [Point::new(b.x, b.y), Point::new(b.right(), b.y), Point::new(b.right(), b.bottom()), Point::new(b.x, b.bottom())];
-    let near = corners.iter().position(|c| c.distance(p) <= reach)?;
-    Some((key, corners[(near + 2) % 4]))
+    let near = HANDLES.into_iter().find(|&(fx, fy)| Point::new(b.x + fx * b.w, b.y + fy * b.h).distance(p) <= reach)?;
+    Some((key, b, near))
 }
 
 fn target(board: &Board, index: &Index, p: Point, reach: f64) -> Option<Key<Shape>> {

@@ -1,1 +1,4 @@
 primary+shift+p: palette
+primary+alt+up: add-cursor-above
+primary+alt+down: add-cursor-below
+primary+d: add-next-match

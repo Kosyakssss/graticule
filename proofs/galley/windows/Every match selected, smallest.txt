@@ -1,4 +1,4 @@
-window		0 0 75 15	
+window		0 0 75 16	
   page	Galley	0 0 75 11	
     group		2 3 71 1	
       group		2 3 53 1	
@@ -17,11 +17,14 @@ window		0 0 75 15
       button	Replace all	59 9 14 1	unavailable (Type what to find first)
   alert		2 11 71 1	
   status		2 12 71 1	
-  toolbar		2 13 71 2	
+  toolbar		2 13 71 3	
     button	Open	2 13 6 1	unavailable (Choose a file first)
     button	Save	10 13 6 1	unavailable (Choose a file first)
     button	Select every match	18 13 17 1	unavailable (Type what to find first)
-    button	Replace all	37 13 11 1	unavailable (Type what to find first)
-    button	Undo	50 13 13 1	unavailable (Nothing to undo)
-    button	Redo	2 14 19 1	unavailable (Nothing to redo)
-    button	Open the palette	23 14 28 1	
+    button	Add a cursor above	37 13 28 1	
+    button	Add a cursor below	2 14 28 1	
+    button	Add the next match	32 14 24 1	
+    button	Replace all	58 14 11 1	unavailable (Type what to find first)
+    button	Undo	2 15 13 1	unavailable (Nothing to undo)
+    button	Redo	17 15 19 1	unavailable (Nothing to redo)
+    button	Open the palette	38 15 28 1	

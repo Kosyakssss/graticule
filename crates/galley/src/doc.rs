@@ -172,6 +172,13 @@ impl Doc {
         self.selections.add(Span::cursor(at), len);
     }
 
+    /// Adds a cursor on the line above or below the primary one, as near its column as that line allows, and makes it primary.
+    pub fn add_cursor_line(&mut self, down: bool) {
+        let head = self.selections.primary().head;
+        let to = self.motion(head, if down { Motion::Down } else { Motion::Up });
+        self.add_cursor(to);
+    }
+
     pub fn select_all(&mut self) {
         self.selections = Selections::new(vec![Span::new(0, self.len())], 0, self.len());
     }

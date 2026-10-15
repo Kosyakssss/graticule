@@ -138,6 +138,61 @@ impl PartialEq for Ready {
 
 impl Eq for Ready {}
 
+/// The next place the primary selection's text appears after it, coming round from the start, worked out on a copy of a [`Doc`] by [`Doc::next_match`] and added by [`Doc::take_next`]. It travels as a command's argument, so the command log keeps where it was.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Next {
+    start: usize,
+    end: usize,
+    revision: Option<u64>,
+}
+
+impl Doc {
+    /// Where the primary selection's text appears next, or `None` when nothing is selected. It looks through the whole text, so run it on a copy in a job.
+    pub fn next_match(&self) -> Option<Next> {
+        let primary = self.selections().primary().range();
+        if primary.is_empty() {
+            return None;
+        }
+        let found = self.find_next(&self.text(primary.clone()), primary.end)?;
+        Some(Next { start: found.start, end: found.end, revision: Some(self.revision()) })
+    }
+
+    /// Selects the match `next` found, as another selection made primary, and says whether it wasn't selected already. Refused when the text changed after it was found.
+    pub fn take_next(&mut self, next: &Next) -> Result<bool, Stale> {
+        let len = self.len();
+        if next.revision.is_some_and(|r| r != self.revision()) || next.end > len || next.start > next.end {
+            return Err(Stale);
+        }
+        let mut selections = self.selections().clone();
+        let before = selections.spans().len();
+        selections.add(Span::new(next.start, next.end), len);
+        let added = selections.spans().len() > before;
+        self.select(selections);
+        Ok(added)
+    }
+}
+
+impl Field for Next {
+    ledger::register!(Next);
+
+    fn same(&self, other: &Self) -> bool {
+        (self.start, self.end) == (other.start, other.end)
+    }
+
+    fn value(&self) -> Value {
+        Value::Map(vec![("start".into(), Value::UInt(self.start as u64)), ("end".into(), Value::UInt(self.end as u64))])
+    }
+
+    fn from_value(value: &Value) -> Option<Self> {
+        let Value::Map(fields) = value else { return None };
+        let number = |name: &str| match fields.iter().find(|(k, _)| k == name).map(|(_, v)| v) {
+            Some(Value::UInt(n)) => Some(*n as usize),
+            _ => None,
+        };
+        Some(Next { start: number("start")?, end: number("end")?, revision: None })
+    }
+}
+
 /// A replacement refused because the text changed after it was worked out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stale;

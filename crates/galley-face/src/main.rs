@@ -24,6 +24,14 @@ enum Cmd {
     Saved(Result<Path, Failure>),
     #[label("Select every match")]
     SelectMatches,
+    #[label("Add a cursor above")]
+    AddCursorAbove,
+    #[label("Add a cursor below")]
+    AddCursorBelow,
+    #[label("Add the next match")]
+    AddNextMatch,
+    #[internal]
+    NextFound(Option<galley::Next>),
     #[label("Replace all")]
     ReplaceAll,
     #[internal]
@@ -39,7 +47,10 @@ impl App for Galley {
         match cmd {
             Cmd::Open | Cmd::Save => no_if(self.file.is_empty(), t!("Choose a file first")),
             Cmd::SelectMatches | Cmd::ReplaceAll => no_if(self.find.is_empty(), t!("Type what to find first")),
-            Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Replaced(_) | Cmd::Edit(_) => Yes,
+            Cmd::AddCursorAbove => no_if(self.text.line_of(self.text.selections().primary().head) == 0, t!("The cursor is on the first line")),
+            Cmd::AddCursorBelow => no_if(self.text.line_of(self.text.selections().primary().head) + 1 >= self.text.lines(), t!("The cursor is on the last line")),
+            Cmd::AddNextMatch => no_if(self.text.selections().primary().is_empty(), t!("Select some text first")),
+            Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Replaced(_) | Cmd::NextFound(_) | Cmd::Edit(_) => Yes,
         }
     }
 
@@ -63,6 +74,28 @@ impl App for Galley {
             Cmd::SelectMatches => match self.text.select_matches(self.find.as_str()) {
                 0 => cx.say(t!("Nothing matches")),
                 count => cx.say(t!("Selected {count} matches")),
+            },
+            Cmd::AddCursorAbove | Cmd::AddCursorBelow => {
+                let before = self.text.selections().spans().len();
+                self.text.add_cursor_line(matches!(cmd, Cmd::AddCursorBelow));
+                match self.text.selections().spans().len() {
+                    count if count == before => cx.say(t!("There is a cursor there already")),
+                    count => cx.say(t!("{count} cursors")),
+                }
+            }
+            Cmd::AddNextMatch => {
+                let text = self.text.clone();
+                cx.job(t!("Finding the next match"), move || text.next_match(), Cmd::NextFound);
+                Outcome::Nothing
+            }
+            Cmd::NextFound(None) => Outcome::Nothing,
+            Cmd::NextFound(Some(next)) => match self.text.take_next(&next) {
+                Ok(true) => {
+                    let count = self.text.selections().spans().len();
+                    cx.say(t!("{count} selections"))
+                }
+                Ok(false) => cx.say(t!("Every match is selected already")),
+                Err(_) => cx.say(t!("The text changed while the next match was being found")),
             },
             Cmd::ReplaceAll => {
                 let (text, find, with) = (self.text.clone(), self.find.to_string(), self.with.to_string());

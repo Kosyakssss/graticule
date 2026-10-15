@@ -11,6 +11,6 @@ mod laws;
 
 pub use changes::Changes;
 pub use doc::Doc;
-pub use find::{Replacement, Stale};
+pub use find::{Next, Replacement, Stale};
 pub use motion::Motion;
 pub use selection::{Selections, Span};

@@ -1,25 +1,28 @@
 window		0 0 120 30	
-  page	Galley	0 0 120 27	
+  page	Galley	0 0 120 26	
     group		2 3 116 1	
       group		2 3 98 1	
         text field	File	2 3 86 1	
         button	Choose…	90 3 10 1	
       button	Open	102 3 7 1	unavailable (Choose a file first)
       button	Save	111 3 7 1	unavailable (Choose a file first)
-    editor	Text	2 5 116 19	
+    editor	Text	2 5 116 18	
       line		2 5 116 1	
-    group		2 25 116 1	
-      text field	Find	2 25 37 1	
-      text field	Replace with	41 25 38 1	
-      button	Select every match	81 25 21 1	unavailable (Type what to find first)
-      button	Replace all	104 25 14 1	unavailable (Type what to find first)
-  alert		2 27 116 1	
-  status		2 28 116 1	
-  toolbar		2 29 116 1	
-    button	Open	2 29 6 1	unavailable (Choose a file first)
-    button	Save	10 29 6 1	unavailable (Choose a file first)
-    button	Select every match	18 29 17 1	unavailable (Type what to find first)
-    button	Replace all	37 29 11 1	unavailable (Type what to find first)
-    button	Undo	50 29 13 1	unavailable (Nothing to undo)
-    button	Redo	65 29 19 1	unavailable (Nothing to redo)
-    button	Open the palette	86 29 28 1	
+    group		2 24 116 1	
+      text field	Find	2 24 37 1	
+      text field	Replace with	41 24 38 1	
+      button	Select every match	81 24 21 1	unavailable (Type what to find first)
+      button	Replace all	104 24 14 1	unavailable (Type what to find first)
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Open	2 28 6 1	unavailable (Choose a file first)
+    button	Save	10 28 6 1	unavailable (Choose a file first)
+    button	Select every match	18 28 17 1	unavailable (Type what to find first)
+    button	Add a cursor above	37 28 28 1	unavailable (The cursor is on the first line)
+    button	Add a cursor below	67 28 28 1	unavailable (The cursor is on the last line)
+    button	Add the next match	2 29 24 1	unavailable (Select some text first)
+    button	Replace all	28 29 11 1	unavailable (Type what to find first)
+    button	Undo	41 29 13 1	unavailable (Nothing to undo)
+    button	Redo	56 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	77 29 28 1	

@@ -91,6 +91,10 @@ impl App for Todo {
             .add("Very long list", Todo::sample(10_000))
             .add("Long titles", Todo::with_titles(&["A title that goes on and on and on past the edge of any reasonable window"]))
     }
+
+    fn translations() -> Translations {
+        &[("de", include_str!("../locales/de.ftl"))]
+    }
 }
 
 impl Todo {

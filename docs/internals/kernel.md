@@ -299,6 +299,14 @@ Settings are derived from the app's data (spec §8.3). `derive(Form)` on a struc
 
 `ui.form(Player::playback)` draws them top to bottom. A switch, an option or a step is pressed like any control, and the kernel sends an `Edit` setting the new value at the field's path, so it arrives in `update` like every edit, is one undo step and is logged under how it reads ("Speed: Double", "Volume: 51"); the field types like any field. The values the controls set live beside the tree's commands (`Tree::sets`). "Show only the changed settings" narrows every form to what differs from its defaults, and "Show every setting" brings the rest back. A form in `#[session]` facts changes without undo steps, as every session change does. Searching a long form waits for the typed filter field of item 15, and so do a slider for fractions and percentages.
 
+### 9.8 Translations
+
+A message without values is a `&'static str` written in the source, so looking it up has to give back something as long-lived: the first time an id is asked for in a language, its translation is formatted once and leaked, and every later look-up reads it from a map. Languages are chosen at launch, so this is bounded by the app's translations. A message with values is formatted when it is made, and its values are gathered only when the language in use has the id, so English pays nothing for translation.
+
+A value reaches Fluent as a number when it is one, so a translation can choose its plural, and as text otherwise. `t!` can't know a value's type, so it writes `(&Wrap(&value)).arg()` and lets method lookup choose: `Argument` is implemented for `Wrap` of each kind of number and for a reference to `Wrap` of anything that displays, and lookup tries the receiver as it is before borrowing it again, so a number finds its own implementation first. No specialization and no `unsafe`.
+
+The rules that make ids live in the `messages` crate, which both the macros and `bindery messages` use, so the tool can never disagree with what was compiled. Ids are plain ASCII and start with a letter, as Fluent requires.
+
 ### 9.5 Bindable everywhere
 
 A component takes a command in one of two forms, chosen by type:

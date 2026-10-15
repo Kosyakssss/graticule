@@ -30,6 +30,11 @@ pub trait App: Facts + Send {
     fn states() -> States<Self> {
         States::new()
     }
+
+    /// The app's translations, each a language's tag and its Fluent source: `&[("de", include_str!("../locales/de.ftl"))]`. The one for the system's language is used; English is written in the source and needs none. `bindery messages` writes the English template and says what each translation lacks.
+    fn translations() -> crate::language::Translations {
+        &[]
+    }
 }
 
 /// Named sets of facts, so Specimen can show every screen in every state that matters.

@@ -1,0 +1,13 @@
+[package]
+name = "messages"
+description = "How Graticule's labels and messages get their ids, and finding every one in an app's source."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+proc-macro2 = { version = "1", features = ["span-locations"] }
+syn = { version = "2", features = ["full", "visit"] }

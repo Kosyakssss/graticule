@@ -17,6 +17,12 @@ const USAGE: &str = "BD-01 Bindery: starts Graticule apps and runs the developme
       builds the app, runs it, and on every saved change builds it again;
       a build that succeeds replaces the running app in the same window
       frame and state, and one that fails never reaches it
+
+  bindery messages [FOLDER]
+      finds every label and t! message in the app's source, writes them
+      in English to locales/en.ftl for translators, and says, for each
+      translation beside it, which texts it lacks and which of its ids
+      no longer have a source
 ";
 
 const RELOAD: &str = "GRATICULE_RELOAD";
@@ -46,6 +52,7 @@ fn main() {
             Some(folder) => new(Path::new(folder)),
             None => Err("where? bindery new FOLDER".into()),
         },
+        Some("messages") => messages(Path::new(positional.first().copied().unwrap_or("."))),
         Some("dev") => dev(Path::new(positional.first().copied().unwrap_or(".")), flag("-p").as_deref(), flag("--bin").as_deref(), &app_args),
         _ => {
             print!("{USAGE}");
@@ -159,6 +166,43 @@ fn main() {
     graticule::run::<HelloWorld>(t!("Hello world"));
 }
 "#;
+
+fn messages(folder: &Path) -> Result<(), String> {
+    let found = messages::find(&folder.join("src"))?;
+    let locales = folder.join("locales");
+    std::fs::create_dir_all(&locales).map_err(|e| format!("{}: {e}", locales.display()))?;
+    let english = locales.join("en.ftl");
+    std::fs::write(&english, messages::template(&found, folder)).map_err(|e| format!("{}: {e}", english.display()))?;
+    let mut ids: Vec<&str> = found.iter().map(|f| f.id.as_str()).collect();
+    ids.dedup();
+    ids.sort_unstable();
+    ids.dedup();
+    println!("{} labels and messages, written in English to {}", ids.len(), english.display());
+    let mut files: Vec<PathBuf> =
+        std::fs::read_dir(&locales).map_err(|e| e.to_string())?.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|e| e == "ftl") && *p != english).collect();
+    files.sort();
+    for file in files {
+        let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+        let has = messages::ids_in(&text);
+        let lacking: Vec<&str> = ids.iter().copied().filter(|id| !has.iter().any(|h| h == id)).collect();
+        let lost: Vec<&String> = has.iter().filter(|h| !ids.contains(&h.as_str())).collect();
+        match (lacking.len(), lost.len()) {
+            (0, 0) => println!("{name}: every text is translated"),
+            _ => {
+                for id in &lacking {
+                    if let Some(f) = found.iter().find(|f| f.id == *id) {
+                        println!("{name}: no translation for {id} (“{}”, {}:{})", f.text, f.file.strip_prefix(folder).unwrap_or(&f.file).display(), f.line);
+                    }
+                }
+                for id in &lost {
+                    println!("{name}: {id} has no source any more; was its text changed or its command renamed?");
+                }
+            }
+        }
+    }
+    Ok(())
+}
 
 fn dev(folder: &Path, package: Option<&str>, bin: Option<&str>, app_args: &[String]) -> Result<(), String> {
     let root = workspace_root(folder)?;

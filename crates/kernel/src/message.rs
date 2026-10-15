@@ -14,7 +14,9 @@ impl Message {
         Self { id, source, text: Cow::Borrowed(source) }
     }
 
-    pub fn formatted(id: &'static str, source: &'static str, text: String) -> Self {
+    /// A message with values put in: its translation when the language in use has one, else `text`, the English formatted already.
+    pub fn formatted<'n>(id: &'static str, source: &'static str, text: String, args: impl FnOnce() -> Vec<(&'n str, crate::language::Arg)>) -> Self {
+        let text = crate::language::translated_with(id, args).unwrap_or(text);
         Self { id, source, text: Cow::Owned(text) }
     }
 
@@ -30,14 +32,18 @@ impl Message {
         self.source
     }
 
+    /// The text to show: the translation of a message without values when the language in use has one, else the text as written.
     pub fn as_str(&self) -> &str {
-        &self.text
+        match &self.text {
+            Cow::Borrowed(_) => crate::language::fixed_text(self.id).unwrap_or(&self.text),
+            Cow::Owned(text) => text,
+        }
     }
 }
 
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.text)
+        f.write_str(self.as_str())
     }
 }
 
@@ -55,6 +61,6 @@ impl From<&'static str> for Message {
 
 impl AsRef<str> for Message {
     fn as_ref(&self) -> &str {
-        &self.text
+        self.as_str()
     }
 }

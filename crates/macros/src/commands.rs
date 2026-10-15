@@ -104,21 +104,6 @@ fn is_edit(ty: &Type) -> bool {
     matches!(ty, Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == "Edit"))
 }
 
-fn kebab(name: &str) -> String {
-    let mut out = String::new();
-    for (i, c) in name.chars().enumerate() {
-        if c.is_uppercase() {
-            if i > 0 {
-                out.push('-');
-            }
-            out.extend(c.to_lowercase());
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
 struct Arg {
     ident: syn::Ident,
     name: Option<syn::Ident>,
@@ -149,7 +134,7 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
     let mut edit_as = None;
     for (index, v) in data.variants.iter().enumerate() {
         let vi = &v.ident;
-        let command_name = kebab(&vi.to_string());
+        let command_name = messages::kebab(&vi.to_string());
         let internal = v.attrs.iter().any(|a| a.path().is_ident("internal"));
         let doc = v
             .attrs
@@ -324,29 +309,43 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
         let label_body = match &label {
             None => quote!(out.push_str(#command_name)),
             Some(label) => {
-                let write = |text: &LitStr, many: bool| -> syn::Result<TokenStream> {
-                    let mut parts = Vec::new();
+                let write = |text: &LitStr, many: bool, id: String| -> syn::Result<TokenStream> {
+                    let (mut parts, mut values) = (Vec::new(), Vec::new());
                     for hole in holes(&text.value()) {
-                        parts.push(match hole {
-                            Hole::Text(t) => quote!(out.push_str(#t);),
-                            Hole::Name(n) if n == "count" && many => quote!(let _ = ::std::write!(out, "{}", count);),
+                        let value = match &hole {
+                            Hole::Text(t) => {
+                                parts.push(quote!(out.push_str(#t);));
+                                continue;
+                            }
+                            Hole::Name(n) if n == "count" && many => quote!(count),
                             Hole::Name(n) => {
-                                let id = format_ident!("{}", n);
-                                if let Some(arg) = args.iter().find(|a| a.name.as_ref().is_some_and(|x| *x == n)) {
+                                let field = format_ident!("{}", n);
+                                if let Some(arg) = args.iter().find(|a| a.name.as_ref().is_some_and(|x| x == n)) {
                                     let ai = &arg.ident;
-                                    quote!(let _ = ::std::write!(out, "{}", #ai);)
+                                    quote!(#ai)
                                 } else if subject_item.is_some() {
-                                    quote!(let _ = ::std::write!(out, "{}", found.#id);)
+                                    quote!(found.#field)
                                 } else if let Some(s) = subject {
                                     let si = &s.ident;
-                                    quote!(let _ = ::std::write!(out, "{}", #si);)
+                                    quote!(#si)
                                 } else {
                                     return Err(syn::Error::new_spanned(text, format!("`{{{n}}}` isn't an argument of this command, and it has no subject to read it from")));
                                 }
                             }
-                        });
+                        };
+                        let Hole::Name(n) = hole else { continue };
+                        parts.push(quote!(let _ = ::std::write!(out, "{}", #value);));
+                        values.push(quote!((#n, (&#kernel::language::Wrap(&#value)).arg())));
                     }
-                    Ok(quote!(#(#parts)*))
+                    Ok(quote! {
+                        match #kernel::language::translated_with(#id, || {
+                            use #kernel::language::Argument as _;
+                            ::std::vec![#(#values),*]
+                        }) {
+                            ::std::option::Option::Some(translated) => out.push_str(&translated),
+                            ::std::option::Option::None => { #(#parts)* }
+                        }
+                    })
                 };
                 let needs_found = |text: &LitStr| {
                     subject_item.is_some() && holes(&text.value()).iter().any(|h| matches!(h, Hole::Name(n) if n != "count" && !args.iter().any(|a| a.name.as_ref().is_some_and(|x| x == n))))
@@ -377,8 +376,8 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
                 };
                 let long = match (&label.plain, &label.by) {
                     (_, Some((field, yes, no))) => {
-                        let yes_w = write(yes, false)?;
-                        let no_w = write(no, false)?;
+                        let yes_w = write(yes, false, command_name.clone())?;
+                        let no_w = write(no, false, format!("{command_name}-else"))?;
                         if subject_item.is_none() {
                             return Err(syn::Error::new_spanned(field, "a label chosen by a field reads it from the command's #[subject] key"));
                         }
@@ -391,7 +390,7 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
                         }
                     }
                     (Some(plain), None) => {
-                        let w = write(plain, false)?;
+                        let w = write(plain, false, command_name.clone())?;
                         if needs_found(plain) {
                             let s = &subject.expect("subject").ident;
                             quote! {
@@ -407,11 +406,11 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
                     (None, None) => unreachable!(),
                 };
                 let short = match &label.short {
-                    Some(s) => quote!(out.push_str(#s);),
+                    Some(s) => write(s, false, format!("{command_name}-short"))?,
                     None => long.clone(),
                 };
                 let many = match &label.many {
-                    Some(m) => write(m, true)?,
+                    Some(m) => write(m, true, format!("{command_name}-many"))?,
                     None => long.clone(),
                 };
                 quote! {

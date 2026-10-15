@@ -29,6 +29,8 @@ notify = "8.2.0"
 jiff = "0.2.38"
 arc-swap = "1.7.1"
 graticule-macros.workspace = true
+fluent-bundle = "0.16.0"
+sys-locale = "0.3.2"
 
 [features]
 profile = ["profiling/profile-with-tracy"]

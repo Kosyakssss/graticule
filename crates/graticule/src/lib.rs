@@ -9,6 +9,7 @@ pub use ledger;
 pub mod prelude {
     pub use graticule_macros::{Choice, Commands, Facts, Form, t};
     pub use kernel::Available::{self, No, Yes};
+    pub use kernel::language::Translations;
     pub use kernel::{App, Cx, Derived, Failure, Feed, Fill, Ink, Jobs, Live, Message, Moment, Path, Picture, States, Ui, cols, icons, no_if};
     pub use ledger::{Edit, Key, List, Outcome, Selection, Text};
 }
@@ -21,6 +22,15 @@ pub fn run<A: kernel::App + Default>(title: kernel::Message) {
             kernel::shell::run(config, |waker| specimen::Specimen::over(A::default()).wake_with(waker))
         }
         _ => {
+            let args: Vec<String> = std::env::args().collect();
+            let asked = args.iter().position(|a| a == "--language").and_then(|i| args.get(i + 1));
+            let (_, troubles) = match asked {
+                Some(tag) => kernel::language::choose(A::translations(), tag),
+                None => kernel::language::choose_system(A::translations()),
+            };
+            for trouble in troubles {
+                eprintln!("{trouble}");
+            }
             let config = kernel::shell::Config::new(title.as_str());
             kernel::shell::run(config, |waker| kernel::runner::Runner::open(&kernel::runner::folder(), A::default).wake_with(waker))
         }

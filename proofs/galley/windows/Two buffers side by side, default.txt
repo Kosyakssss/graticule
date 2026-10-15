@@ -1,0 +1,69 @@
+window		0 0 120 30	
+  page	Galley	0 0 120 24	
+    group		2 3 116 1	
+      group		2 3 98 1	
+        text field	File	2 3 86 1	holds “main.rs”
+        button	Choose…	90 3 10 1	
+      button	Open	102 3 7 1	
+      button	Save	111 3 7 1	
+    split		2 5 116 16	
+      pane	This buffer	2 5 55 16	
+        text	Untitled, buffer 1 of 2	2 5 55 1	muted
+        editor	Untitled	2 6 55 15	
+          line	fn main() {	2 6 55 1	
+          line	    // Print every line that has something on it	2 7 55 1	
+          line	    let lines: Vec<String> = read("notes.txt");	2 8 55 1	
+          line	    for line in lines {	2 9 55 1	
+          line	        if line.is_empty() {	2 10 55 1	
+          line	            continue;	2 11 55 1	
+          line	        }	2 12 55 1	
+          line	        print(line);	2 13 55 1	
+          line	    }	2 14 55 1	
+          line	}	2 15 55 1	
+          line		2 16 55 1	
+      divider	Between “This buffer” and “Beside it”	59 5 1 16	
+      pane	Beside it	62 5 56 16	
+        text	Letter, buffer 2 of 2	62 5 56 1	muted
+        editor	Letter	62 6 56 15	
+          line	Dear reader,	62 6 56 1	
+          line		62 7 56 1	
+          line	The text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.	62 8 56 3	
+          line	Every change is an operation the ledger keeps, and undo takes it back with the cursors where they were.	62 11 56 2	
+          line		62 13 56 1	
+          line	    Indented lines keep their indent when Return starts the next one.	62 14 56 2	
+          line		62 16 56 1	
+          line	With thanks,	62 17 56 1	
+          line	the galley	62 18 56 1	
+          line		62 19 56 1	
+    group		2 22 116 1	
+      text field	Find	2 22 17 1	
+      text field	Replace with	21 22 18 1	
+      button	Find the previous	41 22 20 1	unavailable (Type what to find first)
+      button	Find the next	63 22 16 1	unavailable (Type what to find first)
+      button	Select every match	81 22 21 1	unavailable (Type what to find first)
+      button	Replace all	104 22 14 1	unavailable (Type what to find first)
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Open	2 26 6 1	
+    button	Save	10 26 6 1	
+    button	New buffer	18 26 11 1	
+    button	Next buffer	31 26 11 1	unavailable (Every other buffer is showing beside this one)
+    button	Previous buffer	44 26 14 1	unavailable (Every other buffer is showing beside this one)
+    button	Close the buffer	60 26 14 1	
+    button	Split	76 26 6 1	unavailable (The window is split already)
+    button	Close the split	84 26 13 1	
+    button	Swap the panes	99 26 14 1	
+    button	Select every match	2 27 17 1	unavailable (Type what to find first)
+    button	Find the next	21 27 19 1	unavailable (Type what to find first)
+    button	Find the previous	42 27 28 1	unavailable (Type what to find first)
+    button	Add a cursor above	72 27 28 1	unavailable (The cursor is on the first line)
+    button	Add a cursor below	2 28 28 1	
+    button	Add the next match	32 28 24 1	unavailable (Select some text first)
+    button	Replace all	58 28 11 1	unavailable (Type what to find first)
+    button	Fold the block	71 28 13 1	
+    button	Unfold	86 28 7 1	unavailable (Nothing is folded under this line)
+    button	Unfold everything	95 28 16 1	unavailable (Nothing is folded)
+    button	Undo	2 29 13 1	unavailable (Nothing to undo)
+    button	Redo	17 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	38 29 28 1	

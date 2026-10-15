@@ -1,45 +1,50 @@
 window		0 0 120 30	
-  page	Galley	0 0 120 25	
+  page	Galley	0 0 120 24	
     group		2 3 116 1	
       group		2 3 98 1	
         text field	File	2 3 86 1	
         button	Choose…	90 3 10 1	
       button	Open	102 3 7 1	unavailable (Choose a file first)
       button	Save	111 3 7 1	unavailable (Choose a file first)
-    editor	Text	2 5 116 17	
-      line	Line 1	2 5 116 1	
-      line	Line 2	2 6 116 1	
-      line	Line 3	2 7 116 1	
-      line	Line 4	2 8 116 1	
-      line	Line 5	2 9 116 1	
-      line	Line 6	2 10 116 1	
-      line	Line 7	2 11 116 1	
-      line	Line 8	2 12 116 1	
-      line	Line 9	2 13 116 1	
-      line	Line 10	2 14 116 1	
-      line	Line 11	2 15 116 1	
-      line	Line 12	2 16 116 1	
-      line	Line 13	2 17 116 1	
-      line	Line 14	2 18 116 1	
-      line	Line 15	2 19 116 1	
-      line	Line 16	2 20 116 1	
-      line	Line 17	2 21 116 1	
-    group		2 23 116 1	
-      text field	Find	2 23 17 1	
-      text field	Replace with	21 23 18 1	
-      button	Find the previous	41 23 20 1	unavailable (Type what to find first)
-      button	Find the next	63 23 16 1	unavailable (Type what to find first)
-      button	Select every match	81 23 21 1	unavailable (Type what to find first)
-      button	Replace all	104 23 14 1	unavailable (Type what to find first)
-  alert		2 25 116 1	
-  status		2 26 116 1	
-  toolbar		2 27 116 3	
-    button	Open	2 27 6 1	unavailable (Choose a file first)
-    button	Save	10 27 6 1	unavailable (Choose a file first)
-    button	Select every match	18 27 17 1	unavailable (Type what to find first)
-    button	Find the next	37 27 19 1	unavailable (Type what to find first)
-    button	Find the previous	58 27 28 1	unavailable (Type what to find first)
-    button	Add a cursor above	88 27 28 1	unavailable (The cursor is on the first line)
+    text	Untitled, buffer 1 of 1	2 5 116 1	muted
+    editor	Untitled	2 7 116 14	
+      line	Line 1	2 7 116 1	
+      line	Line 2	2 8 116 1	
+      line	Line 3	2 9 116 1	
+      line	Line 4	2 10 116 1	
+      line	Line 5	2 11 116 1	
+      line	Line 6	2 12 116 1	
+      line	Line 7	2 13 116 1	
+      line	Line 8	2 14 116 1	
+      line	Line 9	2 15 116 1	
+      line	Line 10	2 16 116 1	
+      line	Line 11	2 17 116 1	
+      line	Line 12	2 18 116 1	
+      line	Line 13	2 19 116 1	
+      line	Line 14	2 20 116 1	
+    group		2 22 116 1	
+      text field	Find	2 22 17 1	
+      text field	Replace with	21 22 18 1	
+      button	Find the previous	41 22 20 1	unavailable (Type what to find first)
+      button	Find the next	63 22 16 1	unavailable (Type what to find first)
+      button	Select every match	81 22 21 1	unavailable (Type what to find first)
+      button	Replace all	104 22 14 1	unavailable (Type what to find first)
+  alert		2 24 116 1	
+  status		2 25 116 1	
+  toolbar		2 26 116 4	
+    button	Open	2 26 6 1	unavailable (Choose a file first)
+    button	Save	10 26 6 1	unavailable (Choose a file first)
+    button	New buffer	18 26 11 1	
+    button	Next buffer	31 26 11 1	unavailable (There is only one buffer)
+    button	Previous buffer	44 26 14 1	unavailable (There is only one buffer)
+    button	Close the buffer	60 26 14 1	unavailable (The last buffer stays open)
+    button	Split	76 26 6 1	unavailable (Open a second buffer to show beside this one)
+    button	Close the split	84 26 13 1	unavailable (The window isn't split)
+    button	Swap the panes	99 26 14 1	unavailable (The window isn't split)
+    button	Select every match	2 27 17 1	unavailable (Type what to find first)
+    button	Find the next	21 27 19 1	unavailable (Type what to find first)
+    button	Find the previous	42 27 28 1	unavailable (Type what to find first)
+    button	Add a cursor above	72 27 28 1	unavailable (The cursor is on the first line)
     button	Add a cursor below	2 28 28 1	
     button	Add the next match	32 28 24 1	unavailable (Select some text first)
     button	Replace all	58 28 11 1	unavailable (Type what to find first)

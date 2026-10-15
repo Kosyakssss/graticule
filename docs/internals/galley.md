@@ -52,6 +52,10 @@ Marks are worked out over the whole text, so they belong in a derived value: the
 
 `Spelling` is the hook a spellchecker fills: whether it knows a word and what might have been meant. `Doc::check_spelling` walks a range of the text word by word and marks those it doesn't know; a word is letters with apostrophes inside, and a run holding a digit or an underscore is a name and left alone, so code checks sensibly. Which spellcheckers ship is open question 15.
 
+## Buffers and splits
+
+Buffers and splits are facts the app keeps, so the kernel has nothing of its own for them: the Galley face keeps a `List` of buffers, each with a name and a `Doc`, the key of the buffer that shows and the key of the one beside it in a split, both kept for the session. A `Doc` holds its own cursors and folds, so the same buffer in two panes would share one set of cursors, and the editors, keyed by the path they edit, would be the same box twice, which sends layout round its settling loop until it gives up. So one buffer never shows in both panes: Split needs a second buffer, Next and Previous step over the one beside, and closing a buffer ends a split that would show it twice. Two views of one text with cursors of their own would need the cursors kept per pane, outside the `Doc`; nothing asks for that yet.
+
 ## Laws
 
 `crates/galley/src/laws.rs`: any sequence of edits at any cursors, over text with combining marks, emoji and line breaks, undoes to the start and redoes to the end through its recorded operations, bringing back the selections each time as well as the text; and the selections are valid after every step. The edits include folding any lines, folding the block at the cursor and unfolding, and validity includes the folds: in order, apart, each whole lines under a line that shows, with no cursor inside one; undo and redo bring the folds back with the selections. Every app with an editor also gets the universal laws, which Assay drives by typing into its editors as well as its fields.

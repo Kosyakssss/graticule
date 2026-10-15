@@ -1,37 +1,45 @@
-window		0 0 114 16	
-  page	Galley	0 0 114 11	
+window		0 0 114 19	
+  page	Galley	0 0 114 13	
     group		2 3 110 1	
       group		2 3 92 1	
         text field	File	2 3 80 1	
         button	Choose…	84 3 10 1	
       button	Open	96 3 7 1	unavailable (Choose a file first)
       button	Save	105 3 7 1	unavailable (Choose a file first)
-    editor	Text	2 5 110 3	
-      line	Dear reader,	2 5 110 1	
-      line		2 6 110 1	
-      line	The text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.	2 7 110 1	
-    group		2 9 110 1	
-      text field	Find	2 9 16 1	holds “the”
-      text field	Replace with	20 9 16 1	
-      button	Find the previous	38 9 19 1	
-      button	Find the next	59 9 16 1	
-      button	Select every match	77 9 19 1	
-      button	Replace all	98 9 14 1	
-  alert		2 11 110 1	
-  status		2 12 110 1	
-  toolbar		2 13 110 3	
-    button	Open	2 13 6 1	unavailable (Choose a file first)
-    button	Save	10 13 6 1	unavailable (Choose a file first)
-    button	Select every match	18 13 17 1	
-    button	Find the next	37 13 19 1	
-    button	Find the previous	58 13 28 1	
-    button	Add a cursor above	2 14 28 1	unavailable (The cursor is on the first line)
-    button	Add a cursor below	32 14 28 1	
-    button	Add the next match	62 14 24 1	unavailable (Select some text first)
-    button	Replace all	88 14 11 1	
-    button	Fold the block	2 15 13 1	
-    button	Unfold	17 15 7 1	unavailable (Nothing is folded under this line)
-    button	Unfold everything	26 15 16 1	unavailable (Nothing is folded)
-    button	Undo	44 15 13 1	unavailable (Nothing to undo)
-    button	Redo	59 15 19 1	unavailable (Nothing to redo)
-    button	Open the palette	80 15 28 1	
+    text	Untitled, buffer 1 of 1	2 5 110 1	muted
+    editor	Untitled	2 7 110 3	
+      line	Dear reader,	2 7 110 1	
+      line		2 8 110 1	
+      line	The text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.	2 9 110 1	
+    group		2 11 110 1	
+      text field	Find	2 11 16 1	holds “the”
+      text field	Replace with	20 11 16 1	
+      button	Find the previous	38 11 19 1	
+      button	Find the next	59 11 16 1	
+      button	Select every match	77 11 19 1	
+      button	Replace all	98 11 14 1	
+  alert		2 13 110 1	
+  status		2 14 110 1	
+  toolbar		2 15 110 4	
+    button	Open	2 15 6 1	unavailable (Choose a file first)
+    button	Save	10 15 6 1	unavailable (Choose a file first)
+    button	New buffer	18 15 11 1	
+    button	Next buffer	31 15 11 1	unavailable (There is only one buffer)
+    button	Previous buffer	44 15 14 1	unavailable (There is only one buffer)
+    button	Close the buffer	60 15 14 1	unavailable (The last buffer stays open)
+    button	Split	76 15 6 1	unavailable (Open a second buffer to show beside this one)
+    button	Close the split	84 15 13 1	unavailable (The window isn't split)
+    button	Swap the panes	2 16 14 1	unavailable (The window isn't split)
+    button	Select every match	18 16 17 1	
+    button	Find the next	37 16 19 1	
+    button	Find the previous	58 16 28 1	
+    button	Add a cursor above	2 17 28 1	unavailable (The cursor is on the first line)
+    button	Add a cursor below	32 17 28 1	
+    button	Add the next match	62 17 24 1	unavailable (Select some text first)
+    button	Replace all	88 17 11 1	
+    button	Fold the block	2 18 13 1	
+    button	Unfold	17 18 7 1	unavailable (Nothing is folded under this line)
+    button	Unfold everything	26 18 16 1	unavailable (Nothing is folded)
+    button	Undo	44 18 13 1	unavailable (Nothing to undo)
+    button	Redo	59 18 19 1	unavailable (Nothing to redo)
+    button	Open the palette	80 18 28 1	

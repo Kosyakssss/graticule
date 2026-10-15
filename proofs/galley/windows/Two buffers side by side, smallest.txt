@@ -1,0 +1,54 @@
+window		0 0 114 18	
+  page	Galley	0 0 114 12	
+    group		2 3 110 1	
+      group		2 3 92 1	
+        text field	File	2 3 80 1	holds “main.rs”
+        button	Choose…	84 3 10 1	
+      button	Open	96 3 7 1	
+      button	Save	105 3 7 1	
+    split		2 5 110 4	
+      pane	This buffer	2 5 52 4	
+        text	Untitled, buffer 1 of 2	2 5 52 1	muted
+        editor	Untitled	2 6 52 3	
+          line	fn main() {	2 6 52 1	
+          line	    // Print every line that has something on it	2 7 52 1	
+          line	    let lines: Vec<String> = read("notes.txt");	2 8 52 1	
+      divider	Between “This buffer” and “Beside it”	56 5 1 4	
+      pane	Beside it	59 5 53 4	
+        text	Letter, buffer 2 of 2	59 5 53 1	muted
+        editor	Letter	59 6 53 3	
+          line	Dear reader,	59 6 53 1	
+          line		59 7 53 1	
+          line	The text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.	59 8 53 1	
+    group		2 10 110 1	
+      text field	Find	2 10 16 1	
+      text field	Replace with	20 10 16 1	
+      button	Find the previous	38 10 19 1	unavailable (Type what to find first)
+      button	Find the next	59 10 16 1	unavailable (Type what to find first)
+      button	Select every match	77 10 19 1	unavailable (Type what to find first)
+      button	Replace all	98 10 14 1	unavailable (Type what to find first)
+  alert		2 12 110 1	
+  status		2 13 110 1	
+  toolbar		2 14 110 4	
+    button	Open	2 14 6 1	
+    button	Save	10 14 6 1	
+    button	New buffer	18 14 11 1	
+    button	Next buffer	31 14 11 1	unavailable (Every other buffer is showing beside this one)
+    button	Previous buffer	44 14 14 1	unavailable (Every other buffer is showing beside this one)
+    button	Close the buffer	60 14 14 1	
+    button	Split	76 14 6 1	unavailable (The window is split already)
+    button	Close the split	84 14 13 1	
+    button	Swap the panes	2 15 14 1	
+    button	Select every match	18 15 17 1	unavailable (Type what to find first)
+    button	Find the next	37 15 19 1	unavailable (Type what to find first)
+    button	Find the previous	58 15 28 1	unavailable (Type what to find first)
+    button	Add a cursor above	2 16 28 1	unavailable (The cursor is on the first line)
+    button	Add a cursor below	32 16 28 1	
+    button	Add the next match	62 16 24 1	unavailable (Select some text first)
+    button	Replace all	88 16 11 1	unavailable (Type what to find first)
+    button	Fold the block	2 17 13 1	
+    button	Unfold	17 17 7 1	unavailable (Nothing is folded under this line)
+    button	Unfold everything	26 17 16 1	unavailable (Nothing is folded)
+    button	Undo	44 17 13 1	unavailable (Nothing to undo)
+    button	Redo	59 17 19 1	unavailable (Nothing to redo)
+    button	Open the palette	80 17 28 1	

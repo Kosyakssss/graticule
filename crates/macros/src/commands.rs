@@ -196,7 +196,7 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
             Some(s) => {
                 let si = &s.ident;
                 let raw = if subject_item.is_some() { quote!(#si.raw()) } else { quote!(#kernel::Subject::raw(#si)) };
-                subjects.push(quote!(#pattern => ::std::option::Option::Some(#raw)));
+                subjects.push(quote!(#[allow(unused_variables)] #pattern => ::std::option::Option::Some(#raw)));
                 let rebuilt: Vec<TokenStream> = args
                     .iter()
                     .map(|a| {
@@ -213,7 +213,7 @@ pub fn derive(input: DeriveInput) -> syn::Result<TokenStream> {
                     })
                     .collect();
                 let built = if named { quote!(Self::#vi { #(#rebuilt),* }) } else { quote!(Self::#vi(#(#rebuilt),*)) };
-                with_subjects.push(quote!(#pattern => #built));
+                with_subjects.push(quote!(#[allow(unused_variables)] #pattern => #built));
             }
             None => {
                 subjects.push(quote!(#ignore => ::std::option::Option::None));

@@ -72,14 +72,7 @@ Several names on either side are the same component. They are merged into one ro
 | Choice | Select (native) | HTMLSelect | grounded: a button that cycles through the options |
 | File field | | FileInput | a path typed in, or chosen with the system's file panel |
 | Tag field | TagGroup (removable) | TagInput | a list of words, each removable, and a field to add another |
-
-## Wave 2: fields in full
-
-These need the full field (spec §7.2, build-plan item 11): input methods, selection and multi-line.
-
-| Graticule | HeroUI | Blueprint | Notes |
-|---|---|---|---|
-| Range slider | Slider (range) | RangeSlider, MultiSlider | a range, or several handles; one value is done |
+| Range slider | Slider (range) | RangeSlider | two handles on one track, each its own tab stop; more handles are not done |
 
 ## Wave 3: choices that open
 

@@ -13,7 +13,8 @@ fn role(kind: Kind) -> Role {
         Kind::Field { holds: Holds::Lines { .. } } => Role::MultilineTextInput,
         Kind::Field { holds: Holds::Search } => Role::SearchInput,
         Kind::Field { holds: Holds::Number } => Role::SpinButton,
-        Kind::Slider { .. } => Role::Slider,
+        Kind::Slider { .. } | Kind::Thumb { .. } => Role::Slider,
+        Kind::Range { .. } => Role::Group,
         Kind::Cycle { .. } | Kind::Browse | Kind::Chip => Role::Button,
         Kind::Field { .. } => Role::TextInput,
         Kind::Check { .. } => Role::CheckBox,
@@ -60,12 +61,16 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
         let name = tree.str(n.name);
         match n.kind {
             Kind::Root => node.set_label(title),
-            Kind::Slider { .. } | Kind::Field { holds: Holds::Number } => {
+            Kind::Slider { .. } | Kind::Thumb { .. } | Kind::Field { holds: Holds::Number } => {
                 node.set_value(text);
+                if !name.is_empty() {
+                    node.set_label(name);
+                }
                 if let Ok(value) = crate::field::evaluate(text) {
                     node.set_numeric_value(value);
                 }
-                if let Some((least, most)) = tree.bounds(i as u32) {
+                let held = if matches!(n.kind, Kind::Thumb { .. }) { n.parent } else { i as u32 };
+                if let Some((least, most)) = tree.bounds(held) {
                     node.set_min_numeric_value(least as f64);
                     node.set_max_numeric_value(most as f64);
                 }

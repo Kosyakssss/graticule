@@ -222,10 +222,10 @@ impl<'t> Layout<'t> {
                 let c = (length as i32 * CODE - 1).max(1);
                 (c, c)
             }
-            Kind::Slider { label, .. } => (13 + label as i32, 33 + label as i32),
+            Kind::Slider { label, .. } | Kind::Range { label } => (13 + label as i32, 33 + label as i32),
             Kind::Cycle { widest } => (widest as i32 + BUTTON + 2, widest as i32 + BUTTON + 2),
             Kind::Field { .. } => (16, 32),
-            Kind::Rule | Kind::Placeholder { .. } => (0, 0),
+            Kind::Rule | Kind::Placeholder { .. } | Kind::Thumb { .. } => (0, 0),
             Kind::Chip => {
                 let c = self.cols(tree.str(n.text), false) + 3;
                 (c, c)
@@ -435,6 +435,8 @@ impl<'t> Layout<'t> {
             | Kind::Link
             | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline | Holds::Number | Holds::Code { .. } | Holds::Tags }
             | Kind::Slider { .. }
+            | Kind::Range { .. }
+            | Kind::Thumb { .. }
             | Kind::Cycle { .. }
             | Kind::Browse
             | Kind::Status
@@ -591,6 +593,15 @@ impl<'t> Layout<'t> {
                 self.stack_down(tree, i, Area::new(area.col, area.row + label, area.cols, area.rows - label), 0);
             }
             Kind::Tabs => self.stack_down(tree, i, area, 1),
+            Kind::Range { label } => {
+                let track = crate::components::slider_track(&tree.nodes[i as usize], label);
+                let (start, end) = self.children(tree, i);
+                for k in start..end {
+                    let c = self.stack[k];
+                    self.place(tree, c, track);
+                }
+                self.release(start);
+            }
             Kind::Disclosure => {
                 let (start, end) = self.children(tree, i);
                 let mut row = area.row;

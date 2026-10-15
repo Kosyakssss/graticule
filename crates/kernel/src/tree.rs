@@ -160,6 +160,8 @@ pub enum Kind {
     Cycle { widest: u8 },
     Browse,
     Chip,
+    Range { label: u8 },
+    Thumb { at: u16, high: bool },
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -194,6 +196,7 @@ impl Kind {
                 | Kind::Cycle { .. }
                 | Kind::Browse
                 | Kind::Chip
+                | Kind::Thumb { .. }
         )
     }
 
@@ -284,6 +287,8 @@ impl Kind {
             Kind::Cycle { .. } => "cycling choice",
             Kind::Browse => "button",
             Kind::Chip => "removable tag",
+            Kind::Range { .. } => "range slider",
+            Kind::Thumb { .. } => "slider handle",
             Kind::More => "more",
         }
     }

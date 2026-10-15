@@ -174,6 +174,8 @@ pub struct Catalog {
     attachment: Text,
     #[session]
     labels: Vec<String>,
+    #[session]
+    hours: (u8, u8),
 }
 
 #[derive(Facts)]
@@ -300,10 +302,11 @@ pub enum Component {
     Choice,
     FileField,
     TagField,
+    RangeSlider,
 }
 
 impl Component {
-    const ALL: [Component; 52] = [
+    const ALL: [Component; 53] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -356,6 +359,7 @@ impl Component {
         Component::Choice,
         Component::FileField,
         Component::TagField,
+        Component::RangeSlider,
     ];
 
     fn name(self) -> &'static str {
@@ -412,6 +416,7 @@ impl Component {
             Component::Choice => "Choice",
             Component::FileField => "File field",
             Component::TagField => "Tag field",
+            Component::RangeSlider => "Range slider",
         }
     }
 
@@ -469,6 +474,7 @@ impl Component {
             Component::Choice => include_str!("../../../docs/components/choice.md"),
             Component::FileField => include_str!("../../../docs/components/file-field.md"),
             Component::TagField => include_str!("../../../docs/components/tag-field.md"),
+            Component::RangeSlider => include_str!("../../../docs/components/range-slider.md"),
         }
     }
 
@@ -585,6 +591,7 @@ impl Default for Catalog {
             printing: Printing::default(),
             attachment: Text::default(),
             labels: vec!["groceries".to_string(), "weekend".to_string()],
+            hours: (9, 17),
         }
     }
 }
@@ -987,6 +994,7 @@ impl Catalog {
             Component::Choice => ui.choice("Show as", Catalog::shape),
             Component::FileField => ui.file_field("Attachment", Catalog::attachment),
             Component::TagField => ui.tag_field("Tags", Catalog::labels),
+            Component::RangeSlider => ui.labelled("Opening hours", |ui| ui.range_slider(Catalog::hours, 0..=24)),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);

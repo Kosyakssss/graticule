@@ -890,6 +890,17 @@ impl<A: App> Runner<A> {
                 self.tree.nodes[i].text = self.tree.put(&crate::value::grouped(now));
                 self.tree.nodes[i].kind = Kind::Slider { at: ((now - least) * 1000 / (most - least)) as u16, label };
             }
+            if let Kind::Thumb { high, .. } = n.kind
+                && let Some((id, now)) = self.sliding
+                && id == n.id
+                && let Some((least, most)) = self.tree.bounds(n.parent)
+                && let Some((low, top)) = self.ends(i as u32, now)
+            {
+                let shown = if high { top } else { low };
+                self.tree.nodes[i].text = self.tree.put(&crate::value::grouped(shown));
+                self.tree.nodes[i].kind = Kind::Thumb { at: ((shown - least) * 1000 / (most - least)) as u16, high };
+                self.tree.nodes[n.parent as usize].text = self.tree.put(&format!("{}–{}", crate::value::grouped(low), crate::value::grouped(top)));
+            }
             if let Some(b) = n.builtin {
                 let label = match (b, self.undo_label(), self.history.redo_label()) {
                     (Builtin::Undo, Some(step), _) => format!("Undo {step}"),
@@ -2349,9 +2360,68 @@ impl<A: App> Runner<A> {
         self.set_tags(i, tags, said)
     }
 
+    fn track(&self, i: u32) -> Option<(crate::grid::Area, i128, i128)> {
+        let n = self.tree.nodes[i as usize];
+        let (track, held) = match n.kind {
+            Kind::Slider { label, .. } => (crate::components::slider_track(&n, label), i),
+            Kind::Thumb { .. } => (n.area, n.parent),
+            _ => return None,
+        };
+        let (least, most) = self.tree.bounds(held)?;
+        Some((track, least, most))
+    }
+
+    fn ends(&self, i: u32, to: i128) -> Option<(i128, i128)> {
+        let n = self.tree.nodes[i as usize];
+        let Kind::Thumb { high, .. } = n.kind else { return None };
+        let (least, most) = self.tree.bounds(n.parent)?;
+        let mut c = self.tree.nodes[n.parent as usize].first;
+        while c != NONE {
+            let other = self.tree.nodes[c as usize];
+            if matches!(other.kind, Kind::Thumb { high: upper, .. } if upper != high) {
+                let other = field::evaluate(self.tree.str(other.text)).ok()?.round() as i128;
+                return Some(if high { (other, to.clamp(other, most)) } else { (to.clamp(least, other), other) });
+            }
+            c = other.next;
+        }
+        None
+    }
+
+    fn set_end(&mut self, i: u32, to: i128) -> bool {
+        let parent = self.tree.nodes[i as usize].parent;
+        let (Some((low, high)), Some(path), Some((least, _))) = (self.ends(i, to), self.tree.nodes[parent as usize].path, self.tree.bounds(parent)) else { return false };
+        let now = format!("{}–{}", crate::value::grouped(low), crate::value::grouped(high));
+        if self.tree.str(self.tree.nodes[parent as usize].text) == now {
+            return true;
+        }
+        let whole = |n: i128| if least < 0 { Value::Int(n as i64) } else { Value::UInt(n as u64) };
+        self.set_value(path, Value::List(vec![whole(low), whole(high)]), format!("Set to {now}"))
+    }
+
+    fn nearer(&self, frame: &Frame, i: u32) -> u32 {
+        let n = self.tree.nodes[i as usize];
+        let (Kind::Thumb { .. }, Some(to)) = (n.kind, self.slid_to(frame, i)) else { return i };
+        let (mut best, mut gap) = (i, i128::MAX);
+        let mut c = self.tree.nodes[n.parent as usize].first;
+        while c != NONE {
+            let other = self.tree.nodes[c as usize];
+            if let Kind::Thumb { high, .. } = other.kind
+                && let Ok(at) = field::evaluate(self.tree.str(other.text))
+            {
+                let at = at.round() as i128;
+                let far = (at - to).abs() * 2 + i128::from(high != (to > at));
+                if far < gap {
+                    (best, gap) = (c, far);
+                }
+            }
+            c = other.next;
+        }
+        best
+    }
+
     fn slide_key(&mut self, i: u32, key: Key) -> bool {
         let n = self.tree.nodes[i as usize];
-        let (Some((least, most)), Ok(now)) = (self.tree.bounds(i), field::evaluate(self.tree.str(n.text))) else { return false };
+        let (Some((_, least, most)), Ok(now)) = (self.track(i), field::evaluate(self.tree.str(n.text))) else { return false };
         let (now, page) = (now.round() as i128, ((most - least) / 10).max(1));
         let to = match key {
             Key::Left | Key::Down => now - 1,
@@ -2362,13 +2432,15 @@ impl<A: App> Runner<A> {
             Key::End => most,
             _ => return false,
         };
+        if matches!(n.kind, Kind::Thumb { .. }) {
+            return self.set_end(i, to);
+        }
         self.set_number(i, to.clamp(least, most))
     }
 
     fn slid_to(&self, frame: &Frame, i: u32) -> Option<i128> {
-        let n = self.tree.nodes[i as usize];
-        let (Kind::Slider { label, .. }, Some((least, most)), Some((x, _))) = (n.kind, self.tree.bounds(i), frame.pointer) else { return None };
-        let (m, track) = (frame.metrics, crate::components::slider_track(&n, label));
+        let (Some((track, least, most)), Some((x, _))) = (self.track(i), frame.pointer) else { return None };
+        let m = frame.metrics;
         let r = m.rect(track);
         let share = ((x - r.x - m.cell_w / 2.0) / (r.w - m.cell_w).max(1.0)).clamp(0.0, 1.0) as f64;
         Some(least + ((most - least) as f64 * share).round() as i128)
@@ -2735,7 +2807,7 @@ impl<A: App> Runner<A> {
             && typing
             && chord.mods == Mods::default()
             && let Some(i) = self.focused_control()
-            && matches!(self.tree.nodes[i as usize].kind, Kind::Slider { .. })
+            && matches!(self.tree.nodes[i as usize].kind, Kind::Slider { .. } | Kind::Thumb { .. })
             && matches!(chord.key, Key::Left | Key::Right | Key::Up | Key::Down | Key::PageUp | Key::PageDown | Key::Home | Key::End)
         {
             return self.slide_key(i, chord.key);
@@ -3550,7 +3622,13 @@ impl<A: App> Runner<A> {
                 }
                 let Some(i) = self.pressed.and_then(|id| self.tree.find(id)) else { return false };
                 let n = self.tree.nodes[i as usize];
-                if matches!(n.kind, Kind::Slider { .. })
+                let (i, n) = if matches!(n.kind, Kind::Thumb { .. }) {
+                    let near = self.nearer(frame, i);
+                    (near, self.tree.nodes[near as usize])
+                } else {
+                    (i, n)
+                };
+                if matches!(n.kind, Kind::Slider { .. } | Kind::Thumb { .. })
                     && let Some(now) = self.slid_to(frame, i)
                 {
                     self.focus_on(n.id, false);
@@ -3580,8 +3658,14 @@ impl<A: App> Runner<A> {
                 self.drag = None;
                 if let Some((id, now)) = self.sliding.take() {
                     self.stale = true;
-                    if let Some(i) = self.tree.find(id) {
-                        self.set_number(i, now);
+                    match self.tree.find(id) {
+                        Some(i) if matches!(self.tree.nodes[i as usize].kind, Kind::Thumb { .. }) => {
+                            self.set_end(i, now);
+                        }
+                        Some(i) => {
+                            self.set_number(i, now);
+                        }
+                        None => {}
                     }
                     return true;
                 }

@@ -223,9 +223,9 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
         };
         let value = runner.facts.value();
         let before = (runner.history.len(), runner.effects().len(), runner.history.depth());
-        let started = Instant::now();
+        let (started, aside) = (Instant::now(), runner.worked_aside());
         let taken = catch_unwind(AssertUnwindSafe(|| take(&mut runner, step, aimed)));
-        let took = started.elapsed().as_micros().min(u32::MAX as u128) as u32;
+        let took = started.elapsed().saturating_sub(runner.worked_aside() - aside).as_micros().min(u32::MAX as u128) as u32;
         let (done, probe) = match taken {
             Ok(taken) => taken,
             Err(panic) => {
@@ -264,8 +264,9 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
         {
             played.ran.push(name);
         }
+        let aside = runner.worked_aside();
         let painted = match catch_unwind(AssertUnwindSafe(|| screen.paint(&mut runner))) {
-            Ok(micros) => micros,
+            Ok(micros) => micros.saturating_sub((runner.worked_aside() - aside).as_micros().min(u32::MAX as u128) as u32),
             Err(panic) => {
                 played.broke = Some((Law::NeverFails, panicked(panic)));
                 return played;

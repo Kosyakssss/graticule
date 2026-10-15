@@ -321,6 +321,7 @@ pub struct Runner<A: App> {
     hold: bool,
     fonts: u64,
     stages: crate::scope::Stages,
+    aside: Duration,
     drawn_in: Option<(crate::ink::Theme, Style)>,
     switch: Option<Switch>,
     offered: Offered,
@@ -428,6 +429,7 @@ impl<A: App> Runner<A> {
             hold: false,
             fonts: 0,
             stages: crate::scope::Stages::default(),
+            aside: Duration::ZERO,
             drawn_in: None,
             switch: None,
             offered: Offered::default(),
@@ -1664,6 +1666,11 @@ impl<A: App> Runner<A> {
         }
     }
 
+    /// How long derived values have taken to work out on this thread, all told. A window works them out on threads of their own, so a frame never waits for them; a runner without one, as Assay drives, works them out in line, and leaves this time out of its frames.
+    pub fn worked_aside(&self) -> Duration {
+        self.aside
+    }
+
     /// What went wrong in the last command, if it failed.
     pub fn failure(&self) -> Option<&str> {
         match &self.said {
@@ -2367,7 +2374,10 @@ impl<A: App> Runner<A> {
                     }
                 }
                 None => {
-                    let _ = send.send((field, from, work()));
+                    let started = Instant::now();
+                    let value = work();
+                    self.aside += started.elapsed();
+                    let _ = send.send((field, from, value));
                 }
             }
         }
@@ -4878,10 +4888,12 @@ impl<A: App> Face for Runner<A> {
             self.laid = false;
         }
         let started = Instant::now();
+        let aside = self.aside;
         if self.stale {
             self.build();
         }
         let built = Instant::now();
+        let aside = (self.aside - aside).as_micros().min(u32::MAX as u128) as u32;
         if !self.laid {
             self.layout(p);
         }
@@ -4908,7 +4920,7 @@ impl<A: App> Face for Runner<A> {
             self.answers.push(answer);
         }
         let micros = |from: Instant, to: Instant| (to - from).as_micros().min(u32::MAX as u128) as u32;
-        self.stages = crate::scope::Stages { view: micros(started, built), layout: micros(built, laid), paint: micros(laid, Instant::now()) };
+        self.stages = crate::scope::Stages { view: micros(started, built).saturating_sub(aside), layout: micros(built, laid), paint: micros(laid, Instant::now()) };
     }
 
     fn stages(&self) -> crate::scope::Stages {

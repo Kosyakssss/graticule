@@ -16,6 +16,40 @@ pub const SANS: [&[u8]; 6] = [
     include_bytes!("../assets/fonts/IBMPlexSans-Bold.ttf"),
 ];
 
+/// A font file's bytes and which font in it to use.
+pub type FontFile = (Arc<[u8]>, u32);
+
+/// The file of the font family called `name`, upright and of regular weight, and which font in it: one of the Plex families Graticule carries, or else one installed on the system, found by name as the system's font menus show it. Looking for a system font scans them all the first time, so do it off the main thread; each answer is remembered.
+pub fn family(name: &str) -> Option<FontFile> {
+    static FOUND: std::sync::Mutex<Option<HashMap<String, Option<FontFile>>>> = std::sync::Mutex::new(None);
+    let key = name.trim().to_lowercase();
+    if let Some(found) = FOUND.lock().ok()?.get_or_insert_with(HashMap::new).get(&key) {
+        return found.clone();
+    }
+    let bundled = match key.as_str() {
+        "ibm plex sans" => Some(SANS[0]),
+        "ibm plex mono" => Some(MONO[0]),
+        _ => EXTRA.iter().find_map(|f| match f.files {
+            Files::Bundled(files) if f.name.to_lowercase() == key => files.first().copied(),
+            _ => None,
+        }),
+    };
+    let found = match bundled {
+        Some(bytes) => Some((Arc::from(bytes), 0)),
+        None => {
+            let mut collection = Collection::new(CollectionOptions { shared: false, system_fonts: true });
+            let family = collection.family_by_name(name.trim())?;
+            let font = family
+                .match_index(parley::fontique::FontWidth::NORMAL, parley::fontique::FontStyle::Normal, parley::fontique::FontWeight::NORMAL, true)
+                .and_then(|i| family.fonts().get(i))
+                .or(family.default_font())?;
+            font.load(None).map(|blob| (Arc::from(blob.data()), font.index()))
+        }
+    };
+    FOUND.lock().ok()?.get_or_insert_with(HashMap::new).insert(key, found.clone());
+    found
+}
+
 /// How many bytes of fonts every program carries inside it: the fetched ones are not counted.
 pub fn bundled() -> usize {
     let extra: usize = EXTRA

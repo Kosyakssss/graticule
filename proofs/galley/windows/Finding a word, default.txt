@@ -1,5 +1,5 @@
 window		0 0 120 30	
-  page	Galley	0 0 120 24	
+  page	Galley	0 0 120 23	
     group		2 3 116 1	
       group		2 3 98 1	
         text field	File	2 3 86 1	
@@ -7,7 +7,7 @@ window		0 0 120 30
       button	Open	102 3 7 1	unavailable (Choose a file first)
       button	Save	111 3 7 1	unavailable (Choose a file first)
     text	Untitled, buffer 1 of 1	2 5 116 1	muted
-    editor	Untitled	2 7 116 14	
+    editor	Untitled	2 7 116 13	
       line	Dear reader,	2 7 116 1	
       line		2 8 116 1	
       line	The text you are reading sits in a rope, so typing in the middle of a long file costs the same as typing in a short one.	2 9 116 2	
@@ -18,35 +18,40 @@ window		0 0 120 30
       line	With thanks,	2 15 116 1	
       line	the galley	2 16 116 1	
       line		2 17 116 1	
-    group		2 22 116 1	
-      text field	Find	2 22 17 1	holds “the”
-      text field	Replace with	21 22 18 1	
-      button	Find the previous	41 22 20 1	
-      button	Find the next	63 22 16 1	
-      button	Select every match	81 22 21 1	
-      button	Replace all	104 22 14 1	
-  alert		2 24 116 1	
-  status		2 25 116 1	
-  toolbar		2 26 116 4	
-    button	Open	2 26 6 1	unavailable (Choose a file first)
-    button	Save	10 26 6 1	unavailable (Choose a file first)
-    button	New buffer	18 26 11 1	
-    button	Next buffer	31 26 11 1	unavailable (There is only one buffer)
-    button	Previous buffer	44 26 14 1	unavailable (There is only one buffer)
-    button	Close the buffer	60 26 14 1	unavailable (The last buffer stays open)
-    button	Split	76 26 6 1	unavailable (Open a second buffer to show beside this one)
-    button	Close the split	84 26 13 1	unavailable (The window isn't split)
-    button	Swap the panes	99 26 14 1	unavailable (The window isn't split)
-    button	Select every match	2 27 17 1	
-    button	Find the next	21 27 19 1	
-    button	Find the previous	42 27 28 1	
-    button	Add a cursor above	72 27 28 1	unavailable (The cursor is on the first line)
-    button	Add a cursor below	2 28 28 1	
-    button	Add the next match	32 28 24 1	unavailable (Select some text first)
-    button	Replace all	58 28 11 1	
-    button	Fold the block	71 28 13 1	
-    button	Unfold	86 28 7 1	unavailable (Nothing is folded under this line)
-    button	Unfold everything	95 28 16 1	unavailable (Nothing is folded)
-    button	Undo	2 29 13 1	unavailable (Nothing to undo)
-    button	Redo	17 29 19 1	unavailable (Nothing to redo)
-    button	Open the palette	38 29 28 1	
+    group		2 21 116 1	
+      text field	Find	2 21 17 1	holds “the”
+      text field	Replace with	21 21 18 1	
+      button	Find the previous	41 21 20 1	
+      button	Find the next	63 21 16 1	
+      button	Select every match	81 21 21 1	
+      button	Replace all	104 21 14 1	
+  alert		2 23 116 1	
+  status		2 24 116 1	
+  toolbar		2 25 116 5	
+    button	Open	2 25 6 1	unavailable (Choose a file first)
+    button	Save	10 25 6 1	unavailable (Choose a file first)
+    button	New buffer	18 25 11 1	
+    button	Next buffer	31 25 11 1	unavailable (There is only one buffer)
+    button	Previous buffer	44 25 14 1	unavailable (There is only one buffer)
+    button	Close the buffer	60 25 14 1	unavailable (The last buffer stays open)
+    button	Split	76 25 6 1	unavailable (Open a second buffer to show beside this one)
+    button	Close the split	84 25 13 1	unavailable (The window isn't split)
+    button	Swap the panes	99 25 14 1	unavailable (The window isn't split)
+    button	Select every match	2 26 17 1	
+    button	Find the next	21 26 19 1	
+    button	Find the previous	42 26 28 1	
+    button	Add a cursor above	72 26 28 1	unavailable (The cursor is on the first line)
+    button	Add a cursor below	2 27 28 1	
+    button	Add the next match	32 27 24 1	unavailable (Select some text first)
+    button	Replace all	58 27 11 1	
+    button	Fold the block	71 27 13 1	
+    button	Unfold	86 27 7 1	unavailable (Nothing is folded under this line)
+    button	Unfold everything	95 27 16 1	unavailable (Nothing is folded)
+    button	Show the pages	2 28 14 1	
+    button	Show the text	18 28 13 1	unavailable (The text shows already)
+    button	Use A4 paper	33 28 13 1	unavailable (The pages are A4 already)
+    button	Use US Letter paper	48 28 17 1	
+    button	Save as a PDF…	67 28 14 1	
+    button	Undo	83 28 13 1	unavailable (Nothing to undo)
+    button	Redo	98 28 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 29 28 1	

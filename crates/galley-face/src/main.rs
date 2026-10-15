@@ -1,4 +1,8 @@
-use galley::{Doc, Mark, Marks, Replacement, Stale};
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use galley::{Doc, Font, Hyphenation, Mark, Marks, Replacement, Segment, Setting, Stale, Typeset};
+use graticule::kernel::{Camera, Drawing, Weight};
 use graticule::ledger::{Migration, Value};
 use graticule::prelude::*;
 
@@ -15,8 +19,128 @@ struct Galley {
     find: Text,
     #[session]
     with: Text,
+    font: Text,
+    paper: Paper,
+    #[session]
+    reading: Reading,
+    #[session]
+    camera: Camera,
     #[derived(marked, from = [buffers, showing, file])]
     marks: Derived<Marks>,
+    #[derived(Pages::of, from = [buffers, showing, font, paper, reading])]
+    pages: Derived<Pages>,
+    #[derived(Sheets::of, from = [pages, camera])]
+    sheets: Derived<Sheets>,
+}
+
+/// What the main pane shows: the text to edit, or the text typeset on pages.
+#[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
+enum Reading {
+    #[default]
+    Text,
+    Pages,
+}
+
+/// The paper the pages are set on.
+#[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
+enum Paper {
+    #[default]
+    A4,
+    Letter,
+}
+
+impl Paper {
+    fn galley(self) -> galley::Paper {
+        match self {
+            Paper::A4 => galley::Paper::A4,
+            Paper::Letter => galley::Paper::Letter,
+        }
+    }
+}
+
+/// The shown buffer typeset in the chosen font, with the outline of every glyph it uses, worked out off the main thread.
+#[derive(Default)]
+struct Pages {
+    set: Option<Typeset>,
+    outlines: HashMap<u16, Vec<Segment>>,
+    missing: Option<String>,
+}
+
+/// The space between pages on the canvas, in points.
+const GAP: f32 = 24.0;
+
+/// The most a canvas shows, in points: what is in sight through the camera on the largest screen.
+const SIGHT: (f64, f64) = (3_840.0, 2_160.0);
+
+impl Pages {
+    fn of(buffers: &List<Buffer>, showing: &Key<Buffer>, font: &Text, paper: &Paper, reading: &Reading) -> Pages {
+        if *reading == Reading::Text {
+            return Pages::default();
+        }
+        let Some(buffer) = buffers.find(*showing).or(buffers.first()) else { return Pages::default() };
+        let Some(set) = typeset(&buffer.text.to_string(), font.as_str(), *paper) else { return Pages { missing: Some(font.to_string()), ..Pages::default() } };
+        let mut outlines = HashMap::new();
+        for g in set.pages.iter().flat_map(|p| &p.lines).flat_map(|l| &l.glyphs) {
+            outlines.entry(g.id).or_insert_with(|| set.font.outline(g.id));
+        }
+        Pages { set: Some(set), outlines, missing: None }
+    }
+}
+
+/// Drawings of the pages in sight through the camera, one to a page.
+#[derive(Default)]
+struct Sheets {
+    pages: Vec<Arc<Drawing>>,
+}
+
+impl Sheets {
+    fn of(pages: &Derived<Pages>, camera: &Camera) -> Sheets {
+        let Some(pages) = pages.get() else { return Sheets::default() };
+        let Some(set) = &pages.set else { return Sheets::default() };
+        let (width, height) = set.setting.paper.size();
+        let [_, _, top, bottom] = camera.showing(SIGHT.0, SIGHT.1);
+        let step = f64::from(height + GAP);
+        let first = (top / step).floor().max(0.0) as usize;
+        let last = ((bottom / step).ceil().max(0.0) as usize).min(set.pages.len());
+        let size = set.setting.size;
+        let sheets = (first..last)
+            .map(|k| {
+                let mut drawing = Drawing::new();
+                let y0 = k as f32 * (height + GAP);
+                drawing.rect((0.0, y0), (width, y0 + height)).fill().ink(Ink::Field);
+                drawing.rect((0.0, y0), (width, y0 + height)).stroke(Weight::Hair).ink(Ink::Rule);
+                for line in &set.pages[k].lines {
+                    let base = y0 + line.baseline;
+                    drawing
+                        .path(|pen| {
+                            for g in &line.glyphs {
+                                let at = |x: f32, y: f32| (g.x + x * size, base - y * size);
+                                for segment in pages.outlines.get(&g.id).into_iter().flatten() {
+                                    match *segment {
+                                        Segment::Move(x, y) => pen.move_to(at(x, y)),
+                                        Segment::Line(x, y) => pen.line_to(at(x, y)),
+                                        Segment::Quad(cx, cy, x, y) => pen.quad_to(at(cx, cy), at(x, y)),
+                                        Segment::Cubic(ax, ay, bx, by, x, y) => pen.curve_to(at(ax, ay), at(bx, by), at(x, y)),
+                                        Segment::Close => pen.close(),
+                                    };
+                                }
+                            }
+                        })
+                        .fill()
+                        .ink(Ink::Ink);
+                }
+                let _ = drawing.stamp();
+                Arc::new(drawing)
+            })
+            .collect();
+        Sheets { pages: sheets }
+    }
+}
+
+fn typeset(text: &str, font: &str, paper: Paper) -> Option<Typeset> {
+    let (data, index) = graticule::kernel::fonts::family(font)?;
+    let font = Font::new(data, index)?;
+    Some(galley::set(text, &font, Setting { paper: paper.galley(), ..Setting::default() }, Some(Hyphenation::english())))
 }
 
 #[derive(Facts)]
@@ -79,6 +203,18 @@ enum Cmd {
     Unfold,
     #[label("Unfold everything")]
     UnfoldAll,
+    #[label("Show the pages")]
+    ShowPages,
+    #[label("Show the text")]
+    ShowText,
+    #[label("Use A4 paper")]
+    UseA4,
+    #[label("Use US Letter paper")]
+    UseLetter,
+    #[label("Save as a PDF…")]
+    SavePdf,
+    #[internal]
+    SavedPdf(Result<Path, Failure>),
     #[internal]
     Edit(Edit),
 }
@@ -104,7 +240,15 @@ impl App for Galley {
             Cmd::Fold => no_if(text.lines() < 2, t!("There is only one line")),
             Cmd::Unfold => no_if(text.folded(line) == 0, t!("Nothing is folded under this line")),
             Cmd::UnfoldAll => no_if(text.folds().is_empty(), t!("Nothing is folded")),
-            Cmd::NewBuffer | Cmd::Folding(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Replaced(_) | Cmd::NextFound(_) | Cmd::Found(_) | Cmd::Edit(_) => Yes,
+            Cmd::ShowPages => no_if(self.reading == Reading::Pages, t!("The pages show already")),
+            Cmd::ShowText => no_if(self.reading == Reading::Text, t!("The text shows already")),
+            Cmd::UseA4 => no_if(self.paper == Paper::A4, t!("The pages are A4 already")),
+            Cmd::UseLetter => no_if(self.paper == Paper::Letter, t!("The pages are US Letter already")),
+            Cmd::SavePdf => match self.pages.get().and_then(|p| p.missing.as_deref()) {
+                Some(font) => no_if(true, t!("There is no font called “{font}”")),
+                None => no_if(self.font.is_empty(), t!("Name a font first")),
+            },
+            Cmd::SavedPdf(_) | Cmd::NewBuffer | Cmd::Folding(_) | Cmd::Opened(_) | Cmd::Saved(_) | Cmd::Replaced(_) | Cmd::NextFound(_) | Cmd::Found(_) | Cmd::Edit(_) => Yes,
         }
     }
 
@@ -247,6 +391,22 @@ impl App for Galley {
                 let count = self.change(Doc::unfold_all).unwrap_or(0);
                 cx.say(t!("Unfolded {count} folds"))
             }
+            Cmd::ShowPages | Cmd::ShowText => {
+                self.reading = if matches!(cmd, Cmd::ShowPages) { Reading::Pages } else { Reading::Text };
+                Outcome::Nothing
+            }
+            Cmd::UseA4 | Cmd::UseLetter => {
+                self.paper = if matches!(cmd, Cmd::UseA4) { Paper::A4 } else { Paper::Letter };
+                Outcome::Changed
+            }
+            Cmd::SavePdf => {
+                let name = self.buffers.find(self.shown()).map_or("Untitled", |b| b.name.as_str());
+                let stem = std::path::Path::new(name).file_stem().map_or_else(|| name.to_string(), |s| s.to_string_lossy().into_owned());
+                cx.save_as(&format!("{stem}.pdf"), pdf, Cmd::SavedPdf);
+                Outcome::Nothing
+            }
+            Cmd::SavedPdf(Ok(path)) => cx.say(t!("Saved the pages to {path}")),
+            Cmd::SavedPdf(Err(failure)) => cx.say_failure(failure),
             Cmd::Edit(edit) => edit.apply(self),
         }
     }
@@ -259,6 +419,9 @@ impl App for Galley {
                 ui.button(Cmd::Save);
             });
             let shown = self.shown();
+            if self.reading == Reading::Pages {
+                return self.typeset_view(ui);
+            }
             match self.beside.and_then(|k| self.buffers.find(k)) {
                 Some(other) => ui.split(|ui| {
                     ui.pane(t!("This buffer"), Fill, move |ui| self.buffer(ui, shown, true));
@@ -306,6 +469,7 @@ impl App for Galley {
                 galley.beside = Some(Key::fixed(2));
                 galley
             })
+            .add("The letter typeset", Galley { reading: Reading::Pages, ..Galley::with_text(LETTER) })
             .add("A long file", Galley::with_text(&(1..=100_000).map(|n| format!("Line {n}\n")).collect::<String>()))
     }
 }
@@ -320,7 +484,21 @@ impl Galley {
     fn with_text(text: &str) -> Galley {
         let mut buffers = List::new();
         let _ = buffers.push(Buffer { id: Key::fixed(1), name: "Untitled".into(), text: Doc::new(text) });
-        Galley { buffers, showing: Key::fixed(1), beside: None, file: Text::default(), find: Text::default(), with: Text::default(), marks: Derived::default() }
+        Galley {
+            buffers,
+            showing: Key::fixed(1),
+            beside: None,
+            file: Text::default(),
+            find: Text::default(),
+            with: Text::default(),
+            font: Text::from("IBM Plex Sans"),
+            paper: Paper::A4,
+            reading: Reading::Text,
+            camera: Camera { x: -f64::from(GAP), y: -f64::from(GAP), zoom: 0.75 },
+            marks: Derived::default(),
+            pages: Derived::default(),
+            sheets: Derived::default(),
+        }
     }
 
     fn shown(&self) -> Key<Buffer> {
@@ -348,6 +526,29 @@ impl Galley {
         outcome
     }
 
+    fn typeset_view(&self, ui: &mut Ui<Cmd>) {
+        ui.row(|ui| {
+            ui.field(Galley::font, t!("Font"));
+            ui.button(match self.paper {
+                Paper::A4 => Cmd::UseLetter,
+                Paper::Letter => Cmd::UseA4,
+            });
+            ui.button(Cmd::SavePdf);
+            ui.button(Cmd::ShowText);
+        });
+        let pages = self.pages.get();
+        let count = pages.and_then(|p| p.set.as_ref()).map_or(0, |s| s.pages.len());
+        if let Some(font) = pages.and_then(|p| p.missing.as_deref()) {
+            ui.muted(t!("There is no font called “{font}” on this computer"));
+        }
+        ui.canvas(t!("The pages typeset, {count} of them"), 0, |canvas| {
+            canvas.camera(Galley::camera);
+            for drawing in self.sheets.get().into_iter().flat_map(|s| &s.pages) {
+                canvas.drawing(drawing);
+            }
+        });
+    }
+
     fn buffer(&self, ui: &mut Ui<Cmd>, key: Key<Buffer>, main: bool) {
         let Some(buffer) = self.buffers.find(key) else { return };
         let at = self.buffers.position(key).unwrap_or(0) + 1;
@@ -358,6 +559,11 @@ impl Galley {
         let editor = if main { ui.editor_with_find(buffer.name.as_str(), path, Galley::find) } else { ui.editor(buffer.name.as_str(), path) };
         editor.marked(self.marks.get().filter(|_| main));
     }
+}
+
+fn pdf(facts: &Galley) -> Vec<u8> {
+    let name = facts.buffers.find(facts.shown()).map_or("Untitled", |b| b.name.as_str());
+    typeset(&facts.text().to_string(), facts.font.as_str(), facts.paper).map(|set| set.pdf(name)).unwrap_or_default()
 }
 
 fn into_buffers(facts: Value) -> Value {

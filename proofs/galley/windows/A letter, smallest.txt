@@ -1,4 +1,4 @@
-window		0 0 114 19	
+window		0 0 114 20	
   page	Galley	0 0 114 13	
     group		2 3 110 1	
       group		2 3 92 1	
@@ -20,7 +20,7 @@ window		0 0 114 19
       button	Replace all	98 11 14 1	unavailable (Type what to find first)
   alert		2 13 110 1	
   status		2 14 110 1	
-  toolbar		2 15 110 4	
+  toolbar		2 15 110 5	
     button	Open	2 15 6 1	unavailable (Choose a file first)
     button	Save	10 15 6 1	unavailable (Choose a file first)
     button	New buffer	18 15 11 1	
@@ -40,6 +40,11 @@ window		0 0 114 19
     button	Fold the block	2 18 13 1	
     button	Unfold	17 18 7 1	unavailable (Nothing is folded under this line)
     button	Unfold everything	26 18 16 1	unavailable (Nothing is folded)
-    button	Undo	44 18 13 1	unavailable (Nothing to undo)
-    button	Redo	59 18 19 1	unavailable (Nothing to redo)
-    button	Open the palette	80 18 28 1	
+    button	Show the pages	44 18 14 1	
+    button	Show the text	60 18 13 1	unavailable (The text shows already)
+    button	Use A4 paper	75 18 13 1	unavailable (The pages are A4 already)
+    button	Use US Letter paper	90 18 17 1	
+    button	Save as a PDF…	2 19 14 1	
+    button	Undo	18 19 13 1	unavailable (Nothing to undo)
+    button	Redo	33 19 19 1	unavailable (Nothing to redo)
+    button	Open the palette	54 19 28 1	

@@ -11,6 +11,10 @@ workspace = true
 [dependencies]
 ledger.workspace = true
 graticule-macros.workspace = true
+kernel = { workspace = true, optional = true }
+
+[features]
+kernel = ["dep:kernel"]
 
 [dev-dependencies]
 proptest.workspace = true

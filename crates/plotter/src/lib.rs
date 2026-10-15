@@ -9,6 +9,8 @@ pub mod order;
 mod snap;
 mod svg;
 mod tool;
+#[cfg(feature = "kernel")]
+pub mod view;
 
 #[cfg(test)]
 mod laws;

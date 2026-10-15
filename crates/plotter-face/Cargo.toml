@@ -16,4 +16,4 @@ workspace = true
 [dependencies]
 graticule.workspace = true
 ledger.workspace = true
-plotter.workspace = true
+plotter = { workspace = true, features = ["kernel"] }

@@ -359,8 +359,9 @@ fn aim<A: App>(runner: &mut Runner<A>, pick: u32) -> Option<(String, &'static st
     let fields: Vec<u32> = (0..runner.tree.nodes.len() as u32).filter(|&i| matches!(runner.tree.nodes[i as usize].kind, Kind::Field { .. } | Kind::Editor { .. })).collect();
     let node = runner.tree.nodes[*fields.get(pick as usize % fields.len().max(1))? as usize];
     let word = WORDS[(pick as usize / fields.len()) % WORDS.len()];
+    let what = format!("{} “{}”", if matches!(node.kind, Kind::Editor { .. }) { "editor" } else { "text field" }, runner.tree.str(node.name));
     runner.act(node.id.0, Action::Focus);
-    Some((format!("{} “{}”", if matches!(node.kind, Kind::Editor { .. }) { "editor" } else { "text field" }, runner.tree.str(node.name)), word))
+    Some((what, word))
 }
 
 fn take<A: App>(runner: &mut Runner<A>, step: Step, aimed: Option<(String, &'static str)>) -> (String, Option<Probe<A>>) {

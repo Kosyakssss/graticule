@@ -1,0 +1,43 @@
+window		0 0 70 17	
+  page	Atlas	0 0 70 11	
+    group		2 3 66 1	
+      button	Zoom in	2 3 10 1	
+      button	Zoom out	14 3 11 1	
+      button	Show the whole map	27 3 21 1	
+      button	Pin this place…	50 3 18 1	
+    split		2 5 66 3	
+      pane	Map	2 5 37 3	
+        canvas	Map at 35.150° N, 45.000° W, level 7	2 5 37 3	
+      divider	Between “Map” and “Pins”	41 5 1 3	
+      pane	Pins	44 5 24 3	
+        list		44 5 24 3	2 items
+          list item		44 5 22 2	
+            text	Harbour walk	44 5 8 2	
+            link	Go	54 5 3 1	
+            link	Remove	59 5 7 1	
+          list item		44 7 22 1	
+            text	Lighthouse	44 7 8 1	
+            link	Go	54 7 3 1	
+            link	Remove	59 7 7 1	
+    group		2 9 66 1	
+      group		2 9 28 1	
+        text field	Map file	2 9 16 1	
+        button	Choose…	20 9 10 1	
+      button	Open the map	32 9 15 1	unavailable (Choose a file first)
+      button	Show the sample map	49 9 19 1	unavailable (The sample is showing)
+  alert		2 11 66 1	
+  status		2 12 66 1	
+  toolbar		2 13 66 4	
+    button	Zoom in	2 13 11 1	
+    button	Zoom out	15 13 12 1	
+    button	Pan left	29 13 10 1	
+    button	Pan right	41 13 11 1	
+    button	Pan up	54 13 10 1	
+    button	Pan down	2 14 12 1	
+    button	Show the whole map	16 14 18 1	
+    button	Pin…	36 14 6 1	
+    button	Open the map	44 14 13 1	unavailable (Choose a file first)
+    button	Show the sample map	2 15 19 1	unavailable (The sample is showing)
+    button	Undo	23 15 13 1	unavailable (Nothing to undo)
+    button	Redo	38 15 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 16 15 1	

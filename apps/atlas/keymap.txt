@@ -1,0 +1,6 @@
+=: zoom-in
+-: zoom-out
+left: pan-left
+right: pan-right
+up: pan-up
+down: pan-down

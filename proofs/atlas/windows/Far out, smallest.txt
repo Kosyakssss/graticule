@@ -1,0 +1,39 @@
+window		0 0 70 20	
+  page	Atlas	0 0 70 14	
+    group		2 3 66 1	
+      button	Zoom in	2 3 10 1	
+      button	Zoom out	14 3 11 1	
+      button	Show the whole map	27 3 21 1	
+      button	Pin this place…	50 3 18 1	
+    split		2 5 66 6	
+      pane	Map	2 5 37 6	
+        canvas	Map at 35.000° N, 45.000° W, level 5	2 5 37 4	
+        text	A made-up archipelago, drawn from vector tiles made when Atlas starts	2 9 37 2	muted
+      divider	Between “Map” and “Pins”	41 5 1 6	
+      pane	Pins	44 5 24 6	
+        empty		44 5 24 3	
+          text	No pins yet	44 5 24 1	muted
+          button	Pin this place…	44 7 18 1	
+        list		44 8 24 3	0 items
+    group		2 12 66 1	
+      group		2 12 28 1	
+        text field	Map file	2 12 16 1	
+        button	Choose…	20 12 10 1	
+      button	Open the map	32 12 15 1	unavailable (Choose a file first)
+      button	Show the sample map	49 12 19 1	unavailable (The sample is showing)
+  alert		2 14 66 1	
+  status		2 15 66 1	
+  toolbar		2 16 66 4	
+    button	Zoom in	2 16 11 1	
+    button	Zoom out	15 16 12 1	
+    button	Pan left	29 16 10 1	
+    button	Pan right	41 16 11 1	
+    button	Pan up	54 16 10 1	
+    button	Pan down	2 17 12 1	
+    button	Show the whole map	16 17 18 1	
+    button	Pin…	36 17 6 1	
+    button	Open the map	44 17 13 1	unavailable (Choose a file first)
+    button	Show the sample map	2 18 19 1	unavailable (The sample is showing)
+    button	Undo	23 18 13 1	unavailable (Nothing to undo)
+    button	Redo	38 18 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 19 15 1	

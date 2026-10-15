@@ -28,6 +28,7 @@ assay = { path = "crates/assay" }
 engraver = { path = "crates/engraver" }
 graticule = { path = "crates/graticule" }
 proptest = "1.12.0"
+flate2 = "1.1.10"
 
 [profile.release]
 debug = "line-tables-only"

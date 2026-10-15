@@ -74,6 +74,8 @@ Ticker is a market board. It trades on a pretend exchange of sixteen made-up com
 
 Patchbay is a node editor built on Plotter, the same engine as the whiteboard. "Add" puts a module on the board, an oscillator, a filter, an amplifier and so on, with its inputs on the left and outputs on the right. Drag from an output to an input to wire them; drag a module to move it, and its wires follow. A wire that can't be made, such as one into an input that already has one, turns red while you drag and says why when you let go. "Connect…" wires by name instead, and the pane beside the board lists every wire in words. A patch saves as a picture file that the whiteboard opens too. Nothing plays yet; what a patch should do is a question for you (question 19 in the spec).
 
+Atlas is a map. It reads a single map file in the PMTiles format, the kind Protomaps makes from OpenStreetMap, and needs no network; without one it shows a made-up archipelago with towns, roads, lakes, streets and houses. Drag to move the map, use the wheel to pan, and hold Ctrl (Command on a Mac) with the wheel to zoom, from the whole world down to single houses, twenty levels in all; the buttons and keys do the same. Town names are placed so they never overlap. "Pin this place…" keeps a place in the list beside the map to go back to. Which real map Atlas should come with, if any, is a question for you (question 20 in the spec).
+
 ## The order things are built in
 
 The build plan, at the end of the spec, is one list from top to bottom, and anyone (a person or an AI) asked to build Graticule works down it item by item.

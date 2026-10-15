@@ -1239,6 +1239,39 @@ impl Layout<'_> {
     }
 
     /// The smallest window, in cells, that shows everything in its narrow form: the page's minimum width, and its height at that width with every list three rows tall.
+    /// Why a laid-out box is the size it is, in words, for Scope.
+    pub fn explain<C>(&mut self, tree: &Tree<C>, i: u32) -> String {
+        let n = tree.nodes[i as usize];
+        let a = n.area;
+        if i == 0 {
+            return "the whole window".into();
+        }
+        if a.cols <= 0 || a.rows <= 0 {
+            return "hidden: there is no room for it here".into();
+        }
+        let parent = tree.nodes[n.parent as usize];
+        let (least, wants) = self.size(tree, i);
+        let cols = match n.span.width {
+            Width::Cols(c) if a.cols == c => format!("{c} columns, as the code asks"),
+            _ if a.cols == n.span.min => format!("{} columns, the least the code allows", a.cols),
+            _ if a.cols == n.span.max => format!("{} columns, the most the code allows", a.cols),
+            Width::Fill(_) if a.cols < parent.area.cols => format!("{} columns, its share of the room beside the others", a.cols),
+            _ if a.cols == parent.area.cols => format!("{} columns, as wide as its {}", a.cols, parent.kind.role()),
+            _ if a.cols == wants => format!("{} columns, as wide as what it shows", a.cols),
+            _ if a.cols < least => format!("{} columns, squeezed below the {least} it needs", a.cols),
+            _ if a.cols < wants => format!("{} columns, narrower than the {wants} it wants, so it wraps or cuts", a.cols),
+            _ => format!("{} columns, given by its {}", a.cols, parent.kind.role()),
+        };
+        let need = self.rows(tree, i, a.cols);
+        let count = if a.rows == 1 { "1 row".to_string() } else { format!("{} rows", a.rows) };
+        let rows = match a.rows.cmp(&need) {
+            std::cmp::Ordering::Equal => format!("{count}, what it needs at that width"),
+            std::cmp::Ordering::Less => format!("{count} of the {need} it needs, so the rest scrolls or is cut"),
+            std::cmp::Ordering::Greater => format!("{count}, given by its {}", parent.kind.role()),
+        };
+        format!("{cols}; {rows}")
+    }
+
     pub fn minimum<C>(&mut self, tree: &Tree<C>) -> (i32, i32) {
         let (start, end) = self.children(tree, 0);
         let mut cols = 0;

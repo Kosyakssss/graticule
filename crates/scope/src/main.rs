@@ -2,25 +2,27 @@
 
 mod app;
 
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, channel};
 
-use app::{Cmd, Frame, Running, Scope, Stage};
+use app::{Cmd, Frame, Listed, Measure, Running, Scope, Stage, View};
 use kernel::accesskit;
 use kernel::kept::Kept;
 use kernel::metrics::Metrics;
 use kernel::paint::Painter;
 use kernel::runner::Runner;
-use kernel::scope::{Stages, Stamp};
+use kernel::scope::{Ask, Overlay, Stages, Stamp};
 use kernel::shell::{Face, Frame as ShellFrame, Input, Seen, Waker};
 use ledger::Key;
 
 enum Heard {
     Launch(String, f32),
     Frame(Stamp),
+    Boxes(Vec<Measure>),
+    Commands(Vec<Listed>),
     Closed,
 }
 
@@ -29,6 +31,9 @@ struct Line {
     to: Key<Running>,
     heard: Receiver<Heard>,
     pending: Arc<AtomicBool>,
+    asking: TcpStream,
+    asked: Option<(View, u32)>,
+    overlay: Overlay,
 }
 
 struct Window {
@@ -74,6 +79,7 @@ impl Window {
         }
         let wanted = self.runner.facts.attached;
         if self.line.as_ref().map(|l| l.to) == wanted {
+            self.ask();
             return false;
         }
         self.line = None;
@@ -82,6 +88,10 @@ impl Window {
         let (send, heard) = channel();
         let pending = Arc::new(AtomicBool::new(false));
         let (waker, waiting) = (self.waker.clone(), pending.clone());
+        let Some((stream, asking)) = TcpStream::connect(("127.0.0.1", port)).ok().and_then(|s| s.try_clone().ok().map(|c| (s, c))) else {
+            self.runner.run(Cmd::Lost);
+            return true;
+        };
         let started = std::thread::Builder::new().name("scope line".into()).spawn(move || {
             let wake = || {
                 if !waiting.swap(true, Ordering::AcqRel)
@@ -90,46 +100,89 @@ impl Window {
                     w.wake();
                 }
             };
-            if let Ok(stream) = TcpStream::connect(("127.0.0.1", port)) {
-                for line in BufReader::new(stream).lines() {
-                    let Ok(line) = line else { break };
-                    let got = match line.strip_prefix("launch\t").and_then(|l| l.split_once('\t')) {
-                        Some((stage, ms)) => Heard::Launch(stage.to_string(), ms.parse().unwrap_or(0.0)),
-                        None => match Stamp::read(&line) {
-                            Some(stamp) => Heard::Frame(stamp),
-                            None => continue,
-                        },
-                    };
-                    if send.send(got).is_err() {
-                        return;
-                    }
-                    wake();
+            let (mut boxes, mut depths, mut commands) = (Vec::new(), std::collections::HashMap::new(), Vec::new());
+            for line in BufReader::new(stream).lines() {
+                let Ok(line) = line else { break };
+                let got = if let Some((stage, ms)) = line.strip_prefix("launch\t").and_then(|l| l.split_once('\t')) {
+                    Heard::Launch(stage.to_string(), ms.parse().unwrap_or(0.0))
+                } else if let Some(stamp) = Stamp::read(&line) {
+                    Heard::Frame(stamp)
+                } else if line == "boxes\tbegin" {
+                    boxes.clear();
+                    depths.clear();
+                    continue;
+                } else if line == "boxes\tdone" {
+                    Heard::Boxes(std::mem::take(&mut boxes))
+                } else if line == "commands\tbegin" {
+                    commands.clear();
+                    continue;
+                } else if line == "commands\tdone" {
+                    Heard::Commands(std::mem::take(&mut commands))
+                } else if let Some((i, seen)) = Measure::read(boxes.len() as u64 + 1, &line, |p| p.and_then(|p| depths.get(&p).map(|d| d + 1)).unwrap_or(0)) {
+                    depths.insert(i, seen.depth);
+                    boxes.push(seen);
+                    continue;
+                } else if let Some(listed) = Listed::read(commands.len() as u64 + 1, &line) {
+                    commands.push(listed);
+                    continue;
+                } else {
+                    continue;
+                };
+                if send.send(got).is_err() {
+                    return;
                 }
+                wake();
             }
             let _ = send.send(Heard::Closed);
             wake();
         });
         if started.is_ok() {
-            self.line = Some(Line { to, heard, pending });
+            self.line = Some(Line { to, heard, pending, asking, asked: None, overlay: Overlay::default() });
+            self.ask();
         }
         true
+    }
+
+    fn ask(&mut self) {
+        let Some(line) = &mut self.line else { return };
+        let facts = &self.runner.facts;
+        let overlay = Overlay { grid: facts.grid, boxes: facts.outlines };
+        let mut asks = Vec::new();
+        if overlay != line.overlay {
+            line.overlay = overlay;
+            asks.push(Ask::Overlay(overlay));
+        }
+        let wanted = (facts.view, facts.asked);
+        if line.asked != Some(wanted) {
+            line.asked = Some(wanted);
+            match facts.view {
+                View::Boxes => asks.push(Ask::Boxes),
+                View::Commands => asks.push(Ask::Commands),
+                _ => {}
+            }
+        }
+        for ask in asks {
+            let _ = line.asking.write_all(ask.line().as_bytes());
+        }
     }
 
     fn collect(&mut self) -> bool {
         let Some(line) = &self.line else { return false };
         line.pending.store(false, Ordering::Release);
-        let (mut stages, mut frames, mut closed) = (Vec::new(), Vec::new(), false);
+        let (mut stages, mut frames, mut closed, mut answered) = (Vec::new(), Vec::new(), false, false);
         while let Ok(heard) = line.heard.try_recv() {
             match heard {
                 Heard::Launch(name, ms) => stages.push(Stage::of(stages.len() as u64 + 1, &name, ms)),
                 Heard::Frame(stamp) => frames.push(Frame::of(stamp)),
+                Heard::Boxes(boxes) => answered |= self.runner.run(Cmd::Measured(boxes)),
+                Heard::Commands(commands) => answered |= self.runner.run(Cmd::Listed(commands)),
                 Heard::Closed => closed = true,
             }
         }
         if frames.len() > app::KEPT {
             frames.drain(..frames.len() - app::KEPT);
         }
-        let changed = !stages.is_empty() || !frames.is_empty() || closed;
+        let changed = !stages.is_empty() || !frames.is_empty() || closed || answered;
         if !stages.is_empty() {
             self.runner.run(Cmd::Launched(stages));
         }
@@ -213,6 +266,14 @@ impl Face for Window {
     fn restore(&mut self, kept: &ledger::Value) {
         self.runner.restore(kept);
         self.follow();
+    }
+
+    fn ask(&mut self, ask: Ask) {
+        self.runner.ask(ask);
+    }
+
+    fn answers(&mut self) -> Vec<String> {
+        self.runner.answers()
     }
 }
 

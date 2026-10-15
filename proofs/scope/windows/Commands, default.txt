@@ -1,0 +1,54 @@
+window		0 0 120 30	
+  page	Commands: To do	0 0 120 26	
+    text	Every command the app has right now, with its keys, and why it can't run when it can't.	2 3 116 1	muted
+    list		2 5 116 20	6 items
+      list item		2 5 114 1	
+        heading	Commands	2 5 9 1	strong
+      list item		2 6 114 1	
+        group		2 6 114 1	
+          column		2 6 47 1	
+            text	Add a task	2 6 47 1	
+          column		51 6 16 1	
+            text	enter	51 6 16 1	mono
+          column		69 6 47 1	
+            text	Can run	69 6 47 1	muted
+      list item		2 7 114 1	
+        group		2 7 114 1	
+          column		2 7 47 1	
+            text	Mark “Water the plants” done	2 7 47 1	
+          column		51 7 16 1	
+            text	x	51 7 16 1	mono
+          column		69 7 47 1	
+            text	Can run	69 7 47 1	muted
+      list item		2 8 114 1	
+        group		2 8 114 1	
+          column		2 8 47 1	
+            text	Remove done tasks	2 8 47 1	
+          column		51 8 16 1	
+            text		51 8 16 1	mono
+          column		69 8 47 1	
+            text	Nothing is done yet	69 8 47 1	muted
+      list item		2 9 114 1	
+        heading	Graticule’s own	2 9 12 1	strong
+      list item		2 10 114 1	
+        group		2 10 114 1	
+          column		2 10 47 1	
+            text	Undo	2 10 47 1	
+          column		51 10 16 1	
+            text	ctrl+z	51 10 16 1	mono
+          column		69 10 47 1	
+            text	There is nothing to undo	69 10 47 1	muted
+  alert		2 26 116 1	
+  status		2 27 116 1	
+  toolbar		2 28 116 2	
+    button	Look for running apps	2 28 19 1	
+    button	Detach	23 28 8 1	
+    button	Running apps	33 28 13 1	
+    button	Time	48 28 6 1	
+    button	Why it redrew	56 28 13 1	
+    button	Boxes	71 28 7 1	
+    button	Commands	80 28 11 1	unavailable (It is showing)
+    button	Ask again	93 28 10 1	
+    button	Undo	105 28 13 1	unavailable (Nothing to undo)
+    button	Redo	2 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	23 29 15 1	

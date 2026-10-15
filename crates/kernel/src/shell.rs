@@ -144,6 +144,12 @@ pub trait Face: 'static {
     }
     /// Takes back what the previous build kept, right after the face is made.
     fn restore(&mut self, _: &ledger::Value) {}
+    /// Scope asked for something; the answer comes from `answers` after the next paint.
+    fn ask(&mut self, _: crate::scope::Ask) {}
+    /// The answers to what Scope asked, worked out in the last paint, each in lines of the wire.
+    fn answers(&mut self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 fn cause(input: &Input) -> Cause {
@@ -172,6 +178,7 @@ pub enum Signal {
     Looks(Box<Looks>),
     Menu(u64),
     Access(accesskit_winit::Event),
+    Scope(crate::scope::Ask),
 }
 
 impl From<accesskit_winit::Event> for Signal {
@@ -341,6 +348,9 @@ impl<F: Face> Running<F> {
         self.update_access();
         self.painting = started.elapsed();
         self.recorder.drawn(stages, gpu, micros(rendered), micros(started));
+        for answer in self.face.answers() {
+            self.recorder.answer(answer);
+        }
         profiling::finish_frame!();
     }
 
@@ -512,7 +522,12 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
             clicks: Clicks::default(),
             appearance,
             scope,
-            recorder: Recorder::new(&self.config.title, self.started),
+            recorder: {
+                let to = self.proxy.clone();
+                Recorder::new(&self.config.title, self.started, move |ask| {
+                    let _ = to.send_event(Signal::Scope(ask));
+                })
+            },
             launch: Vec::new(),
             minimum: None,
             access,
@@ -559,6 +574,11 @@ impl<F: Face> ApplicationHandler<Signal> for Shell<F> {
                     r.face.offered(&r.looks);
                     r.wants(Cause::Appearance, since);
                 }
+            }
+            Signal::Scope(ask) => {
+                let since = Instant::now();
+                r.face.ask(ask);
+                r.wants(Cause::Scope, since);
             }
             Signal::Menu(id) => {
                 let since = Instant::now();

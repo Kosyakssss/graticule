@@ -107,6 +107,7 @@ pub struct Kept {
     scratch: [Vec<Quad>; 2],
     frame: u64,
     atlas: u64,
+    loose: Slot,
     pub repainted: usize,
 }
 
@@ -114,9 +115,15 @@ impl Kept {
     /// Forgets everything, so the next frame paints every node.
     pub fn reset(&mut self) {
         self.entries.clear();
+        self.loose = Slot::default();
         for l in &mut self.layers {
             l.clear();
         }
+    }
+
+    /// Quads that belong to no node, drawn above everything: what Scope asks to see over the window. Empty takes them away.
+    pub fn loose(&mut self, quads: &[Quad]) {
+        self.loose = self.layers[3].write(self.loose, quads);
     }
 
     /// Brings the kept quads up to date with `tree`, painting only nodes that are new, moved, changed or touched differently than last frame.

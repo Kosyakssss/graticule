@@ -1,6 +1,6 @@
 //! SC-01 Scope's recorder, in every app: a fixed ring of what each frame cost and why it was drawn, streamed to Scope's window over a local connection when one is attached.
 
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,11 +26,25 @@ pub enum Cause {
     Assistive,
     Uncovered,
     Clock,
+    Scope,
 }
 
 impl Cause {
-    pub const ALL: [Cause; 12] =
-        [Cause::Launch, Cause::Key, Cause::Typing, Cause::Pointer, Cause::Click, Cause::Wheel, Cause::Resize, Cause::Appearance, Cause::Woken, Cause::Assistive, Cause::Uncovered, Cause::Clock];
+    pub const ALL: [Cause; 13] = [
+        Cause::Launch,
+        Cause::Key,
+        Cause::Typing,
+        Cause::Pointer,
+        Cause::Click,
+        Cause::Wheel,
+        Cause::Resize,
+        Cause::Appearance,
+        Cause::Woken,
+        Cause::Assistive,
+        Cause::Uncovered,
+        Cause::Clock,
+        Cause::Scope,
+    ];
 
     /// The cause in words, as Scope shows it.
     pub fn name(self) -> &'static str {
@@ -47,6 +61,7 @@ impl Cause {
             Cause::Assistive => "an assistive tool",
             Cause::Uncovered => "the window being uncovered",
             Cause::Clock => "a date written as how long ago changing",
+            Cause::Scope => "Scope asking",
         }
     }
 
@@ -86,6 +101,51 @@ impl Stamp {
     }
 }
 
+/// What Scope draws over the app's own window: the grid's corners, and the outline of every box.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Overlay {
+    pub grid: bool,
+    pub boxes: bool,
+}
+
+/// What Scope asks the attached app for. The app answers after its next frame, in lines of its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ask {
+    /// Every box in the tree: what it is, where, the line of code that made it and why it is that size.
+    Boxes,
+    /// Every command, available or not and why, with its keys.
+    Commands,
+    /// Draw this over the window.
+    Overlay(Overlay),
+}
+
+impl Ask {
+    /// The ask as one line of the wire, from Scope to the app.
+    pub fn line(&self) -> String {
+        match self {
+            Ask::Boxes => "ask\tboxes\n".into(),
+            Ask::Commands => "ask\tcommands\n".into(),
+            Ask::Overlay(o) => format!("ask\toverlay\t{}\t{}\n", u8::from(o.grid), u8::from(o.boxes)),
+        }
+    }
+
+    /// Reads a line written by `line`.
+    pub fn read(line: &str) -> Option<Ask> {
+        let mut f = line.strip_prefix("ask\t")?.trim_end().split('\t');
+        match f.next()? {
+            "boxes" => Some(Ask::Boxes),
+            "commands" => Some(Ask::Commands),
+            "overlay" => Some(Ask::Overlay(Overlay { grid: f.next()? == "1", boxes: f.next()? == "1" })),
+            _ => None,
+        }
+    }
+}
+
+enum Out {
+    Stamp(Stamp),
+    Text(String),
+}
+
 /// The time spent in the stages a face measures itself, in microseconds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Stages {
@@ -108,7 +168,7 @@ pub struct Recorder {
     update: u32,
     shared: Arc<Mutex<Shared>>,
     attached: Arc<AtomicBool>,
-    send: SyncSender<Stamp>,
+    send: SyncSender<Out>,
     file: Option<PathBuf>,
 }
 
@@ -118,8 +178,8 @@ pub fn folder() -> Option<PathBuf> {
 }
 
 impl Recorder {
-    /// Starts recording. Scope can attach once the app is listening on a port on this machine only, which it says in `folder()`.
-    pub fn new(app: &str, started: Instant) -> Recorder {
+    /// Starts recording. Scope can attach once the app is listening on a port on this machine only, which it says in `folder()`. What Scope asks is handed to `asked`, on a thread of its own.
+    pub fn new(app: &str, started: Instant, asked: impl Fn(Ask) + Send + Sync + 'static) -> Recorder {
         let shared = Arc::new(Mutex::new(Shared { ring: Vec::with_capacity(RING), next: 0, launch: Vec::new() }));
         let attached = Arc::new(AtomicBool::new(false));
         let (send, receive) = sync_channel(RING);
@@ -133,7 +193,8 @@ impl Recorder {
             if std::fs::write(&file, format!("{app}\n{port}\n")).is_ok() {
                 recorder.file = Some(file);
                 let (shared, attached) = (recorder.shared.clone(), recorder.attached.clone());
-                let _ = std::thread::Builder::new().name("scope".into()).spawn(move || serve(listener, shared, attached, receive));
+                let asked: Arc<dyn Fn(Ask) + Send + Sync> = Arc::new(asked);
+                let _ = std::thread::Builder::new().name("scope".into()).spawn(move || serve(listener, shared, attached, receive, asked));
             }
         }
         recorder
@@ -182,7 +243,14 @@ impl Recorder {
             s.next = (s.next + 1) % RING;
         }
         if self.attached.load(Ordering::Relaxed) {
-            let _ = self.send.try_send(stamp);
+            let _ = self.send.try_send(Out::Stamp(stamp));
+        }
+    }
+
+    /// Sends Scope the answer to something it asked, if it is still attached.
+    pub fn answer(&self, text: String) {
+        if self.attached.load(Ordering::Relaxed) {
+            let _ = self.send.try_send(Out::Text(text));
         }
     }
 }
@@ -195,9 +263,21 @@ impl Drop for Recorder {
     }
 }
 
-fn serve(listener: TcpListener, shared: Arc<Mutex<Shared>>, attached: Arc<AtomicBool>, receive: Receiver<Stamp>) {
+fn serve(listener: TcpListener, shared: Arc<Mutex<Shared>>, attached: Arc<AtomicBool>, receive: Receiver<Out>, asked: Arc<dyn Fn(Ask) + Send + Sync>) {
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
+        if let Ok(reading) = stream.try_clone() {
+            let asked = asked.clone();
+            let _ = std::thread::Builder::new().name("scope asks".into()).spawn(move || {
+                for line in BufReader::new(reading).lines() {
+                    let Ok(line) = line else { break };
+                    if let Some(ask) = Ask::read(&line) {
+                        asked(ask);
+                    }
+                }
+                asked(Ask::Overlay(Overlay::default()));
+            });
+        }
         while receive.try_recv().is_ok() {}
         let backlog = match shared.lock() {
             Ok(s) => {
@@ -214,12 +294,16 @@ fn serve(listener: TcpListener, shared: Arc<Mutex<Shared>>, attached: Arc<Atomic
     }
 }
 
-fn stream_to(mut stream: TcpStream, backlog: &str, receive: &Receiver<Stamp>) {
+fn stream_to(mut stream: TcpStream, backlog: &str, receive: &Receiver<Out>) {
     if stream.write_all(backlog.as_bytes()).is_err() {
         return;
     }
-    while let Ok(stamp) = receive.recv() {
-        if stream.write_all(stamp.line().as_bytes()).is_err() {
+    while let Ok(out) = receive.recv() {
+        let written = match out {
+            Out::Stamp(stamp) => stream.write_all(stamp.line().as_bytes()),
+            Out::Text(text) => stream.write_all(text.as_bytes()),
+        };
+        if written.is_err() {
             return;
         }
     }

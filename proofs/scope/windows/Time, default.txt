@@ -146,6 +146,9 @@ window		0 0 120 30
     button	Running apps	33 28 13 1	
     button	Time	48 28 6 1	unavailable (It is showing)
     button	Why it redrew	56 28 13 1	
-    button	Undo	71 28 13 1	unavailable (Nothing to undo)
-    button	Redo	86 28 19 1	unavailable (Nothing to redo)
-    button	Open the palette	2 29 15 1	
+    button	Boxes	71 28 7 1	
+    button	Commands	80 28 11 1	
+    button	Ask again	93 28 10 1	unavailable (Only boxes and commands are asked for)
+    button	Undo	105 28 13 1	unavailable (Nothing to undo)
+    button	Redo	2 29 19 1	unavailable (Nothing to redo)
+    button	Open the palette	23 29 15 1	

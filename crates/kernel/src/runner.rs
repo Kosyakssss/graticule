@@ -301,6 +301,10 @@ pub struct Runner<A: App> {
     calendar: Calendar,
     keys_file: Option<std::path::PathBuf>,
     keys_watch: Option<(notify::RecommendedWatcher, mpsc::Receiver<()>)>,
+    scope_asks: Vec<crate::scope::Ask>,
+    overlay: crate::scope::Overlay,
+    overlaid: bool,
+    answers: Vec<String>,
 }
 
 impl<A: App> Runner<A> {
@@ -395,6 +399,10 @@ impl<A: App> Runner<A> {
             calendar: Calendar::default(),
             keys_file: None,
             keys_watch: None,
+            scope_asks: Vec::new(),
+            overlay: crate::scope::Overlay::default(),
+            overlaid: false,
+            answers: Vec::new(),
         }
     }
 
@@ -701,6 +709,74 @@ impl<A: App> Runner<A> {
             lines.push(Help::Item { label: self.target_label(&target, ""), keys: self.builtin_keys(b), state: self.target_state(&target) });
         }
         lines
+    }
+
+    fn overlay_on(&mut self, p: &mut Painter) {
+        let overlay = self.overlay;
+        if !overlay.grid && !overlay.boxes {
+            if self.overlaid {
+                self.kept.loose(&[]);
+                self.overlaid = false;
+            }
+            return;
+        }
+        let mut quads = Vec::new();
+        let saved = std::mem::replace(p.quads, quads);
+        let clip = p.set_clip([0.0, 0.0, p.m.width, p.m.height]);
+        if overlay.grid {
+            p.grid();
+        }
+        if overlay.boxes {
+            let (t, color) = (p.m.hair(), p.theme.link);
+            for n in self.tree.nodes.iter().skip(1).filter(|n| n.area.cols > 0 && n.area.rows > 0) {
+                let r = p.rect(n.area);
+                crate::components::border(p, r, t, color);
+            }
+        }
+        p.set_clip(clip);
+        quads = std::mem::replace(p.quads, saved);
+        self.kept.loose(&quads);
+        self.overlaid = true;
+    }
+
+    fn boxes_answer(&mut self, p: &mut Painter) -> String {
+        let one_line = |s: &str| s.chars().map(|c| if c.is_control() { ' ' } else { c }).take(80).collect::<String>();
+        let mut out = String::from("boxes\tbegin\n");
+        let mut layout = Layout::new(p.text, p.m, std::mem::take(&mut self.stack), std::mem::take(&mut self.widths));
+        for (i, n) in self.tree.nodes.iter().enumerate() {
+            let why = layout.explain(&self.tree, i as u32);
+            let a = n.area;
+            let parent = if i == 0 { String::new() } else { n.parent.to_string() };
+            let _ = writeln!(
+                out,
+                "box\t{i}\t{parent}\t{}\t{} {} {} {}\t{}:{}\t{why}\t{}",
+                n.kind.role(),
+                a.col,
+                a.row,
+                a.cols,
+                a.rows,
+                n.at.file().replace('\\', "/"),
+                n.at.line(),
+                one_line(self.tree.str(n.text))
+            );
+        }
+        (self.stack, self.widths) = layout.finish();
+        out.push_str("boxes\tdone\n");
+        out
+    }
+
+    fn commands_answer(&self) -> String {
+        let one_line = |s: &str| s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>();
+        let mut out = String::from("commands\tbegin\n");
+        for line in self.help_lines(&self.here()) {
+            let _ = match line {
+                Help::Heading(h) => writeln!(out, "heading\t{}", one_line(&h)),
+                Help::Item { label, keys, state } => writeln!(out, "command\t{}\t{}\t{}", one_line(&label), one_line(keys.trim()), one_line(&state)),
+                _ => Ok(()),
+            };
+        }
+        out.push_str("commands\tdone\n");
+        out
     }
 
     fn log_lines(&self) -> Vec<Help> {
@@ -4220,12 +4296,32 @@ impl<A: App> Face for Runner<A> {
         let mut kept = std::mem::take(&mut self.kept);
         kept.update(p, &self.tree, look);
         self.kept = kept;
+        self.overlay_on(p);
+        for ask in std::mem::take(&mut self.scope_asks) {
+            let answer = match ask {
+                crate::scope::Ask::Boxes => self.boxes_answer(p),
+                crate::scope::Ask::Commands => self.commands_answer(),
+                crate::scope::Ask::Overlay(_) => continue,
+            };
+            self.answers.push(answer);
+        }
         let micros = |from: Instant, to: Instant| (to - from).as_micros().min(u32::MAX as u128) as u32;
         self.stages = crate::scope::Stages { view: micros(started, built), layout: micros(built, laid), paint: micros(laid, Instant::now()) };
     }
 
     fn stages(&self) -> crate::scope::Stages {
         self.stages
+    }
+
+    fn ask(&mut self, ask: crate::scope::Ask) {
+        match ask {
+            crate::scope::Ask::Overlay(overlay) => self.overlay = overlay,
+            ask => self.scope_asks.push(ask),
+        }
+    }
+
+    fn answers(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.answers)
     }
 
     fn keep(&self) -> Value {

@@ -1,6 +1,6 @@
 # Scope, small
 
-Scope has two halves: a recorder inside every app (`kernel::scope`) and a window of its own (`crates/scope`) that attaches to a running app. The small version records what each frame cost and why it was drawn, and shows Time and Why it redrew. The rest of spec §13.6 (rewind, code, facts, why it's this size, commands, taste, effects and jobs, the overlays in the app) is build-plan item 19.
+Scope has two halves: a recorder inside every app (`kernel::scope`) and a window of its own (`crates/scope`) that attaches to a running app. The small version records what each frame cost and why it was drawn, and shows Time and Why it redrew. Item 19 adds the asks: boxes, commands, and overlays drawn in the app. The rest of spec §13.6 (rewind, facts, taste, effects and jobs) is still to come.
 
 ## The recorder
 
@@ -16,10 +16,16 @@ At launch the recorder listens on a port on 127.0.0.1, chosen by the system, and
 
 Text, one record a line, tab-separated: `launch <stage> <ms>` for each launch stage, then `frame` followed by the stamp's fields in order (`Stamp::line`, `Stamp::read`). On connecting, Scope gets the launch stages and the whole ring, oldest first; after that, each new frame as it is drawn. The connection's end is noticed at the next frame the app tries to send.
 
+The wire runs both ways. A second thread reads what Scope writes, one ask a line (`Ask::line`, `Ask::read`): `ask boxes`, `ask commands` or `ask overlay <grid> <boxes>`. It hands each to the shell as an event, and the shell gives it to the face and draws a frame, recorded with the cause "Scope asking". The runner answers in that frame's paint, after the tree is laid out, so the answer describes what is on screen; the shell sends answers after the frame's stamp. An answer is a block of lines between `boxes begin` and `boxes done` (or `commands`): `box <index> <parent> <role> <col row cols rows> <file:line> <why> <text>` for every node, and `heading <text>` or `command <label> <keys> <why not>` in the order the help sheet uses. Text is cut to one line. When Scope lets go, the reading thread asks for no overlay, which draws a frame, which also ends the writing side; the app is back as it was without waiting for its next frame.
+
+Why a box is its size is worked out when asked, not recorded during layout, so layout pays nothing for it: `Layout::explain` compares the box with what the code asked for (fixed columns, least and most), what its content wants (`size`, `rows`) and what its parent gave. It reads the laid-out tree, so it names the outcome and its nearest reason, not the whole chain of decisions.
+
+The overlays are quads that belong to no node, kept in their own slot of the topmost kept layer (`Kept::loose`), so turning one on or off rewrites only those quads. The grid is the same corner marks Specimen draws; the outlines are a hairline in the link ink around every box with an area. While an overlay is on it is redrawn with every frame, a cost that grows with the boxes on screen, not with the data.
+
 ## Scope's window
 
 Scope is an ordinary Graticule app (`Scope`) with a thin face around its runner that owns the connection, as Specimen's face owns its runners. A thread reads the lines and wakes the window, at most once until the window has caught up, so an app drawing a thousand frames a second doesn't wake Scope a thousand times. On waking, the frames arrive as one internal command; Scope keeps the last 600, newest first. Its views are Running apps, Time (the slowest 1% against the 1 ms budget, launch stage by stage, and every frame's stages with a bar in block characters, a tenth of the budget per cell) and Why it redrew (the causes tallied, then frame by frame).
 
 ## Not yet
 
-The laws of §13.6 (with Scope off the frame time is the same; with Scope on the app stays within budget; Scope shows and subtracts its own cost) compare frame times with and without Scope, which only means something on the reference machine in release builds; they wait for it. Assay's budgets (`assay.md`) already judge the frames of every app. History and source locations, recorded only in development builds, come with item 19.
+The laws of §13.6 (with Scope off the frame time is the same; with Scope on the app stays within budget; Scope shows and subtracts its own cost) compare frame times with and without Scope, which only means something on the reference machine in release builds; they wait for it. Assay's budgets (`assay.md`) already judge the frames of every app. History over the wire comes with rewind. Source locations are recorded in every build: each node keeps the `Location` of the `ui` call that made it, which costs a pointer.

@@ -1,4 +1,4 @@
-window		0 0 38 26	
+window		0 0 38 27	
   page	Time: To do	0 0 38 19	
     text	The slowest 1% of the last 40 frames took 1.22 ms or less, over the budget of 1.00 ms.	2 3 34 2	
     text	Launch took 137.4 ms: event loop 4.1, system 2.0, window 31.5, gpu 88.2, fonts 1.2, app 0.6, first frame 9.8.	2 6 34 3	muted
@@ -20,12 +20,15 @@ window		0 0 38 26
             text	███▎	22 15 12 1	mono
   alert		2 19 34 1	
   status		2 20 34 1	
-  toolbar		2 21 34 5	
+  toolbar		2 21 34 6	
     button	Look for running apps	2 21 19 1	
     button	Detach	23 21 8 1	
     button	Running apps	2 22 13 1	
     button	Time	17 22 6 1	unavailable (It is showing)
     button	Why it redrew	2 23 13 1	
-    button	Undo	17 23 13 1	unavailable (Nothing to undo)
-    button	Redo	2 24 19 1	unavailable (Nothing to redo)
-    button	Open the palette	2 25 15 1	
+    button	Boxes	17 23 7 1	
+    button	Commands	2 24 11 1	
+    button	Ask again	15 24 10 1	unavailable (Only boxes and commands are asked for)
+    button	Undo	2 25 13 1	unavailable (Nothing to undo)
+    button	Redo	17 25 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 26 15 1	

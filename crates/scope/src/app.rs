@@ -27,6 +27,20 @@ pub struct Scope {
     reading: Selection<Frame>,
     #[session]
     pub looks: u32,
+    #[session]
+    boxes: List<Measure>,
+    #[session]
+    looking: Selection<Measure>,
+    #[session]
+    commands: List<Listed>,
+    #[session]
+    listing: Selection<Listed>,
+    #[session]
+    pub asked: u32,
+    #[session]
+    pub grid: bool,
+    #[session]
+    pub outlines: bool,
 }
 
 #[derive(Facts, Copy, Debug, Default, PartialEq, Eq)]
@@ -35,6 +49,62 @@ pub enum View {
     Apps,
     Time,
     Redraws,
+    Boxes,
+    Commands,
+}
+
+/// One box of the attached app's tree, as it answered when asked.
+#[derive(Facts)]
+pub struct Measure {
+    #[key]
+    id: Key<Measure>,
+    pub depth: u32,
+    pub role: String,
+    pub area: String,
+    pub at: String,
+    pub why: String,
+    pub text: String,
+}
+
+/// One line of the attached app's commands: a heading, or a command with its keys and why it can't run.
+#[derive(Facts)]
+pub struct Listed {
+    #[key]
+    id: Key<Listed>,
+    pub heading: bool,
+    pub label: String,
+    pub keys: String,
+    pub why: String,
+}
+
+impl Measure {
+    /// Reads a `box` line of the wire: the box's index, and the box with `depth` worked out from its parent's index.
+    pub fn read(n: u64, line: &str, depth: impl Fn(Option<u64>) -> u32) -> Option<(u64, Measure)> {
+        let mut f = line.strip_prefix("box\t")?.split('\t');
+        let index: u64 = f.next()?.parse().ok()?;
+        let parent = f.next()?.parse().ok();
+        let seen = Measure {
+            id: Key::fixed(n),
+            depth: depth(parent),
+            role: f.next()?.to_string(),
+            area: f.next()?.to_string(),
+            at: f.next()?.to_string(),
+            why: f.next()?.to_string(),
+            text: f.next().unwrap_or_default().to_string(),
+        };
+        Some((index, seen))
+    }
+}
+
+impl Listed {
+    /// Reads a `heading` or `command` line of the wire.
+    pub fn read(n: u64, line: &str) -> Option<Listed> {
+        if let Some(h) = line.strip_prefix("heading\t") {
+            return Some(Listed { id: Key::fixed(n), heading: true, label: h.to_string(), keys: String::new(), why: String::new() });
+        }
+        let mut f = line.strip_prefix("command\t")?.split('\t');
+        Some(Listed { id: Key::fixed(n), heading: false, label: f.next()?.to_string(), keys: f.next().unwrap_or_default().to_string(), why: f.next().unwrap_or_default().to_string() })
+    }
 }
 
 /// A Graticule app running on this machine, which Scope can attach to.
@@ -115,6 +185,12 @@ pub enum Cmd {
     Time,
     #[label("Why it redrew")]
     Redraws,
+    #[label("Boxes")]
+    Boxes,
+    #[label("Commands")]
+    Commands,
+    #[label("Ask again")]
+    Again,
     #[internal]
     Found(Vec<Running>),
     #[internal]
@@ -123,6 +199,10 @@ pub enum Cmd {
     Arrived(Vec<Frame>),
     #[internal]
     Lost,
+    #[internal]
+    Measured(Vec<Measure>),
+    #[internal]
+    Listed(Vec<Listed>),
 }
 
 impl App for Scope {
@@ -144,7 +224,16 @@ impl App for Scope {
                 Available::Yes => here(View::Redraws),
                 no => no,
             },
-            Cmd::Look | Cmd::Found(_) | Cmd::Launched(_) | Cmd::Arrived(_) | Cmd::Lost => Available::Yes,
+            Cmd::Boxes => match attached() {
+                Available::Yes => here(View::Boxes),
+                no => no,
+            },
+            Cmd::Commands => match attached() {
+                Available::Yes => here(View::Commands),
+                no => no,
+            },
+            Cmd::Again => kernel::no_if(!matches!(self.view, View::Boxes | View::Commands), Message::from("Only boxes and commands are asked for")),
+            Cmd::Look | Cmd::Found(_) | Cmd::Launched(_) | Cmd::Arrived(_) | Cmd::Lost | Cmd::Measured(_) | Cmd::Listed(_) => Available::Yes,
         }
     }
 
@@ -166,6 +255,8 @@ impl App for Scope {
                 self.attached = Some(app);
                 let _ = self.launch.replace([]);
                 let _ = self.frames.replace([]);
+                let _ = self.boxes.replace([]);
+                let _ = self.commands.replace([]);
                 self.view = View::Time;
                 Outcome::Changed
             }
@@ -177,6 +268,26 @@ impl App for Scope {
             Cmd::Apps => self.show(View::Apps),
             Cmd::Time => self.show(View::Time),
             Cmd::Redraws => self.show(View::Redraws),
+            Cmd::Boxes => {
+                self.asked += 1;
+                self.show(View::Boxes)
+            }
+            Cmd::Commands => {
+                self.asked += 1;
+                self.show(View::Commands)
+            }
+            Cmd::Again => {
+                self.asked += 1;
+                Outcome::Changed
+            }
+            Cmd::Measured(boxes) => {
+                let _ = self.boxes.replace(boxes);
+                Outcome::Changed
+            }
+            Cmd::Listed(commands) => {
+                let _ = self.commands.replace(commands);
+                Outcome::Changed
+            }
             Cmd::Launched(stages) => {
                 let _ = self.launch.replace(stages);
                 Outcome::Changed
@@ -228,13 +339,47 @@ impl App for Scope {
             Scope { view, apps: [app].into_iter().collect(), attached: Some(id), launch: launch.iter().zip(1..).map(|((name, ms), n)| Stage::of(n, name, *ms)).collect(), frames, ..Scope::default() }
         };
         let running = Scope { apps: [Running::of(4242, "To do", 50_000), Running::of(4243, "Specimen", 50_001)].into_iter().collect(), ..Scope::default() };
-        kernel::States::new().add("No apps", Scope::default()).add("Two apps running", running).add("Time", attached(View::Time)).add("Why it redrew", attached(View::Redraws))
+        let boxes = [
+            "box\t0\t\twindow\t0 0 80 30\tapps/todo/src/main.rs:90\tthe whole window\t",
+            "box\t1\t0\tpage\t0 0 80 28\tapps/todo/src/main.rs:91\t80 columns, as wide as its window; 28 rows, given by its window\tTo do",
+            "box\t2\t1\tfield\t2 2 60 1\tapps/todo/src/main.rs:93\t60 columns, as the code asks; 1 row, what it needs at that width\t",
+            "box\t3\t1\tlist\t2 4 76 22\tapps/todo/src/main.rs:96\t76 columns, as wide as its page; 22 rows of the 40 it needs, so the rest scrolls or is cut\t",
+            "box\t4\t3\tcheckbox\t2 4 40 1\tapps/todo/src/main.rs:98\t40 columns, as wide as what it shows; 1 row, what it needs at that width\tWater the plants",
+        ];
+        let mut depths = std::collections::HashMap::new();
+        let mut seen = Vec::new();
+        for (line, n) in boxes.iter().zip(1..) {
+            if let Some((i, b)) = Measure::read(n, line, |p| p.and_then(|p| depths.get(&p).map(|d| d + 1)).unwrap_or(0)) {
+                depths.insert(i, b.depth);
+                seen.push(b);
+            }
+        }
+        let commands = [
+            "heading\tCommands",
+            "command\tAdd a task\tenter\t",
+            "command\tMark “Water the plants” done\tx\t",
+            "command\tRemove done tasks\t\tNothing is done yet",
+            "heading\tGraticule’s own",
+            "command\tUndo\tctrl+z\tThere is nothing to undo",
+        ];
+        let commands = commands.iter().zip(1..).filter_map(|(l, n)| Listed::read(n, l)).collect();
+        let measured = Scope { boxes: seen.into_iter().collect(), outlines: true, ..attached(View::Boxes) };
+        let listed = Scope { commands, ..attached(View::Commands) };
+        kernel::States::new()
+            .add("No apps", Scope::default())
+            .add("Two apps running", running)
+            .add("Time", attached(View::Time))
+            .add("Why it redrew", attached(View::Redraws))
+            .add("Boxes", measured)
+            .add("Commands", listed)
     }
 
     fn view(&self, ui: &mut Ui<Cmd>) {
         match (self.view, self.attached) {
             (View::Time, Some(_)) => self.time(ui),
             (View::Redraws, Some(_)) => self.redraws(ui),
+            (View::Boxes, Some(_)) => self.measured(ui),
+            (View::Commands, Some(_)) => self.listed(ui),
             _ => self.running(ui),
         }
     }
@@ -322,6 +467,51 @@ impl Scope {
                     ui.column(8, |ui| ui.mono(f.number.to_string()));
                     ui.column(12, |ui| ui.mono(format!("{:.3} s", f.at as f64 / 1_000_000.0)));
                     ui.column(kernel::Fill, |ui| ui.text(&f.cause));
+                });
+            });
+        });
+    }
+}
+
+impl Scope {
+    fn measured(&self, ui: &mut Ui<Cmd>) {
+        ui.page(Message::plain(format!("Boxes: {}", self.name())), |ui| {
+            ui.muted("Every box on the app's screen, inside the one it sits in: its place in cells, the line of code that made it, and why it is that size.");
+            ui.switch("Show the grid over the app", Scope::grid);
+            ui.switch("Outline every box in the app", Scope::outlines);
+            if self.boxes.is_empty() {
+                ui.empty(Message::from("No answer yet. The app answers after its next frame."), Cmd::Again);
+                return;
+            }
+            ui.list(&self.boxes, Scope::looking, |ui, b| {
+                let indent = "    ".repeat(b.depth.min(12) as usize);
+                let text = if b.text.is_empty() { String::new() } else { format!(" “{}”", b.text) };
+                ui.columns(|ui| {
+                    ui.column(kernel::Fill, |ui| ui.text(format!("{indent}{}{text}", b.role)));
+                    ui.column(14, |ui| ui.mono(&b.area));
+                    ui.column(kernel::Fill, |ui| ui.mono(&b.at));
+                    ui.column(kernel::Fill, |ui| ui.muted(&b.why));
+                });
+            });
+        });
+    }
+
+    fn listed(&self, ui: &mut Ui<Cmd>) {
+        ui.page(Message::plain(format!("Commands: {}", self.name())), |ui| {
+            ui.muted("Every command the app has right now, with its keys, and why it can't run when it can't.");
+            if self.commands.is_empty() {
+                ui.empty(Message::from("No answer yet. The app answers after its next frame."), Cmd::Again);
+                return;
+            }
+            ui.list(&self.commands, Scope::listing, |ui, c| {
+                if c.heading {
+                    ui.heading(&c.label);
+                    return;
+                }
+                ui.columns(|ui| {
+                    ui.column(kernel::Fill, |ui| ui.text(&c.label));
+                    ui.column(16, |ui| ui.mono(&c.keys));
+                    ui.column(kernel::Fill, |ui| ui.muted(if c.why.is_empty() { "Can run" } else { &c.why }));
                 });
             });
         });

@@ -1,0 +1,30 @@
+window		0 0 50 21	
+  page	Boxes: To do	0 0 50 15	
+    text	Every box on the app's screen, inside the one it sits in: its place in cells, the line of code that made it, and why it is that size.	2 3 46 3	muted
+    switch	Show the grid over the app	2 7 46 1	
+    switch	Outline every box in the app	2 9 46 1	
+    list		2 11 46 3	5 items
+      list item		2 11 44 3	
+        group		2 11 44 3	
+          column		2 11 8 1	
+            text	window	2 11 8 1	
+          column		12 11 14 1	
+            text	0 0 80 30	12 11 14 1	mono
+          column		28 11 8 3	
+            text	apps/todo/src/main.rs:90	28 11 8 3	mono
+          column		38 11 8 2	
+            text	the whole window	38 11 8 2	muted
+  alert		2 15 46 1	
+  status		2 16 46 1	
+  toolbar		2 17 46 4	
+    button	Look for running apps	2 17 19 1	
+    button	Detach	23 17 8 1	
+    button	Running apps	33 17 13 1	
+    button	Time	2 18 6 1	
+    button	Why it redrew	10 18 13 1	
+    button	Boxes	25 18 7 1	unavailable (It is showing)
+    button	Commands	34 18 11 1	
+    button	Ask again	2 19 10 1	
+    button	Undo	14 19 13 1	unavailable (Nothing to undo)
+    button	Redo	29 19 19 1	unavailable (Nothing to redo)
+    button	Open the palette	2 20 15 1	

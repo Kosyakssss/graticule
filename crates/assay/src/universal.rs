@@ -205,10 +205,21 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
         return played;
     }
     for (n, &step) in steps.iter().enumerate() {
+        let aimed = match step {
+            Step::Fill(pick) => match catch_unwind(AssertUnwindSafe(|| aim(&mut runner, pick))) {
+                Ok(aimed) => aimed,
+                Err(panic) => {
+                    played.done.push(describe(step));
+                    played.broke = Some((Law::NeverFails, panicked(panic)));
+                    return played;
+                }
+            },
+            _ => None,
+        };
         let value = runner.facts.value();
         let before = (runner.history.len(), runner.effects().len(), runner.history.depth());
         let started = Instant::now();
-        let taken = catch_unwind(AssertUnwindSafe(|| take(&mut runner, step)));
+        let taken = catch_unwind(AssertUnwindSafe(|| take(&mut runner, step, aimed)));
         let took = started.elapsed().as_micros().min(u32::MAX as u128) as u32;
         let (done, probe) = match taken {
             Ok(taken) => taken,
@@ -243,7 +254,7 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
             played.ran.push(probe.name);
         }
         if let Step::Run(name) = step
-            && (runner.history.len(), runner.effects().len()) != (before.0, before.1)
+            && ((runner.history.len(), runner.effects().len()) != (before.0, before.1) || runner.facts.value() != value)
             && A::Cmd::entries().iter().any(|e| e.name == name && !e.internal)
         {
             played.ran.push(name);
@@ -335,7 +346,15 @@ fn describe(step: Step) -> String {
     }
 }
 
-fn take<A: App>(runner: &mut Runner<A>, step: Step) -> (String, Option<Probe<A>>) {
+fn aim<A: App>(runner: &mut Runner<A>, pick: u32) -> Option<(String, &'static str)> {
+    let fields: Vec<u32> = (0..runner.tree.nodes.len() as u32).filter(|&i| matches!(runner.tree.nodes[i as usize].kind, Kind::Field { .. })).collect();
+    let node = runner.tree.nodes[*fields.get(pick as usize % fields.len().max(1))? as usize];
+    let word = WORDS[(pick as usize / fields.len()) % WORDS.len()];
+    runner.act(node.id.0, Action::Focus);
+    Some((runner.tree.str(node.name).to_string(), word))
+}
+
+fn take<A: App>(runner: &mut Runner<A>, step: Step, aimed: Option<(String, &'static str)>) -> (String, Option<Probe<A>>) {
     match step {
         Step::Press(keys) => {
             if let Ok(chord) = Chord::parse(keys) {
@@ -370,15 +389,8 @@ fn take<A: App>(runner: &mut Runner<A>, step: Step) -> (String, Option<Probe<A>>
             runner.act(node.id.0, Action::Click);
             return (format!("click the {what}"), probe);
         }
-        Step::Fill(pick) => {
-            let fields: Vec<u32> = (0..runner.tree.nodes.len() as u32).filter(|&i| matches!(runner.tree.nodes[i as usize].kind, Kind::Field { .. })).collect();
-            if fields.is_empty() {
-                return ("fill in a field, with none on screen".into(), None);
-            }
-            let node = runner.tree.nodes[fields[pick as usize % fields.len()] as usize];
-            let label = runner.tree.str(node.name).to_string();
-            let word = WORDS[(pick as usize / fields.len()) % WORDS.len()];
-            runner.act(node.id.0, Action::Focus);
+        Step::Fill(_) => {
+            let Some((label, word)) = aimed else { return ("fill in a field, with none on screen".into(), None) };
             for c in word.chars() {
                 runner.press(Chord { key: Pressed::Char(c), mods: Default::default() }, Some(&c.to_string()));
             }

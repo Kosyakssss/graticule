@@ -663,13 +663,15 @@ impl<'a, C, S> Ui<'a, C, S> {
             }
             Control::Choice(options) => self.segments_at(item.label, path, options, &item.value, at),
             Control::Whole { least, most } => {
-                let row = self.tree.add(self.parent, Kind::Row, Some(id), at);
+                let row = self.tree.add(self.parent, Kind::Row, Some(id.mix(4)), at);
                 let label = self.tree.add(row, Kind::Text { mono: false, tone: Tone::Ink, strong: false }, Some(id.mix(1)), at);
                 let r = self.tree.put(item.label);
                 self.tree.nodes[label as usize].text = r;
-                let count = self.tree.add(row, Kind::Value { value: Value::Count }, Some(id.mix(2)), at);
-                let r = self.tree.put(&item.shown());
-                self.tree.nodes[count as usize].text = r;
+                let count = self.tree.add(row, Kind::Field { holds: Holds::Number }, Some(id), at);
+                let (r, named) = (self.tree.put(&item.shown()), self.tree.put(item.label));
+                let n = &mut self.tree.nodes[count as usize];
+                (n.path, n.text, n.name, n.subject) = (Some(path), r, named, self.subject);
+                self.tree.numbers.push((count, *least, *most));
                 for (k, (sign, by, verb, end)) in [("−", -1, "Lower", "least"), ("+", 1, "Raise", "most")].into_iter().enumerate() {
                     let b = self.tree.add(row, Kind::Button, Some(id.mix(3).mix(k as u64)), at);
                     let r = self.tree.put(sign);

@@ -26,4 +26,4 @@ The boxes keep their width: four columns each, three for the box and one between
 
 ## Screen reader
 
-A text field with the code typed so far.
+A text field with the code typed so far, named by its label, or else by its length ("A code of 6 characters").

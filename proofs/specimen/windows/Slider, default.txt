@@ -12,7 +12,7 @@ window		0 0 120 30
       list item		2 8 114 1	
         heading	Code	2 8 4 1	strong
       list item		2 9 114 1	
-        text	ui.slider(Catalog::volume, 0..=100);	2 9 36 1	mono
+        text	ui.labelled("Volume", |ui| ui.slider(Catalog::volume, 0..=100));	2 9 64 1	mono
       list item		2 10 114 2	
         group		2 10 114 2	
           column		2 10 14 1	

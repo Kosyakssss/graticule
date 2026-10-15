@@ -11,32 +11,30 @@ window		0 0 120 30
       list item		2 7 114 1	
       list item		2 8 114 1	
         heading	Code	2 8 4 1	strong
-      list item		2 9 114 1	
-        text	ui.code_field(Catalog::pin, 6);	2 9 31 1	mono
-      list item		2 10 114 2	
-        group		2 10 114 2	
-          column		2 10 14 1	
-            text	Live	2 10 14 1	muted
-          column		18 10 98 2	
-            labelled	Code	18 10 98 2	
-              code field	A code of 6 characters	18 11 23 1	holds “40”
-      list item		2 12 114 1	
-        text	It types into a Text in the facts like any field, an edit a word at a time. Typing or pasting past the last box does nothing more.	2 12 92 1	
-      list item		2 13 114 1	
+      list item		2 9 114 3	
+        text	ui.labelled("Code", |ui| {\n    ui.code_field(Catalog::pin, 6);\n});	2 9 66 3	mono
+      list item		2 12 114 2	
+        group		2 12 114 2	
+          column		2 12 14 1	
+            text	Live	2 12 14 1	muted
+          column		18 12 98 2	
+            labelled	Code	18 12 98 2	
+              code field	A code of 6 characters	18 13 23 1	holds “40”
       list item		2 14 114 1	
-        heading	Keys	2 14 4 1	strong
+        text	It types into a Text in the facts like any field, an edit a word at a time. Typing or pasting past the last box does nothing more.	2 14 92 1	
       list item		2 15 114 1	
-        text	The platform's own text editing; the caret's box is underlined heavily.	2 15 52 1	
       list item		2 16 114 1	
+        heading	Keys	2 16 4 1	strong
       list item		2 17 114 1	
-        heading	Narrow windows	2 17 14 1	strong
+        text	The platform's own text editing; the caret's box is underlined heavily.	2 17 52 1	
       list item		2 18 114 1	
-        text	The boxes keep their width: four columns each, three for the box and one between.	2 18 62 1	
       list item		2 19 114 1	
+        heading	Narrow windows	2 19 14 1	strong
       list item		2 20 114 1	
-        heading	Screen reader	2 20 11 1	strong
+        text	The boxes keep their width: four columns each, three for the box and one between.	2 20 62 1	
       list item		2 21 114 1	
-        text	A text field with the code typed so far.	2 21 29 1	
+      list item		2 22 114 1	
+        heading	Screen reader	2 22 11 1	strong
   alert		2 24 116 1	
   status		2 25 116 1	
   toolbar		2 26 116 4	

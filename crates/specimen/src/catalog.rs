@@ -1,4 +1,4 @@
-use graticule_macros::{Choice, Commands, Facts};
+use graticule_macros::{Choice, Commands, Facts, Form};
 use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
@@ -67,6 +67,34 @@ pub enum Folder {
     Archive,
     Spam,
     Trash,
+}
+
+/// The paper of the live example of a form.
+#[derive(Facts, Choice, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Paper {
+    #[default]
+    A4,
+    Letter,
+    Legal,
+}
+
+/// The live example of a form: settings for printing, one control for each by its type.
+#[derive(Facts, Form)]
+pub struct Printing {
+    #[label("Copies")]
+    copies: u8,
+    #[label("Paper")]
+    paper: Paper,
+    #[label("Print on both sides")]
+    both_sides: bool,
+    #[label("Header")]
+    header: Text,
+}
+
+impl Default for Printing {
+    fn default() -> Self {
+        Printing { copies: 1, paper: Paper::A4, both_sides: false, header: Text::default() }
+    }
 }
 
 const LEVELS: [&str; 3] = ["Settings", "Account", "Password"];
@@ -140,6 +168,8 @@ pub struct Catalog {
     volume: u8,
     #[session]
     pin: Text,
+    #[session]
+    printing: Printing,
 }
 
 #[derive(Facts)]
@@ -262,10 +292,11 @@ pub enum Component {
     Number,
     Slider,
     CodeField,
+    Form,
 }
 
 impl Component {
-    const ALL: [Component; 48] = [
+    const ALL: [Component; 49] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -314,6 +345,7 @@ impl Component {
         Component::Number,
         Component::Slider,
         Component::CodeField,
+        Component::Form,
     ];
 
     fn name(self) -> &'static str {
@@ -366,6 +398,7 @@ impl Component {
             Component::Number => "Number field",
             Component::Slider => "Slider",
             Component::CodeField => "Code field",
+            Component::Form => "Form",
         }
     }
 
@@ -419,6 +452,7 @@ impl Component {
             Component::Number => include_str!("../../../docs/components/number-field.md"),
             Component::Slider => include_str!("../../../docs/components/slider.md"),
             Component::CodeField => include_str!("../../../docs/components/code-field.md"),
+            Component::Form => include_str!("../../../docs/components/form.md"),
         }
     }
 
@@ -532,6 +566,7 @@ impl Default for Catalog {
             copies: 1284,
             volume: 40,
             pin: Text::from("40"),
+            printing: Printing::default(),
         }
     }
 }
@@ -930,6 +965,7 @@ impl Catalog {
             Component::CodeField => ui.labelled("Code", |ui| {
                 ui.code_field(Catalog::pin, 6);
             }),
+            Component::Form => ui.form(Catalog::printing),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);

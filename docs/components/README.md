@@ -68,6 +68,7 @@ Several names on either side are the same component. They are merged into one ro
 | Number field | NumberField | NumericInput | whole numbers, typed as sums and stepped with the keys; units are not done |
 | Slider | Slider | Slider | one whole number in a range |
 | Code field | InputOTP | | one character per box |
+| Form | Form | FormGroup | settings drawn from a struct of facts, one control per field by its type |
 
 ## Wave 2: fields in full
 

@@ -2234,7 +2234,11 @@ impl<A: App> Runner<A> {
         self.drafts.remove(&n.id);
         self.carets.remove(&n.id);
         let value = if least < 0 { Value::Int(whole as i64) } else { Value::UInt(whole as u64) };
-        self.set_value(path, value, format!("Set to {}", crate::value::grouped(whole)))
+        let said = match self.tree.str(n.name) {
+            "" => format!("Set to {}", crate::value::grouped(whole)),
+            name => format!("{name}: {}", crate::value::grouped(whole)),
+        };
+        self.set_value(path, value, said)
     }
 
     fn work_out(&mut self, i: u32) -> Option<i128> {

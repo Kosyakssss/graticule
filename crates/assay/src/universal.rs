@@ -40,12 +40,12 @@ const TYPED: &[char] = &['a', 'b', 'c', 'd', 'e', ' ', 'é'];
 const WORDS: &[&str] = &["milk", "Call mum", "été", "長い", "12345678901234567890", "שלום"];
 const MOST_PER_LAW: usize = 3;
 
-/// One generated step: a key pressed, a character typed, a command run by the name the palette and keymaps use, or a control on screen clicked, picked by its place among the controls then.
+/// One generated step: a key pressed, a character typed, a command run by the name the palette and keymaps use (with the words typed when it asks for something, then Return), or a control on screen clicked, picked by its place among the controls then.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
     Press(&'static str),
     Type(char),
-    Run(&'static str),
+    Run(&'static str, Option<&'static str>),
     Click(u32),
     Fill(u32),
 }
@@ -111,8 +111,11 @@ pub fn run<A: App>(starts: &[(String, A)], plan: Plan) -> Universal {
             .chain((0..fresh).map(|_| match dice.below(11) {
                 0..=3 => Step::Press(KEYS[dice.below(KEYS.len())]),
                 4 | 5 => Step::Type(TYPED[dice.below(TYPED.len())]),
-                6 | 7 if !unrun.is_empty() => Step::Run(unrun[dice.below(unrun.len())]),
-                6 | 7 => Step::Run(names[dice.below(names.len())]),
+                6 | 7 => {
+                    let name = if unrun.is_empty() { names[dice.below(names.len())] } else { unrun[dice.below(unrun.len())] };
+                    let asks = A::Cmd::entries().iter().any(|e| e.name == name && !e.args.is_empty());
+                    Step::Run(name, asks.then(|| WORDS[dice.below(WORDS.len())]))
+                }
                 8 => Step::Fill(dice.next() as u32),
                 _ => Step::Click(dice.next() as u32),
             }))
@@ -255,7 +258,7 @@ fn play<A: App>(start: &A, steps: &[Step], screen: &mut Screen, mut measure: Opt
             }
             played.ran.push(probe.name);
         }
-        if let Step::Run(name) = step
+        if let Step::Run(name, _) = step
             && ((runner.history.len(), runner.effects().len()) != (before.0, before.1) || runner.facts.value() != value)
             && A::Cmd::entries().iter().any(|e| e.name == name && !e.internal)
         {
@@ -345,7 +348,8 @@ fn describe(step: Step) -> String {
     match step {
         Step::Press(keys) => format!("press {keys}"),
         Step::Type(c) => format!("type “{c}”"),
-        Step::Run(name) => format!("run “{name}”"),
+        Step::Run(name, None) => format!("run “{name}”"),
+        Step::Run(name, Some(words)) => format!("run “{name}”, answering “{words}”"),
         Step::Click(_) => "click a control".into(),
         Step::Fill(_) => "fill in a field".into(),
     }
@@ -369,8 +373,16 @@ fn take<A: App>(runner: &mut Runner<A>, step: Step, aimed: Option<(String, &'sta
         Step::Type(c) => {
             runner.press(Chord { key: Pressed::Char(c), mods: Default::default() }, Some(&c.to_string()));
         }
-        Step::Run(name) => {
+        Step::Run(name, answer) => {
             runner.run_named(name);
+            if let Some(words) = answer {
+                for c in words.chars() {
+                    runner.press(Chord { key: Pressed::Char(c), mods: Default::default() }, Some(&c.to_string()));
+                }
+                if let Ok(enter) = Chord::parse("enter") {
+                    runner.press(enter, None);
+                }
+            }
         }
         Step::Click(pick) => {
             let acting: Vec<u32> = (0..runner.tree.nodes.len() as u32).filter(|&i| runner.tree.nodes[i as usize].kind.acts()).collect();

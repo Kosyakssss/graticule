@@ -230,6 +230,7 @@ pub struct Runner<A: App> {
     drafts: HashMap<Id, String>,
     months: HashMap<Id, i32>,
     sliding: Option<(Id, i128)>,
+    mixing: Option<(Id, (u16, u16))>,
     opened: Option<Id>,
     browse: Option<Id>,
     browsing: Option<(ErasedPath, String, mpsc::Receiver<Option<std::path::PathBuf>>)>,
@@ -315,6 +316,7 @@ impl<A: App> Runner<A> {
             drafts: HashMap::new(),
             months: HashMap::new(),
             sliding: None,
+            mixing: None,
             opened: None,
             browse: None,
             browsing: None,
@@ -893,7 +895,13 @@ impl<A: App> Runner<A> {
     fn resolve(&mut self) {
         for i in 0..self.tree.nodes.len() {
             let n = self.tree.nodes[i];
-            if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags | Holds::Date | Holds::Time })
+            if let Kind::ColorArea { h, .. } = n.kind
+                && let Some((id, (l, c))) = self.mixing
+                && id == n.id
+            {
+                self.tree.nodes[i].kind = Kind::ColorArea { l, c, h };
+            }
+            if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags | Holds::Date | Holds::Time | Holds::Color })
                 && let Some(draft) = self.drafts.get(&n.id)
             {
                 self.tree.nodes[i].text = self.tree.put(draft);
@@ -903,7 +911,10 @@ impl<A: App> Runner<A> {
                 && id == n.id
                 && let Some((least, most)) = self.tree.bounds(i as u32)
             {
-                self.tree.nodes[i].text = self.tree.put(&crate::value::grouped(now));
+                self.tree.nodes[i].text = match self.tree.shades.iter().find(|s| s.0 == i as u32) {
+                    Some(&(_, _, channel)) => self.tree.put(&channel.show(now)),
+                    None => self.tree.put(&crate::value::grouped(now)),
+                };
                 self.tree.nodes[i].kind = Kind::Slider { at: ((now - least) * 1000 / (most - least)) as u16, label };
             }
             if let Kind::Thumb { high, .. } = n.kind
@@ -2391,9 +2402,13 @@ impl<A: App> Runner<A> {
         self.drafts.remove(&n.id);
         self.carets.remove(&n.id);
         let value = if least < 0 { Value::Int(whole as i64) } else { Value::UInt(whole as u64) };
+        let shown = match self.tree.shades.iter().find(|s| s.0 == i) {
+            Some(&(_, _, channel)) => channel.show(whole),
+            None => crate::value::grouped(whole),
+        };
         let said = match self.tree.str(n.name) {
-            "" => format!("Set to {}", crate::value::grouped(whole)),
-            name => format!("{name}: {}", crate::value::grouped(whole)),
+            "" => format!("Set to {shown}"),
+            name => format!("{name}: {shown}"),
         };
         self.set_value(path, value, said)
     }
@@ -2421,7 +2436,7 @@ impl<A: App> Runner<A> {
                 Some(i) if self.tree.nodes[i as usize].kind == (Kind::Field { holds: Holds::Tags }) => {
                     self.add_tag(i);
                 }
-                Some(i) if matches!(self.tree.nodes[i as usize].kind, Kind::Field { holds: Holds::Date | Holds::Time }) => {
+                Some(i) if matches!(self.tree.nodes[i as usize].kind, Kind::Field { holds: Holds::Date | Holds::Time | Holds::Color }) => {
                     self.read_when(i);
                 }
                 Some(i) => {
@@ -2443,6 +2458,7 @@ impl<A: App> Runner<A> {
         let Some(draft) = self.drafts.get(&n.id).cloned() else { return true };
         let read = match n.kind {
             Kind::Field { holds: Holds::Date } => crate::days::read_day(&draft, self.calendar.today()).map(|d| (Value::Int(d.0 as i64), d.to_string())),
+            Kind::Field { holds: Holds::Color } => crate::color::read_color(&draft).map(|c| (ledger::Field::value(&c), c.hex())),
             _ => crate::days::read_time(&draft).map(|t| (Value::UInt(t.0 as u64), t.to_string())),
         };
         let (value, shown) = match read {
@@ -2452,9 +2468,6 @@ impl<A: App> Runner<A> {
         self.drafts.remove(&n.id);
         self.carets.remove(&n.id);
         self.stale = true;
-        if shown == self.tree.str(n.text) {
-            return true;
-        }
         let said = match self.tree.str(n.name) {
             "" => format!("Set to {shown}"),
             name => format!("{name}: {shown}"),
@@ -2503,6 +2516,24 @@ impl<A: App> Runner<A> {
         self.focus = Some(crate::ui::day_id(calendar.id, to));
         self.stale = true;
         true
+    }
+
+    fn mix(&mut self, i: u32, (l, c): (u16, u16)) -> bool {
+        let n = self.tree.nodes[i as usize];
+        let (Some(path), Kind::ColorArea { h, l: was_l, c: was_c }) = (n.path, n.kind) else { return false };
+        if (l, c) == (was_l, was_c) {
+            return true;
+        }
+        let color = crate::color::Oklch { l, c, h };
+        self.set_value(path, ledger::Field::value(&color), format!("Color: {}", color.hex()))
+    }
+
+    fn mixed_at(&self, frame: &Frame, i: u32) -> Option<(u16, u16)> {
+        let (x, y) = frame.pointer?;
+        let r = frame.metrics.rect(self.tree.nodes[i as usize].area);
+        let across = ((x - r.x) / r.w.max(1.0)).clamp(0.0, 1.0);
+        let down = ((y - r.y) / r.h.max(1.0)).clamp(0.0, 1.0);
+        Some((((1.0 - down) * 1000.0).round() as u16, (across * f32::from(crate::color::CHROMA)).round() as u16))
     }
 
     fn turn_month(&mut self, i: u32, forward: bool) -> bool {
@@ -2610,8 +2641,10 @@ impl<A: App> Runner<A> {
 
     fn slide_key(&mut self, i: u32, key: Key) -> bool {
         let n = self.tree.nodes[i as usize];
-        let (Some((_, least, most)), Ok(now)) = (self.track(i), field::evaluate(self.tree.str(n.text))) else { return false };
-        let (now, page) = (now.round() as i128, ((most - least) / 10).max(1));
+        let shade = self.tree.shades.iter().find(|s| s.0 == i).map(|&(_, color, channel)| i128::from(channel.of(color)));
+        let now = shade.or_else(|| field::evaluate(self.tree.str(n.text)).ok().map(|v| v.round() as i128));
+        let (Some((_, least, most)), Some(now)) = (self.track(i), now) else { return false };
+        let page = ((most - least) / 10).max(1);
         let to = match key {
             Key::Left | Key::Down => now - 1,
             Key::Right | Key::Up => now + 1,
@@ -3021,11 +3054,11 @@ impl<A: App> Runner<A> {
                     _ => {}
                 }
             }
-            if matches!(holds, Holds::Date | Holds::Time) && chord.mods == Mods::default() {
+            if matches!(holds, Holds::Date | Holds::Time | Holds::Color) && chord.mods == Mods::default() {
                 match chord.key {
                     Key::Enter => return self.read_when(i),
-                    Key::Up => return self.step_when(i, 1),
-                    Key::Down => return self.step_when(i, -1),
+                    Key::Up if holds != Holds::Color => return self.step_when(i, 1),
+                    Key::Down if holds != Holds::Color => return self.step_when(i, -1),
                     Key::Escape if self.drafts.remove(&n.id).is_some() => {
                         self.carets.remove(&n.id);
                         self.stale = true;
@@ -3081,6 +3114,25 @@ impl<A: App> Runner<A> {
             && matches!(chord.key, Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End | Key::PageUp | Key::PageDown)
         {
             return self.day_key(i, chord.key);
+        }
+        if self.pending.is_empty()
+            && typing
+            && chord.mods == Mods::default()
+            && let Some(i) = self.focused_control()
+            && let Kind::ColorArea { l, c, .. } = self.tree.nodes[i as usize].kind
+        {
+            let (l, c) = match chord.key {
+                Key::Up => (l.saturating_add(10).min(1000), c),
+                Key::Down => (l.saturating_sub(10), c),
+                Key::PageUp => (l.saturating_add(100).min(1000), c),
+                Key::PageDown => (l.saturating_sub(100), c),
+                Key::Right => (l, c.saturating_add(4).min(crate::color::CHROMA)),
+                Key::Left => (l, c.saturating_sub(4)),
+                _ => (u16::MAX, 0),
+            };
+            if l != u16::MAX {
+                return self.mix(i, (l, c));
+            }
         }
         if self.pending.is_empty()
             && typing
@@ -3255,7 +3307,7 @@ impl<A: App> Runner<A> {
 
     fn splice(&mut self, i: u32, range: std::ops::Range<usize>, mut text: String, mut caret: usize, kind: field::Kind) -> bool {
         let n = self.tree.nodes[i as usize];
-        if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags | Holds::Date | Holds::Time }) {
+        if matches!(n.kind, Kind::Field { holds: Holds::Number | Holds::Tags | Holds::Date | Holds::Time | Holds::Color }) {
             let mut draft = self.tree.str(n.text).to_string();
             draft.replace_range(range, &text);
             self.drafts.insert(n.id, draft);
@@ -3860,6 +3912,14 @@ impl<A: App> Runner<A> {
                     reading.head = head;
                     return moved;
                 }
+                if let Some((id, was)) = self.mixing
+                    && let Some(i) = self.tree.find(id)
+                {
+                    let now = self.mixed_at(frame, i).unwrap_or(was);
+                    self.mixing = Some((id, now));
+                    self.stale |= now != was;
+                    return now != was;
+                }
                 if let Some((id, was)) = self.sliding
                     && let Some(i) = self.tree.find(id)
                 {
@@ -3937,6 +3997,14 @@ impl<A: App> Runner<A> {
                     self.stale = true;
                     return true;
                 }
+                if matches!(n.kind, Kind::ColorArea { .. })
+                    && let Some(now) = self.mixed_at(frame, i)
+                {
+                    self.focus_on(n.id, false);
+                    self.mixing = Some((n.id, now));
+                    self.stale = true;
+                    return true;
+                }
                 if matches!(n.kind, Kind::Field { .. }) && n.path.is_some() {
                     self.reading = None;
                     let at = self.caret_at(frame.text, frame.metrics, i, frame.pointer.unwrap_or_default());
@@ -3957,6 +4025,13 @@ impl<A: App> Runner<A> {
             }
             Input::Release { button: Button::Left } => {
                 self.drag = None;
+                if let Some((id, now)) = self.mixing.take() {
+                    self.stale = true;
+                    if let Some(i) = self.tree.find(id) {
+                        self.mix(i, now);
+                    }
+                    return true;
+                }
                 if let Some((id, now)) = self.sliding.take() {
                     self.stale = true;
                     match self.tree.find(id) {

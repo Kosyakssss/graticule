@@ -2,7 +2,7 @@ use graticule_macros::{Choice, Commands, Facts, Form};
 use kernel::ink::{Appearance, contrast};
 use kernel::layout::{GAP, MARGIN};
 use kernel::metrics::{FONT_POINTS, LINE};
-use kernel::{App, Available, Cx, Day, Failure, Ink, Message, Path, States, Time, Ui};
+use kernel::{App, Available, Channel, Cx, Day, Failure, Ink, Message, Oklch, Path, States, Time, Ui};
 use ledger::{Edit, Key, List, Outcome, Selection, Text};
 
 use crate::style::{self, Mark, Mix, Nudge, Reach, Reaches, Side, Weight};
@@ -188,6 +188,8 @@ pub struct Catalog {
     opens: Time,
     #[session]
     zone: Text,
+    #[session]
+    accent: Oklch,
 }
 
 const CITIES: [&str; 12] = ["Amsterdam", "Athens", "Berlin", "Lisbon", "London", "Madrid", "Oslo", "Paris", "Prague", "Rome", "Vienna", "Warsaw"];
@@ -329,10 +331,13 @@ pub enum Component {
     DatePicker,
     TimeField,
     TimeZone,
+    ColorField,
+    ColorArea,
+    ColorPicker,
 }
 
 impl Component {
-    const ALL: [Component; 65] = [
+    const ALL: [Component; 68] = [
         Component::Page,
         Component::Row,
         Component::Columns,
@@ -398,6 +403,9 @@ impl Component {
         Component::DatePicker,
         Component::TimeField,
         Component::TimeZone,
+        Component::ColorField,
+        Component::ColorArea,
+        Component::ColorPicker,
     ];
 
     fn name(self) -> &'static str {
@@ -467,6 +475,9 @@ impl Component {
             Component::DatePicker => "Date picker",
             Component::TimeField => "Time field",
             Component::TimeZone => "Time zone",
+            Component::ColorField => "Color field",
+            Component::ColorArea => "Color area and slider",
+            Component::ColorPicker => "Color picker",
         }
     }
 
@@ -537,6 +548,9 @@ impl Component {
             Component::DatePicker => include_str!("../../../docs/components/date-picker.md"),
             Component::TimeField => include_str!("../../../docs/components/time-field.md"),
             Component::TimeZone => include_str!("../../../docs/components/time-zone.md"),
+            Component::ColorField => include_str!("../../../docs/components/color-field.md"),
+            Component::ColorArea => include_str!("../../../docs/components/color-area.md"),
+            Component::ColorPicker => include_str!("../../../docs/components/color-picker.md"),
         }
     }
 
@@ -660,6 +674,7 @@ impl Default for Catalog {
             due: Day::new(2026, 6, 3).unwrap_or_default(),
             opens: Time::new(9, 0).unwrap_or_default(),
             zone: Text::from("Europe/Lisbon"),
+            accent: Oklch::new(0.63, 0.19, 290.0),
         }
     }
 }
@@ -1096,6 +1111,14 @@ impl Catalog {
             Component::DatePicker => ui.date_picker("Due", Catalog::due),
             Component::TimeField => ui.labelled("Opens at", |ui| ui.time_field(Catalog::opens)),
             Component::TimeZone => ui.time_zone(Catalog::zone, Message::from("Time zone")),
+            Component::ColorField => ui.labelled("Accent", |ui| ui.color_field(Catalog::accent)),
+            Component::ColorArea => {
+                ui.color_area(Catalog::accent);
+                ui.color_slider(Catalog::accent, Channel::Lightness);
+                ui.color_slider(Catalog::accent, Channel::Chroma);
+                ui.color_slider(Catalog::accent, Channel::Hue);
+            }
+            Component::ColorPicker => ui.color_picker(Catalog::accent),
             Component::Swatch => ui.row(|ui| {
                 ui.swatch(Ink::Link);
                 ui.swatch(Ink::Danger);

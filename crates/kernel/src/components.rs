@@ -393,7 +393,10 @@ fn link(p: &mut Painter, n: &Node, label: &str, look: Look, ink: Color) {
 
 /// How far in from a field's left edge its text starts, in cells: past the magnifying glass of a search field.
 pub fn field_inset(holds: Holds) -> f32 {
-    if holds == Holds::Search { 2.5 } else { 0.5 }
+    match holds {
+        Holds::Search | Holds::Color => 2.5,
+        _ => 0.5,
+    }
 }
 
 /// How many cells wide a field's text wraps at.
@@ -416,6 +419,14 @@ fn field(p: &mut Painter, n: &Node, holds: Holds, value: &str, placeholder: &str
     if holds == Holds::Search {
         let glass = Rect::new(r.x + p.m.cell_w * 0.25, r.y + p.m.cell_h * 0.15, p.m.cell_w * 2.0, p.m.cell_h * 0.7);
         draw_picture(p, glass, &crate::picture::icons::SEARCH, Some(theme.muted));
+    }
+    if holds == Holds::Color {
+        let side = (p.m.cell_h * 0.6).round();
+        let swatch = Rect::new((r.x + p.m.cell_w * 0.5).round(), (r.y + (p.m.cell_h - side) / 2.0).round(), (p.m.cell_w * 1.5).round(), side);
+        match crate::color::read_color(value) {
+            Ok(color) => p.fill(swatch, color.color()),
+            Err(_) => border(p, swatch, p.style.line(p.m), theme.faint),
+        }
     }
     let bar = (p.m.scale * 2.0).round().max(1.0);
     let caret = crate::field::boundary(value, look.caret as usize);
@@ -567,6 +578,45 @@ fn slider(p: &mut Painter, n: &Node, value: &str, at: u16, label: u8, look: Look
     knob(p, n, x, cell, look);
     let mono = p.m.mono();
     p.text(value, mono, (cell.right() + w, cell.y), None, theme.muted);
+}
+
+fn shaded(p: &mut Painter, n: &Node, value: &str, (at, label): (u16, u8), (base, channel): (crate::color::Oklch, crate::color::Channel), look: Look) {
+    let cell = p.rect(slider_track(n, label));
+    let (theme, w) = (p.theme, p.m.cell_w);
+    let band = Rect::new(cell.x + w / 2.0, (cell.y + p.m.cell_h * 0.3).round(), cell.w - w, (p.m.cell_h * 0.4).round());
+    let steps = (band.w / w).ceil().max(1.0) as usize * 2;
+    for k in 0..steps {
+        let (x0, x1) = ((band.x + band.w * k as f32 / steps as f32).floor(), (band.x + band.w * (k + 1) as f32 / steps as f32).floor());
+        let color = channel.at(base, (k as f32 + 0.5) / steps as f32).color();
+        p.fill(Rect::new(x0, band.y, x1 - x0, band.h), color);
+    }
+    knob(p, n, knob_x(p, cell, at), cell, look);
+    let mono = p.m.mono();
+    p.text(value, mono, (cell.right() + w, cell.y), None, theme.muted);
+}
+
+fn color_area(p: &mut Painter, n: &Node, now: crate::color::Oklch, look: Look) {
+    let r = p.rect(n.area);
+    let (theme, t) = (p.theme, p.style.line(p.m));
+    let (across, down) = (n.area.cols as usize * 2, n.area.rows as usize * 2);
+    for y in 0..down {
+        let (y0, y1) = ((r.y + r.h * y as f32 / down as f32).floor(), (r.y + r.h * (y + 1) as f32 / down as f32).floor());
+        let l = 1.0 - (y as f32 + 0.5) / down as f32;
+        for x in 0..across {
+            let (x0, x1) = ((r.x + r.w * x as f32 / across as f32).floor(), (r.x + r.w * (x + 1) as f32 / across as f32).floor());
+            let c = (x as f32 + 0.5) / across as f32 * f32::from(crate::color::CHROMA) / 1000.0;
+            p.fill(Rect::new(x0, y0, x1 - x0, y1 - y0), crate::ink::oklch(l, c, f32::from(now.h) / 10.0));
+        }
+    }
+    let side = (p.m.cell_h * 0.5).round();
+    let x = r.x + r.w * f32::from(now.c) / f32::from(crate::color::CHROMA);
+    let y = r.y + r.h * (1.0 - f32::from(now.l) / 1000.0);
+    let mark = Rect::new((x - side / 2.0).round(), (y - side / 2.0).round(), side, side);
+    border(p, mark, t * 2.0, theme.bg);
+    border(p, Rect::new(mark.x - t, mark.y - t, mark.w + t * 2.0, mark.h + t * 2.0), t, theme.ink);
+    if look.focused {
+        border(p, r, t * 2.0, theme.ink);
+    }
 }
 
 fn knob(p: &mut Painter, n: &Node, x: f32, cell: Rect, look: Look) {
@@ -892,7 +942,11 @@ pub fn paint<C>(p: &mut Painter, tree: &Tree<C>, i: u32, look: Look, layer: Laye
             pick(p, &n, text, CHECK, style, ink, look);
         }
         (Layer::Over, Kind::Crumbs) => crumbs(p, tree, &n),
-        (Layer::Over, Kind::Slider { at, label }) => slider(p, &n, text, at, label, look),
+        (Layer::Over, Kind::Slider { at, label }) => match tree.shades.iter().find(|s| s.0 == i) {
+            Some(&(_, base, channel)) => shaded(p, &n, text, (at, label), (base, channel), look),
+            None => slider(p, &n, text, at, label, look),
+        },
+        (Layer::Over, Kind::ColorArea { l, c, h }) => color_area(p, &n, crate::color::Oklch { l, c, h }, look),
         (Layer::Over, Kind::Range { label }) => range(p, tree, &n, text, label),
         (Layer::Over, Kind::Thumb { at, .. }) => thumb(p, &n, at, look),
         (Layer::Over, Kind::Cycle { .. }) => cycle(p, &n, text, look),

@@ -15,6 +15,8 @@ pub const CALLOUT: i32 = 4;
 const WEEK: i32 = 7;
 const DAY: i32 = 4;
 const CALENDAR: i32 = WEEK * DAY - 1;
+const AREA_COLS: i32 = 24;
+const AREA_ROWS: i32 = 8;
 pub const SWITCH: i32 = CHECK;
 pub const CRUMB: i32 = 3;
 pub const CODE: i32 = 4;
@@ -223,6 +225,8 @@ impl<'t> Layout<'t> {
             Kind::Field { holds: Holds::Number } => (10, 16),
             Kind::Field { holds: Holds::Date } => (12, 12),
             Kind::Field { holds: Holds::Time } => (7, 7),
+            Kind::Field { holds: Holds::Color } => (12, 12),
+            Kind::ColorArea { .. } => (AREA_COLS, AREA_COLS),
             Kind::Calendar { .. } => (CALENDAR, CALENDAR),
             Kind::Day { .. } | Kind::Turn { .. } => (DAY - 1, DAY - 1),
             Kind::Field { holds: Holds::Code { length } } => {
@@ -449,7 +453,7 @@ impl<'t> Layout<'t> {
             | Kind::Choice { .. }
             | Kind::Entry
             | Kind::Link
-            | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline | Holds::Number | Holds::Code { .. } | Holds::Tags | Holds::Date | Holds::Time }
+            | Kind::Field { holds: Holds::Line | Holds::Search | Holds::Inline | Holds::Number | Holds::Code { .. } | Holds::Tags | Holds::Date | Holds::Time | Holds::Color }
             | Kind::Slider { .. }
             | Kind::Range { .. }
             | Kind::Thumb { .. }
@@ -467,6 +471,7 @@ impl<'t> Layout<'t> {
             Kind::Picture { rows, .. } => rows,
             Kind::Rule => 2,
             Kind::Calendar { .. } => 2 + 6,
+            Kind::ColorArea { .. } => AREA_ROWS,
             Kind::Keys | Kind::Gauge { .. } | Kind::Tag | Kind::Chip | Kind::Avatar => 1,
             Kind::Placeholder { rows } => rows.max(1),
             Kind::Callout { .. } | Kind::Card => {
@@ -829,8 +834,9 @@ impl<'t> Layout<'t> {
                     | Kind::IconButton { .. }
                     | Kind::Group
                     | Kind::Opener { .. }
-                    | Kind::Field { holds: Holds::Inline | Holds::Number | Holds::Code { .. } | Holds::Date | Holds::Time }
+                    | Kind::Field { holds: Holds::Inline | Holds::Number | Holds::Code { .. } | Holds::Date | Holds::Time | Holds::Color }
                     | Kind::Calendar { .. }
+                    | Kind::ColorArea { .. }
             ) {
                 self.size(tree, c).1.min(area.cols)
             } else {

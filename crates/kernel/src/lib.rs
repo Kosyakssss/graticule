@@ -4,6 +4,7 @@ pub mod access;
 pub mod app;
 pub mod builtin;
 pub mod chars;
+pub mod color;
 pub mod command;
 pub mod components;
 pub mod days;
@@ -39,6 +40,7 @@ pub mod value;
 
 pub use accesskit;
 pub use app::{App, Cx, Effect, Failure, Jobs, Moment, Path, Reply, Said, States};
+pub use color::{Channel, Oklch};
 pub use command::{Arg, Argument, Available, Commands, Entry, Form, Subject, no_if, read_arg};
 pub use days::{Day, Time};
 pub use form::{Control, Setting, Settings};

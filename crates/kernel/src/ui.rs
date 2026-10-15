@@ -6,6 +6,7 @@ use std::panic::Location;
 use ledger::{FactPath, Field, Key, List, Record, Selection, Text};
 
 use crate::app::{Moment, Path};
+use crate::color::{CHROMA, Channel, HUE, Oklch};
 use crate::days::{Day, Time};
 use crate::form::{Control, Item, Setting, Settings};
 use crate::ink::Ink;
@@ -1034,6 +1035,57 @@ impl<'a, C, S> Ui<'a, C, S> {
         let mut ui = self.child::<S>(row, subject);
         ui.date_field(path);
         ui.popover("Choose…", |ui| ui.calendar(label, path));
+    }
+
+    /// A color at `path`, after a swatch of it, typed as hex (`#3366cc`) or OKLCH (`oklch(0.63 0.26 290)`) and shown as hex. What is typed is read when Return is pressed or another field is reached, and the color is set by one `Edit`; Escape puts back what was there.
+    #[track_caller]
+    pub fn color_field<F: Field>(&mut self, path: FactPath<F, Oklch>) {
+        let Some(color) = self.facts::<F>().and_then(|f| path.get(f)).copied() else { return };
+        self.when_field(path.erased(), Holds::Color, &color.hex(), Location::caller());
+    }
+
+    /// One part of the color at `path`, its lightness, chroma or hue, as a slider whose track shows the colors it sets. It is a slider like any other, over that part's whole numbers.
+    #[track_caller]
+    pub fn color_slider<F: Field>(&mut self, path: FactPath<F, Oklch>, channel: Channel) {
+        let Some(color) = self.facts::<F>().and_then(|f| path.get(f)).copied() else { return };
+        let before = self.tree.nodes.len();
+        match channel {
+            Channel::Lightness => self.slider(path.then(Oklch::l), 0..=1000),
+            Channel::Chroma => self.slider(path.then(Oklch::c), 0..=CHROMA as i64),
+            Channel::Hue => self.slider(path.then(Oklch::h), 0..=HUE as i64 - 1),
+        }
+        if let Some(i) = (before..self.tree.nodes.len()).find(|&i| matches!(self.tree.nodes[i].kind, Kind::Slider { .. })) {
+            let r = self.tree.put(channel.name());
+            self.tree.nodes[i].name = r;
+            let r = self.tree.put(&channel.show(i128::from(channel.of(color))));
+            self.tree.nodes[i].text = r;
+            self.tree.shades.push((i as u32, color, channel));
+        }
+    }
+
+    /// The lightness and chroma of the color at `path`, at its hue, as an area to pick them from: chroma grows to the right and lightness upward. Dragging shows where the mark would land and sets both when it is let go, by one `Edit`; the arrows step them.
+    #[track_caller]
+    pub fn color_area<F: Field>(&mut self, path: FactPath<F, Oklch>) {
+        let Some(color) = self.facts::<F>().and_then(|f| path.get(f)).copied() else { return };
+        let erased = path.erased();
+        let i = self.tree.add(self.parent, Kind::ColorArea { l: color.l, c: color.c, h: color.h }, Some(Id::ROOT.mix(erased.hash64()).mix(10)), Location::caller());
+        let r = self.tree.put("Lightness and chroma");
+        let n = &mut self.tree.nodes[i as usize];
+        (n.subject, n.path, n.name) = (self.subject, Some(erased), r);
+    }
+
+    /// A color field for the color at `path` with a button after it that opens an area of lightness and chroma and a slider of hues under it.
+    #[track_caller]
+    pub fn color_picker<F: Field>(&mut self, path: FactPath<F, Oklch>) {
+        let (at, erased) = (Location::caller(), path.erased());
+        let row = self.tree.add(self.parent, Kind::Row, Some(Id::ROOT.mix(erased.hash64()).mix(11)), at);
+        let subject = self.subject;
+        let mut ui = self.child::<S>(row, subject);
+        ui.color_field(path);
+        ui.popover("Choose…", |ui| {
+            ui.color_area(path);
+            ui.color_slider(path, Channel::Hue);
+        });
     }
 
     fn when_field(&mut self, path: ledger::ErasedPath, holds: Holds, now: &str, at: &'static Location<'static>) {

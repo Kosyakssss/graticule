@@ -26,13 +26,13 @@ accesskit_winit = "0.34.1"
 notify = "8.2.0"
 jiff = "0.2.38"
 arc-swap = "1.7.1"
+graticule-macros.workspace = true
 
 [features]
 profile = ["profiling/profile-with-tracy"]
 
 [dev-dependencies]
 proptest.workspace = true
-graticule-macros.workspace = true
 allocation-counter = "0.8.1"
 
 [build-dependencies]

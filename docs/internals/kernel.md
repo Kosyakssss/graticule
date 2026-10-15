@@ -362,6 +362,8 @@ A calendar shows the month of its chosen day until it is turned, by its buttons 
 
 Date and time fields keep a draft as number fields do (§11.4), read when Return is pressed or the field is left; the arrows read the draft, step it and set it at once.
 
+A color is a struct of facts, not a value of its own, so a color slider is an ordinary slider on `path.then(Oklch::h)` and needs no code of its own in the runner. What it adds is paint: the tree's `shades` table names the sliders that set a part of a color, with the color and the part, and the slider's track is drawn from it. The same table gives the slider's keys the exact whole number, since its shown text is rounded for people. A color area is a control of its own because it sets two parts at once; while it is dragged the runner keeps where the mark would land (`mixing`), the way it keeps a slider's, and copies it into the area before painting, so the facts change once, when it is let go.
+
 A menu button's entries are its children, laid out with no area, as an overflow's hidden ones are; pressing it opens them in the drawn menu (§7.3) with their keys and reasons, and Tab passes over them.
 
 ## 12. Effects

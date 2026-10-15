@@ -18,6 +18,7 @@ fn role(kind: Kind) -> Role {
         Kind::Calendar { .. } => Role::Grid,
         Kind::Day { .. } => Role::GridCell,
         Kind::Turn { .. } => Role::Button,
+        Kind::ColorArea { .. } => Role::ColorWell,
         Kind::Slider { .. } | Kind::Thumb { .. } => Role::Slider,
         Kind::Range { .. } => Role::Group,
         Kind::Cycle { .. } | Kind::Browse | Kind::Chip => Role::Button,
@@ -96,6 +97,10 @@ pub fn update<C>(tree: &Tree<C>, m: Metrics, title: &str, focus: Option<Id>) -> 
                 node.set_label(name);
                 node.set_value(text);
                 node.set_expanded(open);
+            }
+            Kind::ColorArea { l, c, h } => {
+                node.set_label(name);
+                node.set_value(crate::color::Oklch { l, c, h }.hex());
             }
             Kind::Day { on, .. } => {
                 node.set_label(name);

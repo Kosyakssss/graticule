@@ -124,6 +124,8 @@ Some choices now open. A select opens its options right under it, in the page, a
 
 Days and times have components now. A calendar shows a month with the chosen day filled and today underlined; the arrows move between days and the buttons beside the month turn it. A date field takes a date or plain words, such as tomorrow, next tue, in 3 days or jun 3, and a time field takes 15:30, 3pm or noon; in both, the arrows step the value. A date picker is a date field with a button that opens a calendar beside it. A time zone field suggests the world's zones as you type their names.
 
+Colors have components too. A color is kept as lightness, chroma and hue, the way the eye sees it, so that a lighter version of a color looks just as vivid. A color field shows a small swatch and takes a hex code such as #3366cc or an OKLCH value; sliders set each part and show along their track the colors they would give; an area sets lightness and chroma together by dragging or the arrows. A color picker is a color field with a button that opens the area and a hue slider.
+
 Apps can take files dragged in from elsewhere on the computer: while they hover over the window, the status line says what dropping them will do ("Import a file"), or why it can't. A list can let you drag its rows into your own order: a line shows where the row will land, the status line says the move, Escape puts it back, and the move undoes in one step. Dragging a file out of a Graticule app onto the desktop isn't possible yet, because the windowing library underneath can't start that kind of drag.
 
 ## How speed is measured

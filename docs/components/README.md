@@ -87,14 +87,9 @@ Several names on either side are the same component. They are merged into one ro
 | Date picker | DatePicker | DatePicker | anchored: a date field and a calendar in a popover; ranges and shortcuts are not done |
 | Time field | TimeField | TimePicker | a time of day (`3pm`), stepped by the hour or minute the caret is in |
 | Time zone | | TimezoneSelect | a combo box over the zones' names |
-
-## Wave 5: color
-
-| Graticule | HeroUI | Blueprint | Notes |
-|---|---|---|---|
-| Color field | ColorField, ColorInputGroup | | OKLCH and hex |
-| Color area and slider | ColorArea, ColorSlider | | drawn on a canvas inside the box |
-| Color picker | ColorPicker, ColorSwatchPicker | | anchored |
+| Color field | ColorField, ColorInputGroup | | a swatch and the color typed as hex or OKLCH, shown as hex |
+| Color area and slider | ColorArea, ColorSlider | | lightness and chroma as an area at the color's hue, each part as a slider over its colors |
+| Color picker | ColorPicker | | anchored: a color field and an area and hue slider in a popover; swatch sets are not done |
 
 ## Wave 6: beyond both kits
 

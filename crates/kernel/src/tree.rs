@@ -106,6 +106,8 @@ pub enum Holds {
     Date,
     /// A time of day.
     Time,
+    /// A color, typed as hex or OKLCH after a swatch of it.
+    Color,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -174,6 +176,7 @@ pub enum Kind {
     Calendar { month: i32 },
     Day { on: bool, today: bool, outside: bool },
     Turn { forward: bool },
+    ColorArea { l: u16, c: u16, h: u16 },
 }
 
 /// What an anchored overlay hangs from: the node that opened it, or the cell the pointer was on.
@@ -216,6 +219,7 @@ impl Kind {
                 | Kind::Confirm { open: false }
                 | Kind::Day { .. }
                 | Kind::Turn { .. }
+                | Kind::ColorArea { .. }
         )
     }
 
@@ -263,6 +267,8 @@ impl Kind {
             Kind::Calendar { .. } => "calendar",
             Kind::Day { .. } => "day",
             Kind::Turn { .. } => "button",
+            Kind::Field { holds: Holds::Color } => "color field",
+            Kind::ColorArea { .. } => "color area",
             Kind::Field { holds: Holds::Tags } => "tag field",
             Kind::Field { holds: Holds::Code { .. } } => "code field",
             Kind::Field { .. } => "text field",
@@ -463,6 +469,8 @@ pub struct Tree<C> {
     pub focus: Option<Id>,
     /// The month each calendar that was turned shows, by its id, counted as `Day::month_index` counts; the others show the month of their chosen day.
     pub months: HashMap<Id, i32>,
+    /// The sliders that set a part of a color, each drawn with the colors it sets.
+    pub shades: Vec<(u32, crate::color::Oklch, crate::color::Channel)>,
 }
 
 impl<C> Default for Tree<C> {
@@ -484,6 +492,7 @@ impl<C> Default for Tree<C> {
             opened: None,
             focus: None,
             months: HashMap::new(),
+            shades: Vec::new(),
         }
     }
 }
@@ -498,6 +507,7 @@ impl<C> Tree<C> {
         self.files.clear();
         self.moves.clear();
         self.numbers.clear();
+        self.shades.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;

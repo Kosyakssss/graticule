@@ -102,7 +102,7 @@ Several names on either side are the same component. They are merged into one ro
 | Chart | | | wave 6: lines, bars and candles on a canvas with scales on whole cells, sized in rows; sparklines in table cells; readouts under the pointer are not done |
 | Diff view | | | wave 6: lines and the words inside them, worked out off the main thread, unchanged stretches folded, only the lines that show built; side by side and stepping between changes are not done |
 | Node graph | | | wave 6: boxes holding what the app gives, set out in layers by a layout worked out off the main thread, wires in tracks of their own; listed when narrow; keys along wires, dragging and drawing wires are not done |
-| Split panes | | | wave 6: panes side by side with dividers dragged or moved by the arrows, the widths kept with the window, stacked when narrow; docking and layouts saved as files are not done |
+| Split panes | | | wave 6: panes side by side with dividers dragged or moved by the arrows, the widths kept with the window, stacked when narrow; panes moved left and right, closed and opened again, and the layout saved as a file and read back; moving a pane into another split is not done |
 
 ## Wave 6: beyond both kits
 
@@ -110,7 +110,6 @@ These are the components of spec §6.1 that professional apps need and that neit
 
 | Graticule | HeroUI | Blueprint | Notes |
 |---|---|---|---|
-| Docking | | | panes that move between places; layouts saved as files |
 | Find | | | find and replace in a document, with Galley (§7.4) |
 | Code and text view | | | Galley (§7.3, §13.3) |
 

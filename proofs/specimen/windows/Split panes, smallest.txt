@@ -1,6 +1,6 @@
 window		0 0 42 22	
   page	Split panes	0 0 42 7	
-    list		2 3 38 3	22 items
+    list		2 3 38 3	23 items
       list item		2 3 36 3	
         text	Panes side by side with a divider between each two, which the user moves to give one pane more room and the other less. A mail app's folders, messages and the message open; a file manager's places and files.	2 3 36 3	
   alert		2 7 38 1	

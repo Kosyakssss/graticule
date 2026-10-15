@@ -38,10 +38,16 @@ pub enum Builtin {
     Log,
     ChangedSettings,
     AllSettings,
+    MovePaneLeft,
+    MovePaneRight,
+    ClosePane,
+    OpenPanes,
+    SaveLayout,
+    UseLayout,
 }
 
 impl Builtin {
-    pub const ALL: [Builtin; 32] = [
+    pub const ALL: [Builtin; 38] = [
         Builtin::Palette,
         Builtin::Undo,
         Builtin::Redo,
@@ -74,6 +80,12 @@ impl Builtin {
         Builtin::Log,
         Builtin::ChangedSettings,
         Builtin::AllSettings,
+        Builtin::MovePaneLeft,
+        Builtin::MovePaneRight,
+        Builtin::ClosePane,
+        Builtin::OpenPanes,
+        Builtin::SaveLayout,
+        Builtin::UseLayout,
     ];
 
     pub fn name(self) -> &'static str {
@@ -110,6 +122,12 @@ impl Builtin {
             Builtin::Log => "log",
             Builtin::ChangedSettings => "changed-settings",
             Builtin::AllSettings => "all-settings",
+            Builtin::MovePaneLeft => "move-pane-left",
+            Builtin::MovePaneRight => "move-pane-right",
+            Builtin::ClosePane => "close-pane",
+            Builtin::OpenPanes => "open-panes",
+            Builtin::SaveLayout => "save-layout",
+            Builtin::UseLayout => "use-layout",
         }
     }
 
@@ -147,6 +165,12 @@ impl Builtin {
             Builtin::Log => "Show what was done",
             Builtin::ChangedSettings => "Show only the changed settings",
             Builtin::AllSettings => "Show every setting",
+            Builtin::MovePaneLeft => "Move the pane left",
+            Builtin::MovePaneRight => "Move the pane right",
+            Builtin::ClosePane => "Close the pane",
+            Builtin::OpenPanes => "Open the closed panes",
+            Builtin::SaveLayout => "Save the layout",
+            Builtin::UseLayout => "Use the saved layout",
         }
     }
 
@@ -237,7 +261,13 @@ impl Builtin {
             | Builtin::WhatsThis
             | Builtin::Log
             | Builtin::ChangedSettings
-            | Builtin::AllSettings => &[],
+            | Builtin::AllSettings
+            | Builtin::MovePaneLeft
+            | Builtin::MovePaneRight
+            | Builtin::ClosePane
+            | Builtin::OpenPanes
+            | Builtin::SaveLayout
+            | Builtin::UseLayout => &[],
         }
     }
 

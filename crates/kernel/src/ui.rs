@@ -128,6 +128,28 @@ impl<C: 'static, S, T: 'static> Listed<'_, '_, C, S, T> {
     }
 }
 
+/// The panes of a `split` being described, in the order the app gives them; the user can move and close them.
+pub struct Panes<'p, C, S> {
+    panes: Vec<Pane<'p, C, S>>,
+}
+
+type Describe<'p, C, S> = Box<dyn FnOnce(&mut Ui<'_, C, S>) + 'p>;
+
+struct Pane<'p, C, S> {
+    name: Message,
+    width: Span,
+    at: &'static Location<'static>,
+    f: Describe<'p, C, S>,
+}
+
+impl<'p, C, S> Panes<'p, C, S> {
+    /// One pane, named for its divider, the screen reader and the commands that move it, starting `width` columns wide: `30.min(20)` or `Fill`. The width the user gives it, where they move it and whether they closed it are kept with the window.
+    #[track_caller]
+    pub fn pane(&mut self, name: impl Into<Message>, width: impl Into<Span>, f: impl FnOnce(&mut Ui<'_, C, S>) + 'p) {
+        self.panes.push(Pane { name: name.into(), width: width.into(), at: Location::caller(), f: Box::new(f) });
+    }
+}
+
 /// A picker being described, to say what choosing one of its items does.
 pub struct Picked<'u, 'a, C, S, T> {
     ui: &'u mut Ui<'a, C, S>,
@@ -287,36 +309,37 @@ impl<'a, C, S> Ui<'a, C, S> {
 
     /// Panes side by side, with a divider between each two that the user drags, or moves with the arrows once it is reached, to make one wider and the other narrower. A split takes the rows the page has to spare, and in a window too narrow for its panes it stacks them.
     #[track_caller]
-    pub fn split(&mut self, f: impl FnOnce(&mut Ui<'_, C, S>)) {
-        let i = self.add(Kind::Split, Location::caller());
+    pub fn split<'p>(&mut self, f: impl FnOnce(&mut Panes<'p, C, S>)) {
+        let at = Location::caller();
+        let i = self.add(Kind::Split, at);
         self.tree.nodes[i as usize].span = crate::tree::Fill;
-        let subject = self.subject;
-        f(&mut self.child(i, subject));
-    }
-
-    /// One pane of a `split`, named for its divider and the screen reader, starting `width` columns wide: `30.min(20)` or `Fill`. The width the user gives it is kept with the window.
-    #[track_caller]
-    pub fn pane(&mut self, name: impl Into<Message>, width: impl Into<Span>, f: impl FnOnce(&mut Ui<'_, C, S>)) {
-        let (name, at) = (name.into(), Location::caller());
-        let parent = self.parent;
-        let id = self.tree.nodes[parent as usize].id.named(name.as_str());
-        let before = self.tree.nodes[parent as usize].last;
-        if self.tree.nodes[parent as usize].kind == Kind::Split && before != NONE && self.tree.nodes[before as usize].kind == Kind::Pane {
-            let d = self.tree.add(parent, Kind::Divider, Some(id.mix(0xd1)), at);
-            let between = format!("Between “{}” and “{}”", self.tree.str(self.tree.nodes[before as usize].name), name.as_str());
-            let r = self.tree.put(&between);
-            self.tree.nodes[d as usize].name = r;
+        let mut panes = Panes { panes: Vec::new() };
+        f(&mut panes);
+        let split = self.tree.nodes[i as usize].id;
+        let dock = self.tree.docks.get(&split).cloned().unwrap_or_default();
+        let mut panes: Vec<(Id, Pane<'p, C, S>)> = panes.panes.into_iter().map(|p| (split.named(p.name.as_str()), p)).collect();
+        panes.sort_by_key(|(id, _)| dock.order.iter().position(|o| o == id).unwrap_or(usize::MAX));
+        self.tree.declared.push((split, panes.iter().map(|(id, p)| (*id, p.name.as_str().to_string())).collect()));
+        let every = panes.iter().all(|(id, _)| dock.closed.contains(id));
+        let mut before: Option<String> = None;
+        for (id, pane) in panes.into_iter().filter(|(id, _)| every || !dock.closed.contains(id)) {
+            if let Some(before) = before.take() {
+                let d = self.tree.add(i, Kind::Divider, Some(id.mix(0xd1)), pane.at);
+                let between = format!("Between “{before}” and “{}”", pane.name.as_str());
+                let r = self.tree.put(&between);
+                self.tree.nodes[d as usize].name = r;
+            }
+            let p = self.tree.add(i, Kind::Pane, Some(id), pane.at);
+            self.tree.nodes[p as usize].span = match self.tree.resized.get(&id) {
+                Some(&w) => crate::tree::cols(w).min(pane.width.min.min(w)),
+                None => pane.width,
+            };
+            let r = self.tree.put(pane.name.as_str());
+            self.tree.nodes[p as usize].name = r;
+            let subject = self.subject;
+            (pane.f)(&mut self.child(p, subject));
+            before = Some(pane.name.as_str().to_string());
         }
-        let i = self.tree.add(parent, Kind::Pane, Some(id), at);
-        let span: Span = width.into();
-        self.tree.nodes[i as usize].span = match self.tree.resized.get(&id) {
-            Some(&w) => crate::tree::cols(w).min(span.min.min(w)),
-            None => span,
-        };
-        let r = self.tree.put(name.as_str());
-        self.tree.nodes[i as usize].name = r;
-        let subject = self.subject;
-        f(&mut self.child(i, subject));
     }
 
     /// One column of `columns`, `width` columns wide: `28.min(20)` or `Fill.min(40)`.

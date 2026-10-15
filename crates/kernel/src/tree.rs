@@ -550,6 +550,10 @@ pub struct Tree<C> {
     pub orders: Vec<std::sync::Arc<crate::table::Ranks>>,
     /// The widths of the columns the user has resized, by the id of each column's head.
     pub resized: HashMap<Id, i32>,
+    /// How the user arranged each split's panes, by the split's id.
+    pub docks: HashMap<Id, Dock>,
+    /// Every pane each split was given this build, in the user's order, open or closed, by the split's id: each pane's id and name.
+    pub declared: Vec<(Id, Vec<(Id, String)>)>,
     /// Where each picker's highlight is, by the picker's id.
     pub picks: HashMap<Id, Picking>,
     /// The letters a picker's query matched in its rows' text, as byte ranges, by the text's node.
@@ -574,6 +578,13 @@ pub(crate) struct Graphed {
     pub node: u32,
     pub shape: std::sync::Arc<crate::graph::Shape>,
     pub places: Vec<Vec<Area>>,
+}
+
+/// How the user arranged a split's panes: their order, left to right, and the ones they closed, each by the pane's id.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Dock {
+    pub order: Vec<Id>,
+    pub closed: Vec<Id>,
 }
 
 /// A time axis's ruler: how its time is counted, what it shows, where the playhead is and the facts it sets.
@@ -629,6 +640,8 @@ impl<C> Default for Tree<C> {
             images: Vec::new(),
             orders: Vec::new(),
             resized: HashMap::new(),
+            docks: HashMap::new(),
+            declared: Vec::new(),
             picks: HashMap::new(),
             marks: Vec::new(),
             rulers: Vec::new(),
@@ -660,6 +673,7 @@ impl<C> Tree<C> {
         self.scales.clear();
         self.sparks.clear();
         self.graphs.clear();
+        self.declared.clear();
         self.counts.clear();
         self.index.clear();
         self.changes = None;

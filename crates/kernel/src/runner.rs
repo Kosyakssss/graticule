@@ -243,6 +243,7 @@ pub struct Runner<A: App> {
     mixing: Option<(Id, (u16, u16))>,
     resizing: Option<Resizing>,
     resized: HashMap<Id, i32>,
+    docks: HashMap<Id, crate::tree::Dock>,
     panes: HashMap<Id, i32>,
     picks: HashMap<Id, crate::tree::Picking>,
     scrub: Option<(Id, i64)>,
@@ -336,6 +337,7 @@ impl<A: App> Runner<A> {
             mixing: None,
             resizing: None,
             resized: HashMap::new(),
+            docks: HashMap::new(),
             panes: HashMap::new(),
             picks: HashMap::new(),
             scrub: None,
@@ -432,6 +434,7 @@ impl<A: App> Runner<A> {
         self.tree.months.clone_from(&self.months);
         self.tree.aim = self.aim;
         self.tree.resized.clone_from(&self.resized);
+        self.tree.docks.clone_from(&self.docks);
         self.tree.picks.clone_from(&self.picks);
         self.tree.scrub = self.scrub;
         self.tree.spans.clone_from(&self.spans);
@@ -1364,6 +1367,14 @@ impl<A: App> Runner<A> {
             Builtin::ChangedSettings if self.only_changed => Available::No(Message::from("Only the changed settings show already")),
             Builtin::AllSettings if !self.only_changed => Available::No(Message::from("Every setting shows already")),
             Builtin::EditKeys if self.keys_file.is_none() => Available::No(Message::from("This window keeps no files, so its keys can't be edited")),
+            Builtin::MovePaneLeft | Builtin::MovePaneRight | Builtin::ClosePane if self.focused_pane().is_none() => Available::No(Message::from("Nothing chosen is in a pane")),
+            Builtin::MovePaneLeft if self.pane_neighbour(-1).is_none() => Available::No(Message::from("The pane is the first already")),
+            Builtin::MovePaneRight if self.pane_neighbour(1).is_none() => Available::No(Message::from("The pane is the last already")),
+            Builtin::ClosePane if self.pane_neighbour(-1).is_none() && self.pane_neighbour(1).is_none() => Available::No(Message::from("The only open pane can't be closed")),
+            Builtin::OpenPanes if self.docks.values().all(|d| d.closed.is_empty()) => Available::No(Message::from("No pane is closed")),
+            Builtin::SaveLayout | Builtin::UseLayout if self.keys_file.is_none() => Available::No(Message::from("This window keeps no files, so its layout can't be saved")),
+            Builtin::SaveLayout if self.tree.declared.is_empty() => Available::No(Message::from("There are no panes to lay out")),
+            Builtin::UseLayout if !self.layout_file().is_some_and(|f| f.exists()) => Available::No(Message::from("No layout has been saved")),
             Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode if !self.keymap.modal => Available::No(Message::from("These keys have no modes")),
             Builtin::NormalMode | Builtin::InsertMode | Builtin::SelectMode if b.mode() == Some(self.mode) => Available::No(Message::plain(format!("In {} mode already", self.mode.name()))),
             _ => Available::Yes,
@@ -1766,11 +1777,14 @@ impl<A: App> Runner<A> {
         let caret = self.place().caret.map_or(Value::None, |c| Value::List(vec![Value::UInt(c.caret as u64), Value::UInt(c.anchor as u64)]));
         let scrolls = self.scrolls.iter().map(|(id, s)| Value::List(vec![Value::UInt(id.0), s.anchor.map_or(Value::None, Value::Key), Value::UInt(s.index as u64)]));
         let widths = self.resized.iter().map(|(id, w)| Value::List(vec![Value::UInt(id.0), Value::Int(i64::from(*w))]));
+        let ids = |list: &[Id]| Value::List(list.iter().map(|id| Value::UInt(id.0)).collect());
+        let docks = self.docks.iter().map(|(id, d)| Value::List(vec![Value::UInt(id.0), ids(&d.order), ids(&d.closed)]));
         Value::Map(vec![
             ("focus".into(), self.focus.map_or(Value::None, |f| Value::UInt(f.0))),
             ("caret".into(), caret),
             ("scrolls".into(), Value::List(scrolls.collect())),
             ("widths".into(), Value::List(widths.collect())),
+            ("docks".into(), Value::List(docks.collect())),
         ])
     }
 
@@ -1794,6 +1808,19 @@ impl<A: App> Runner<A> {
                         _ => None,
                     };
                     self.scrolls.insert(Id(*id), Scroll { anchor, index: *index as u32, rows: 0 });
+                }
+            }
+        }
+        if let Some(Value::List(docks)) = place.field("docks") {
+            let ids = |v: &Value| match v {
+                Value::List(list) => list.iter().filter_map(|v| if let Value::UInt(id) = v { Some(Id(*id)) } else { None }).collect(),
+                _ => Vec::new(),
+            };
+            for d in docks {
+                if let Value::List(parts) = d
+                    && let [Value::UInt(id), order, closed] = parts.as_slice()
+                {
+                    self.docks.insert(Id(*id), crate::tree::Dock { order: ids(order), closed: ids(closed) });
                 }
             }
         }
@@ -2074,6 +2101,96 @@ impl<A: App> Runner<A> {
             Err(said) => self.said = Some(said),
         }
         self.stale = true;
+    }
+
+    /// The split and the pane that hold the focus.
+    fn focused_pane(&self) -> Option<(Id, Id)> {
+        let mut i = self.focus.and_then(|f| self.tree.find(f))?;
+        while i != NONE {
+            let n = &self.tree.nodes[i as usize];
+            if n.kind == Kind::Pane {
+                return Some((self.tree.nodes[n.parent as usize].id, n.id));
+            }
+            i = n.parent;
+        }
+        None
+    }
+
+    /// The open pane `by` places from the focused one, among its split's panes.
+    fn pane_neighbour(&self, by: i32) -> Option<Id> {
+        let (split, pane) = self.focused_pane()?;
+        let s = self.tree.find(split)?;
+        let open: Vec<Id> = self.tree.children(s).filter(|&c| self.tree.nodes[c as usize].kind == Kind::Pane).map(|c| self.tree.nodes[c as usize].id).collect();
+        let at = open.iter().position(|&p| p == pane)? as i32 + by;
+        open.get(usize::try_from(at).ok()?).copied()
+    }
+
+    fn move_pane(&mut self, by: i32) -> bool {
+        let (Some((split, pane)), Some(other)) = (self.focused_pane(), self.pane_neighbour(by)) else { return false };
+        let mut order: Vec<Id> = self.tree.declared.iter().find(|d| d.0 == split).map(|d| d.1.iter().map(|p| p.0).collect()).unwrap_or_default();
+        if let (Some(a), Some(b)) = (order.iter().position(|&p| p == pane), order.iter().position(|&p| p == other)) {
+            order.swap(a, b);
+        }
+        self.docks.entry(split).or_default().order = order;
+        self.stale = true;
+        true
+    }
+
+    fn close_pane(&mut self) -> bool {
+        let Some((split, pane)) = self.focused_pane() else { return false };
+        let name = self.tree.declared.iter().find(|d| d.0 == split).and_then(|d| d.1.iter().find(|p| p.0 == pane)).map(|p| p.1.clone()).unwrap_or_default();
+        let next = self.pane_neighbour(1).or_else(|| self.pane_neighbour(-1));
+        self.docks.entry(split).or_default().closed.push(pane);
+        self.focus = next;
+        self.say(Message::plain(format!("Closed “{name}”: Open the closed panes brings it back")))
+    }
+
+    fn layout_file(&self) -> Option<std::path::PathBuf> {
+        Some(self.keys_file.as_deref()?.parent()?.join(LAYOUT))
+    }
+
+    fn save_layout(&mut self) -> bool {
+        let Some(file) = self.layout_file() else { return false };
+        let mut text = String::from("# Each line is one pane, left to right in its split: the split, the pane's name, its width in columns or - for its own, and whether it is open or closed.\n");
+        for (split, panes) in &self.tree.declared {
+            let closed = self.docks.get(split).map(|d| d.closed.as_slice()).unwrap_or_default();
+            for (id, name) in panes {
+                let width = self.resized.get(id).map_or("-".to_string(), i32::to_string);
+                let open = if closed.contains(id) { "closed" } else { "open" };
+                text.push_str(&format!("{:016x}\t{name}\t{width}\t{open}\n", split.0));
+            }
+        }
+        match file.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&file, text)) {
+            Ok(()) => self.say(Message::plain(format!("Saved the layout to {}", file.display()))),
+            Err(e) => self.say(Message::plain(format!("{LAYOUT} couldn't be written: {e}"))),
+        }
+    }
+
+    fn use_layout(&mut self) -> bool {
+        let Some(file) = self.layout_file() else { return false };
+        let text = match std::fs::read_to_string(&file) {
+            Ok(text) => text,
+            Err(e) => return self.say(Message::plain(format!("{LAYOUT} couldn't be read: {e}"))),
+        };
+        let mut docks: HashMap<Id, crate::tree::Dock> = HashMap::new();
+        for line in text.lines().filter(|l| !l.starts_with('#') && !l.trim().is_empty()) {
+            let parts: Vec<&str> = line.split('\t').collect();
+            let [split, name, width, open] = parts.as_slice() else { continue };
+            let Ok(split) = u64::from_str_radix(split, 16) else { continue };
+            let (split, pane) = (Id(split), Id(split).named(name));
+            let dock = docks.entry(split).or_default();
+            dock.order.push(pane);
+            if *open == "closed" {
+                dock.closed.push(pane);
+            }
+            match width.parse::<i32>() {
+                Ok(w) => self.resized.insert(pane, w),
+                Err(_) => self.resized.remove(&pane),
+            };
+        }
+        self.docks = docks;
+        self.stale = true;
+        true
     }
 
     fn edit_keys(&mut self) -> bool {
@@ -2873,6 +2990,15 @@ impl<A: App> Runner<A> {
             Builtin::Next | Builtin::Previous => self.cycle(b == Builtin::Next),
             Builtin::Cancel => self.cancel(),
             Builtin::EditKeys => self.edit_keys(),
+            Builtin::MovePaneLeft | Builtin::MovePaneRight => self.move_pane(if b == Builtin::MovePaneLeft { -1 } else { 1 }),
+            Builtin::ClosePane => self.close_pane(),
+            Builtin::OpenPanes => {
+                self.docks.values_mut().for_each(|d| d.closed.clear());
+                self.stale = true;
+                true
+            }
+            Builtin::SaveLayout => self.save_layout(),
+            Builtin::UseLayout => self.use_layout(),
             Builtin::Help => {
                 self.sheet = if matches!(self.sheet, Some((Sheet::Help, _))) { None } else { Some((Sheet::Help, 0)) };
                 self.stale = true;
@@ -4563,6 +4689,7 @@ fn done_as(label: &str) -> String {
 }
 
 const KEYMAP: &str = "keymap.txt";
+const LAYOUT: &str = "layout.txt";
 
 fn watch_keys(file: &std::path::Path, waker: Waker) -> Option<(notify::RecommendedWatcher, mpsc::Receiver<()>)> {
     use notify::Watcher;

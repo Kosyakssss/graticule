@@ -164,9 +164,10 @@ impl Board {
         })
     }
 
-    /// A board of only `keys` and the bindings between them: what copying them takes.
+    /// A board of only `keys` and the bindings between them: what copying them takes. Making it records nothing, even inside a command, since it is a copy and not a change.
     pub fn excerpt(&self, keys: &[Key<Shape>]) -> Board {
         let inside: HashSet<Key<Shape>> = keys.iter().copied().filter(|k| self.shapes.has(*k)).collect();
+        let apart = ledger::Transaction::begin();
         let mut part = Board::default();
         for shape in self.stacked().into_iter().filter(|s| inside.contains(&s.id)) {
             let _ = part.shapes.push(shape.clone());
@@ -174,6 +175,7 @@ impl Board {
         for b in self.touching(keys).into_iter().filter_map(|b| self.bindings.find(b)).filter(|b| inside.contains(&b.arrow) && inside.contains(&b.to)) {
             let _ = part.bindings.push(b.clone());
         }
+        let _ = apart.end();
         part
     }
 

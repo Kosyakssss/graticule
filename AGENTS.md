@@ -96,7 +96,7 @@ The most common defect is a change that works on the path you tried and is missi
 ## Repository rules
 
 - The repository is public. Never commit secrets, credentials, personal data, session data or machine-local state. Never hardcode a home path; derive paths at runtime.
-- Version control is `jj`. Never add remotes or rewrite shared history without explicit approval.
+- Version control is Git. Never add remotes or rewrite shared history without explicit approval.
 - Do not commit research notes or scratch files. The build plan lives in the spec.
 
 ## Documentation
